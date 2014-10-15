@@ -49,11 +49,11 @@ type CIFFile
         ncluster = read(handle, Uint32)
 
         if version != 1
-            error("Unsupport CIF version.")
+            error("Unsupport CIF version: $version.")
         end
 
         if datasize != sizeof(Int16)
-            error("Unsupported data size in CIF intensities.")
+            error("Unsupported data size ($datasize) in CIF intensities.")
         end
 
         if ncycle != 1
