@@ -72,14 +72,20 @@ function read(cif::CIFFile, count::Int = -1)
         nrecords = minimum((cif.ncluster - cif.position, count))
     end
 
-    records = ltoh(read(cif.handle, Int16, (NUM_CHANNELS, int(nrecords))))
+    records = Array(Int16, (int(nrecords), NUM_CHANNELS))
+    for chan in 1:NUM_CHANNELS
+        recno = sizeof(Int16) * ((chan - 1) * int(cif.ncluster) + int(cif.position))
+        seek(cif.handle, CIF_HEADER_SIZE + recno)
+        records[:, chan] = ltoh(read(cif.handle, Int16, int(nrecords)))
+    end
+
     cif.position += nrecords
-    return records
+
+    return permutedims(records, [2, 1])
 end
 
 
 function seek(cif::CIFFile, newposition::Int)
-    seek(cif.handle, CIF_HEADER_SIZE + sizeof(Int16) * NUM_CHANNELS * newposition)
     cif.position = newposition
 end
 
@@ -89,24 +95,33 @@ type CIFCollection
     lane::Int
     tile::Int
 
+    firstcycle::Int
     ncycle::Int
     ncluster::Int
     position::Int
     ciffiles::Array{CIFFile}
 
-    function CIFCollection(datadir, lane, tile)
+    function CIFCollection(datadir, lane, tile, firstcycle=-1, ncycle=-1)
         lanedir = "$datadir/L00$lane"
 
         cycledirs = filter(x -> ismatch(r"^C[0-9]+\.1$", x), readdir(lanedir))
-        ncycle = maximum(map(x -> int(match(r"^C([0-9]+)\.1$", x).captures[1]), cycledirs))
-        ciffiles = [CIFFile("$lanedir/C$cycle.1/s_$(lane)_$(tile).cif") for cycle in 1:ncycle]
+        cyclenums = map(x -> int(match(r"^C([0-9]+)\.1$", x).captures[1]), cycledirs)
+        if firstcycle == -1
+            firstcycle = minimum(cyclenums)
+        end
+        if ncycle == -1
+            ncycle = maximum(cyclenums) - firstcycle + 1
+        end
+
+        ciffiles = [CIFFile("$lanedir/C$cycle.1/s_$(lane)_$(tile).cif")
+                    for cycle in firstcycle:(firstcycle+ncycle-1)]
         ncluster = ciffiles[1].ncluster
 
         if any(x -> x.ncluster != ncluster, ciffiles)
             error("Number of cluster is not consistent over the cycles.")
         end
 
-        return new(datadir, lane, tile, ncycle, ncluster, 0, ciffiles)
+        return new(datadir, lane, tile, firstcycle, ncycle, ncluster, 0, ciffiles)
     end
 end
 

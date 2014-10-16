@@ -23,23 +23,45 @@
 
 importall Base
 
+include("bclfile.jl")
 include("ciffile.jl")
 
 # ---------------
 
-cif = CIFFile("sample-miseq/Data/Intensities/L001/C1.1/s_1_1101.cif")
-println(length(read(cif, 100)))
-println(length(read(cif, 200)))
-println(length(read(cif)))
-println(length(read(cif)))
-seek(cif, 100000)
-println(length(read(cif)))
-seek(cif, 0)
-println(read(cif, 2))
-println("---------------")
+#cif = CIFFile("sample-miseq/Data/Intensities/L001/C1.1/s_1_1101.cif")
+#println(length(read(cif, 100)))
+#println(length(read(cif, 200)))
+#println(length(read(cif)))
+#println(length(read(cif)))
+#seek(cif, 100000)
+#println(length(read(cif)))
+#seek(cif, 0)
+#println(read(cif, 2))
+#println("---------------")
+#
+#cif = CIFCollection("sample-miseq/Data/Intensities", 1, 1101)
+#println(cif.ncluster)
+#println(read(cif, 2))
 
-cif = CIFCollection("sample-miseq/Data/Intensities", 1, 1101)
-println(cif.ncluster)
+#bcl = BCLFile("sample-miseq/Data/Intensities/BaseCalls/L001/C1.1/s_1_1101.bcl")
+#println(length(read(bcl, 100)))
+#println(length(read(bcl, 200)))
+#println(length(read(bcl)))
+#println(length(read(bcl)))
+#seek(bcl, 100000)
+#println(length(read(bcl)))
+#seek(bcl, 0)
+#println(read(bcl, 20))
+#println("---------------")
+
+bcl = BCLCollection("sample-miseq/Data/Intensities", 1, 1101)
+println(bcl.ncluster)
+println(read(bcl, 2))
+
+bcl = BCLCollection("sample-miseq/Data/Intensities", 1, 1101, 1, 30)
+println(read(bcl, 2))
+
+cif = CIFCollection("sample-miseq/Data/Intensities", 1, 1101, 1, 30)
 println(read(cif, 2))
 
 println("Done.")
