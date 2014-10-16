@@ -44,9 +44,9 @@ type CIFFile
         # Read values in header
         version = read(handle, Uint8)
         datasize = read(handle, Uint8)
-        firstcycle = read(handle, Uint16)
-        ncycle = read(handle, Uint16)
-        ncluster = read(handle, Uint32)
+        firstcycle = ltoh(read(handle, Uint16))
+        ncycle = ltoh(read(handle, Uint16))
+        ncluster = ltoh(read(handle, Uint32))
 
         if version != 1
             error("Unsupport CIF version: $version.")
