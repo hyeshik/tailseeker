@@ -20,6 +20,11 @@
 # THE SOFTWARE.
 #
 
+#
+# Refer "bcl2fastq Conversion User Guide" by Illumina for the descriptions
+# of the file formats.
+#
+
 const BCL_HEADER_SIZE = 4
 const NOCALL_BASE = b"N"[1]
 const CALL_BASES = b"ACGT"

@@ -20,6 +20,11 @@
 # THE SOFTWARE.
 #
 
+#
+# Refer "bcl2fastq Conversion User Guide" by Illumina for the descriptions
+# of the file formats.
+#
+
 const NUM_CHANNELS = 4
 const CIF_HEADER_SIZE = 13
 
