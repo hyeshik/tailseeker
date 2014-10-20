@@ -29,7 +29,7 @@ const BCL_HEADER_SIZE = 4
 const NOCALL_BASE = b"N"[1]
 const CALL_BASES = b"ACGT"
 const NOCALL_QUALITY = 2
-const PHRED_BASE = 64
+const PHRED_BASE = 33
 
 type BCLFile
     path::String

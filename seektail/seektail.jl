@@ -25,6 +25,7 @@ importall Base
 
 include("bclfile.jl")
 include("ciffile.jl")
+include("controlfile.jl")
 
 # ---------------
 
@@ -54,14 +55,18 @@ include("ciffile.jl")
 #println(read(bcl, 20))
 #println("---------------")
 
-bcl = BCLCollection("sample-miseq/Data/Intensities", 1, 1101)
-println(bcl.ncluster)
-println(read(bcl, 2))
+#bcl = BCLCollection("sample-miseq/Data/Intensities", 1, 1101)
+#println(bcl.ncluster)
+#println(read(bcl, 2))
+#
+#bcl = BCLCollection("sample-miseq/Data/Intensities", 1, 1101, 1, 30)
+#println(read(bcl, 2))
+#
+#cif = CIFCollection("sample-miseq/Data/Intensities", 1, 1101, 1, 30)
+#println(read(cif, 2))
 
-bcl = BCLCollection("sample-miseq/Data/Intensities", 1, 1101, 1, 30)
-println(read(bcl, 2))
-
-cif = CIFCollection("sample-miseq/Data/Intensities", 1, 1101, 1, 30)
-println(read(cif, 2))
+ctl = ControlFile("sample-miseq/Data/Intensities/BaseCalls/L001/s_1_1101.control")
+records = read(ctl)
+println(sum(records))
 
 println("Done.")
