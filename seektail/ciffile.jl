@@ -70,7 +70,7 @@ type CIFFile
 end
 
 
-function read(cif::CIFFile, count::Int = -1)
+function Base.read(cif::CIFFile, count::Int = -1)
     if count < 0
         nrecords = cif.ncluster - cif.position
     else
@@ -90,7 +90,7 @@ function read(cif::CIFFile, count::Int = -1)
 end
 
 
-function seek(cif::CIFFile, newposition::Int)
+function Base.seek(cif::CIFFile, newposition::Int)
     cif.position = newposition
 end
 
@@ -130,7 +130,7 @@ type CIFCollection
     end
 end
 
-function read(cif::CIFCollection, count::Int = -1)
+function Base.read(cif::CIFCollection, count::Int = -1)
     if count < 0
         nrecords = cif.ncluster - cif.position
     else

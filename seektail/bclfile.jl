@@ -46,7 +46,7 @@ type BCLFile
 end
 
 
-function read(bcl::BCLFile, count::Int = -1)
+function Base.read(bcl::BCLFile, count::Int = -1)
     if count < 0 
         nrecords = bcl.ncluster - bcl.position
     else
@@ -72,7 +72,7 @@ function read(bcl::BCLFile, count::Int = -1)
     return (sequence, quality)
 end
 
-function seek(bcl::BCLFile, newposition::Int)
+function Base.seek(bcl::BCLFile, newposition::Int)
     seek(bcl.handle, BCL_HEADER_SIZE + sizeof(Uint8) * newposition)
     bcl.position = newposition
 end
@@ -113,7 +113,7 @@ type BCLCollection
     end 
 end
 
-function read(bcl::BCLCollection, count::Int = -1) 
+function Base.read(bcl::BCLCollection, count::Int = -1) 
     if count < 0 
         nrecords = bcl.ncluster - bcl.position
     else
@@ -135,6 +135,12 @@ function read(bcl::BCLCollection, count::Int = -1)
     sequences_ascii = [ascii(sequences_t[:, i]) for i in 1:nrecords]
     qualities_ascii = [ascii(qualities_t[:, i]) for i in 1:nrecords]
 
+    bcl.position += nrecords
+
     return (sequences_ascii, qualities_ascii)
+end
+
+function is_eof(bcl::BCLCollection)
+    bcl.position >= bcl.ncluster
 end
 
