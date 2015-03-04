@@ -1,6 +1,6 @@
 CLASSPATH=${CURDIR}/picard/picard-1.91.jar:${CURDIR}/picard/sam-1.91.jar:${CURDIR}
 
-all: net/sf/picard/illumina/parser/TailSeqCIFDumper.class sqi2fq
+all: net/sf/picard/illumina/parser/TailSeqCIFDumper.class sqi2fq tailseq-retrieve-signals
 	python setup.py install --user
 	python test.py
 
@@ -13,4 +13,7 @@ net/sf/picard/illumina/parser/TailSeqCIFDumper.class: TailSeqCIFDumper.java
 	javac -cp ${CLASSPATH} $< && mv -f TailSeqCIFDumper.class net/sf/picard/illumina/parser
 
 sqi2fq: sqi2fq.c
+	cc -O3 -Wall -o $@ $<
+
+tailseq-retrieve-signals: tailseq-retrieve-signals.c
 	cc -O3 -Wall -o $@ $<
