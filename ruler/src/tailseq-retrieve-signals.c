@@ -35,6 +35,8 @@
 #include <limits.h>
 #include <endian.h>
 #include <zlib.h>
+#include "kseq.h"
+#include "ssw.h"
 
 #define NUM_CHANNELS        4
 #define NOCALL_QUALITY      2
@@ -86,9 +88,38 @@ struct AlternativeCallInfo {
     struct AlternativeCallInfo *next;
 };
 
+#define CONTROL_NAME_MAX    128
+struct ControlFilterInfo {
+    char name[CONTROL_NAME_MAX];
+    char filename[PATH_MAX];
+    int first_cycle;
+    int read_length;
+    struct BarcodeInfo *barcode;
+};
+
+KSEQ_INIT(gzFile, gzread)
+
 static const char CALL_BASES[4] = "ACGT";
 static const char BASE64_ENCODE_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
                                           "ghijklmnopqrstuvwxyz0123456789+/";
+
+static const int8_t DNABASE2NUM[128] = { 
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
+};
+
+#define CONTROL_ALIGN_BASE_COUNT            5
+#define CONTROL_ALIGN_MATCH_SCORE           1
+#define CONTROL_ALIGN_MISMATCH_SCORE        2
+#define CONTROL_ALIGN_GAP_OPEN_SCORE        4
+#define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
+#define CONTROL_ALIGN_MINIMUM_SCORE         0.8
 
 
 static struct CIFData *
@@ -497,7 +528,7 @@ assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *bar
     }
 
     if (bestidx == NULL || secondbestfound || bestmismatches > bestidx->maximum_mismatches)
-        return barcodes; /* which is "Unknown". */
+        return NULL;
     else
         return bestidx;
 }
@@ -523,17 +554,148 @@ find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode)
 }
 
 
+static void
+initialize_ssw_score_matrix(int8_t *score_mat, int8_t match_score, int8_t mismatch_score)
+{
+    int l, m, k;
+
+    /* initialize score matrix for Smith-Waterman alignment */
+    for (l = k = 0; l < 4; l++) {
+        for (m = 0; m < 4; m++)
+            score_mat[k++] = (l == m) ? match_score : -mismatch_score;
+        score_mat[k++] = 0; /* no penalty for ambiguous base */
+    }
+
+    for (m = 0; m < 5; m++)
+        score_mat[k++] = 0;
+}
+
+
+static size_t
+load_control_sequence(const char *filename, int8_t **control_seq)
+{
+    gzFile fp;
+    kseq_t *ctlseq_reader;
+    int8_t *ctlseq;
+    ssize_t len, i;
+
+    fp = gzopen(filename, "rt");
+    if (fp == NULL)
+        return -1;
+
+    ctlseq_reader = kseq_init(fp);
+    if (ctlseq_reader == NULL) {
+        perror("load_control_sequence");
+        gzclose(fp);
+        return -1;
+    }
+
+    if (kseq_read(ctlseq_reader) < 0) {
+        fprintf(stderr, "Can't find any sequence from %s.", filename);
+        gzclose(fp);
+        return -1;
+    }
+
+    len = ctlseq_reader->seq.l;
+    ctlseq = malloc(len);
+    if (ctlseq == NULL) {
+        perror("load_control_sequence");
+        kseq_destroy(ctlseq_reader);
+        gzclose(fp);
+        return -1;
+    }
+
+    for (i = 0; i < len; i++)
+        ctlseq[i] = DNABASE2NUM[(int)ctlseq_reader->seq.s[i]];
+
+    kseq_destroy(ctlseq_reader);
+    gzclose(fp);
+
+    *control_seq = ctlseq;
+
+    return len;
+}
+
+
+static int
+try_alignment_to_control(const char *sequence_read, const int8_t *control_seq,
+                         ssize_t control_seq_length,
+                         struct ControlFilterInfo *control_info,
+                         int8_t *ssw_score_mat, int32_t min_control_alignment_score,
+                         int32_t control_alignment_mask_len)
+{
+    s_profile *alnprof;
+    s_align *alnresult;
+    int8_t read_seq[control_info->read_length];
+    size_t i, j;
+    int r;
+
+    for (i = 0, j = control_info->first_cycle; i < control_info->read_length; i++, j++)
+        read_seq[i] = DNABASE2NUM[(int)sequence_read[j]];
+
+    alnprof = ssw_init(read_seq, control_info->read_length, ssw_score_mat, 5, 0);
+    if (alnprof == NULL) {
+        perror("try_alignment_to_control");
+        return -1;
+    }
+
+    alnresult = ssw_align(alnprof, control_seq, control_seq_length,
+                          CONTROL_ALIGN_GAP_OPEN_SCORE,
+                          CONTROL_ALIGN_GAP_EXTENSION_SCORE, 2,
+                          min_control_alignment_score,
+                          0, control_alignment_mask_len);
+    r = (alnresult != NULL && alnresult->score1 >= min_control_alignment_score);
+
+    if (alnresult != NULL)
+        align_destroy(alnresult);
+
+    init_destroy(alnprof);
+
+    return r;
+}
+
+
 static int
 demultiplex_and_write(const char *laneid, int tile, int ncycles, double scalefactor,
                       int barcode_start, int barcode_length,
                       struct BarcodeInfo *barcodes,
                       struct CIFData **intensities, struct BCLData **basecalls,
-                      int keep_no_delimiter)
+                      struct ControlFilterInfo *control_info, int keep_no_delimiter)
 {
     uint32_t cycleno, clusterno;
     uint32_t totalclusters;
     char sequence_formatted[ncycles+1], quality_formatted[ncycles+1];
     char intensity_formatted[ncycles*8+1];
+    struct BarcodeInfo *noncontrol_barcodes;
+
+    int8_t ssw_score_mat[CONTROL_ALIGN_BASE_COUNT * CONTROL_ALIGN_BASE_COUNT];
+    int8_t *control_seq;
+    ssize_t control_seq_length;
+    int32_t min_control_alignment_score, control_alignment_mask_len;
+
+    /* set the starting point of index matching to non-special (other than Unknown and control)
+     * barcodes */
+    for (noncontrol_barcodes = barcodes;
+         noncontrol_barcodes != NULL && noncontrol_barcodes->index[0] != 'X';
+         noncontrol_barcodes = noncontrol_barcodes->next)
+        /* do nothing */;
+
+    /* prepare reference sequence for (PhiX) control */
+    control_seq = NULL;
+    control_seq_length = -1;
+    control_alignment_mask_len = min_control_alignment_score = -1;
+
+    if (control_info != NULL) {
+        initialize_ssw_score_matrix(ssw_score_mat, CONTROL_ALIGN_MATCH_SCORE,
+                                    CONTROL_ALIGN_MISMATCH_SCORE);
+
+        control_seq_length = load_control_sequence(control_info->filename, &control_seq);
+        if (control_seq_length < 0)
+            return -1;
+
+        min_control_alignment_score = control_info->read_length * CONTROL_ALIGN_MINIMUM_SCORE;
+        control_alignment_mask_len = control_info->read_length / 2;
+    }
 
     totalclusters = intensities[0]->nclusters;
     for (cycleno = 0; cycleno < ncycles; cycleno++)
@@ -550,7 +712,30 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, double scalefac
         format_basecalls(sequence_formatted, quality_formatted, basecalls, ncycles, clusterno);
         format_intensity(intensity_formatted, intensities, ncycles, clusterno, scalefactor);
 
-        bc = assign_barcode(sequence_formatted + barcode_start, barcode_length, barcodes);
+        bc = assign_barcode(sequence_formatted + barcode_start, barcode_length,
+                            noncontrol_barcodes);
+        if (bc != NULL)
+            /* barcode is assigned to a regular sample. do nothing here. */;
+        else if (control_info == NULL) /* no control sequence is given. treat it Unknown. */
+            bc = barcodes; /* the first barcodes in the list is "Unknown". */
+        else
+            switch (try_alignment_to_control(sequence_formatted, control_seq,
+                                             control_seq_length, control_info,
+                                             ssw_score_mat, min_control_alignment_score,
+                                             control_alignment_mask_len)) {
+                case 0: /* not aligned to control, set as Unknown. */
+                    bc = barcodes;
+                    break;
+                case 1: /* aligned. set as control. */
+                    bc = control_info->barcode; /* set as control */
+                    break;
+                case -1: /* error */
+                default:
+                    fprintf(stderr, "Failed to align read sequence to control.\n");
+                    free(control_seq);
+                    return -1;
+            }
+
         delimiter_end = find_delimiter_end_position(sequence_formatted, bc);
         if (bc->delimiter_length > 0 && delimiter_end < 0 && !keep_no_delimiter)
             continue;
@@ -558,9 +743,15 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, double scalefac
         if (fprintf(bc->stream, "%s%04d\t%d\t0\t%s\t%s\t%s\t%d\n", laneid, tile, clusterno,
              sequence_formatted, quality_formatted, intensity_formatted, delimiter_end) < 0) {
             perror("demultiplex_and_write");
+
+            if (control_seq != NULL)
+                free(control_seq);
             return -1;
         }
     }
+
+    if (control_seq != NULL)
+        free(control_seq);
 
     return 0;
 }
@@ -598,7 +789,8 @@ static int
 process(const char *datadir, const char *laneid, int lane, int tile, int ncycles,
         double scalefactor, int barcode_start, int barcode_length,
         struct BarcodeInfo *barcodes, const char *writercmd,
-        struct AlternativeCallInfo *altcalls, int keep_no_delimiter)
+        struct AlternativeCallInfo *altcalls, struct ControlFilterInfo *control_info,
+        int keep_no_delimiter)
 {
     struct CIFData **intensities;
     struct BCLData **basecalls;
@@ -634,7 +826,7 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
 
     if (demultiplex_and_write(laneid, tile, ncycles, scalefactor, barcode_start,
                               barcode_length, barcodes, intensities, basecalls,
-                              keep_no_delimiter) == -1)
+                              control_info, keep_no_delimiter) == -1)
         goto onError;
 
     for (cycleno = 0; cycleno < ncycles; cycleno++) {
@@ -695,6 +887,8 @@ tailseq-retrieve-signals 1.0\
 \n            \"name,index,maximum_mismatches,delimiter,delimiter_position\".\
 \n       --keep-no-delimiter          don't skip reads where a delimiter\
 \n                                    is not found.\
+\n  -f,  --filter-control=SPEC        sort out control reads by sequence in\
+\n                                    \"name,fasta_file,first_cycle,length\".\
 \n\
 \nAll cycle numbers or positions are in 1-based inclusive system.\
 \n\
@@ -712,6 +906,7 @@ main(int argc, char *argv[])
     double scalefactor;
     struct BarcodeInfo *barcodes;
     struct AlternativeCallInfo *altcalls;
+    struct ControlFilterInfo controlinfo;
     int c, r;
 
     struct option long_options[] =
@@ -728,6 +923,7 @@ main(int argc, char *argv[])
         {"barcode-length",      required_argument,  0,                          'a'},
         {"sample",              required_argument,  0,                          'm'},
         {"writer-command",      required_argument,  0,                          'w'},
+        {"filter-control",      required_argument,  0,                          'f'},
         {"help",                no_argument,        0,                          'h'},
         {0, 0, 0, 0}
     };
@@ -739,11 +935,13 @@ main(int argc, char *argv[])
     barcode_length = 6;
     barcodes = NULL;
     altcalls = NULL;
+    controlinfo.name[0] = controlinfo.filename[0] = 0;
+    controlinfo.first_cycle = controlinfo.read_length = -1;
 
     while (1) {
         int option_index=0;
 
-        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:", long_options, &option_index);
+        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:hf:", long_options, &option_index);
 
         /* Detect the end of the options. */
         if (c == -1)
@@ -905,6 +1103,33 @@ main(int argc, char *argv[])
                 }
                 break;
 
+            case 'f':
+                {
+#define FILTER_CONTROL_OPTION_TOKENS    4
+                    char *str, *saveptr;
+                    char *tokens[FILTER_CONTROL_OPTION_TOKENS];
+                    int j;
+
+                    for (j = 0, str = optarg; j < FILTER_CONTROL_OPTION_TOKENS;
+                                              j++, str = NULL) {
+                        tokens[j] = strtok_r(str, ",", &saveptr);
+                        if (tokens[j] == NULL)
+                            break;
+                    }
+
+                    if (j != FILTER_CONTROL_OPTION_TOKENS) {
+                        fprintf(stderr, "A sample specified with illegal format.\n");
+                        return -1;
+                    }
+
+                    strncpy(controlinfo.name, tokens[0], CONTROL_NAME_MAX);
+                    strncpy(controlinfo.filename, tokens[1], PATH_MAX);
+                    controlinfo.first_cycle = atoi(tokens[2]) - 1;
+                    controlinfo.read_length = atoi(tokens[3]);
+                    controlinfo.barcode = NULL;
+                }
+                break;
+
             case 'h':
                 usage(argv[0]);
                 exit(0);
@@ -979,6 +1204,27 @@ main(int argc, char *argv[])
         return -1;
     }
 
+    if (controlinfo.first_cycle >= 0) {
+        struct BarcodeInfo *control;
+
+        control = malloc(sizeof(struct BarcodeInfo));
+        control->name = strdup(controlinfo.name);
+
+        control->index = malloc(barcode_length + 1);
+        memset(control->index, 'X', barcode_length);
+        control->index[barcode_length] = '\0';
+
+        control->delimiter = strdup("");
+        control->delimiter_pos = -1;
+        control->delimiter_length = 0;
+        control->maximum_mismatches = barcode_length;
+        control->stream = NULL;
+        control->next = barcodes;
+        controlinfo.barcode = control;
+
+        barcodes = control;
+    }
+
     /* Add a fallback barcode entry for "Unknown" samples. */
     {
         struct BarcodeInfo *fallback;
@@ -1000,8 +1246,18 @@ main(int argc, char *argv[])
         barcodes = fallback;
     }
 
-    r = process(datadir, runid, lane, tile, ncycles, scalefactor, barcode_start,
-                barcode_length, barcodes, writercmd, altcalls, keep_no_delimiter_flag);
+    {
+        struct ControlFilterInfo *pctlinfo;
+
+        if (controlinfo.first_cycle >= 0)
+            pctlinfo = &controlinfo;
+        else
+            pctlinfo = NULL;
+
+        r = process(datadir, runid, lane, tile, ncycles, scalefactor, barcode_start,
+                    barcode_length, barcodes, writercmd, altcalls,
+                    pctlinfo, keep_no_delimiter_flag);
+    }
     
     free(datadir);
     free(runid);
