@@ -666,6 +666,42 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
 }
 
 
+static void
+usage(const char *prog)
+{
+    printf("\
+tailseq-retrieve-signals 1.0\
+\n - collects intensities and base calls from Illumina sequencing for TAIL-seq\
+\n\
+\nUsage: %s [OPTION]...\
+\n\
+\nRequired parameters:\
+\n  -d,  --data-dir=DIR               Illumina \"Intensities\" directory.\
+\n  -r,  --run-id=ID                  short identifier of the run.\
+\n  -l,  --lane=NUM                   lane number.\
+\n  -t,  --tile=NUM                   tile number.\
+\n  -n,  --ncycles=NUM                number of cycles.\
+\n  -s,  --signal-scale=NUM           coefficient to multiply to signal\
+\n                                    intensity values.\
+\n  -b,  --barcode-start=NUM          the first cycle of index read.\
+\n  -a,  --barcode-length=NUM         length of index read.\
+\n  -w,  --writer-command=COMMAND     shell command to run to write .sqi\
+\n                                    output (usually a stream compressor.)\
+\n\
+\nOptional parameters:\
+\n  -c,  --alternative-call=SPEC      FASTQ file to replace base calls.\
+\n                                    specify as \"filename,first_cycle\".\
+\n  -m,  --sample=SPEC                sample information as formatted in\
+\n            \"name,index,maximum_mismatches,delimiter,delimiter_position\".\
+\n       --keep-no-delimiter          don't skip reads where a delimiter\
+\n                                    is not found.\
+\n\
+\nAll cycle numbers or positions are in 1-based inclusive system.\
+\n\
+\nMail bug reports and suggestions to Hyeshik Chang <hyeshik@snu.ac.kr>.\n", prog);
+}
+
+
 int
 main(int argc, char *argv[])
 {
@@ -692,6 +728,7 @@ main(int argc, char *argv[])
         {"barcode-length",      required_argument,  0,                          'a'},
         {"sample",              required_argument,  0,                          'm'},
         {"writer-command",      required_argument,  0,                          'w'},
+        {"help",                no_argument,        0,                          'h'},
         {0, 0, 0, 0}
     };
 
@@ -868,6 +905,11 @@ main(int argc, char *argv[])
                 }
                 break;
 
+            case 'h':
+                usage(argv[0]);
+                exit(0);
+                break;
+
             case '?':
                 /* getopt_long already printed an error message. */
                 break;
@@ -878,51 +920,61 @@ main(int argc, char *argv[])
     }
 
     if (datadir == NULL) {
+        usage(argv[0]);
         fprintf(stderr, "--data-dir is not set.\n");
         return -1;
     }
 
     if (runid == NULL) {
+        usage(argv[0]);
         fprintf(stderr, "--run-id is not set.\n");
         return -1;
     }
 
     if (lane < 0) {
+        usage(argv[0]);
         fprintf(stderr, "--lane is not set.\n");
         return -1;
     }
 
     if (tile < 0) {
+        usage(argv[0]);
         fprintf(stderr, "--tile is not set.\n");
         return -1;
     }
 
     if (ncycles < 0) {
+        usage(argv[0]);
         fprintf(stderr, "--ncycles is not set.\n");
         return -1;
     }
 
     if (scalefactor < 0.) {
+        usage(argv[0]);
         fprintf(stderr, "--signal-scale is not set.\n");
         return -1;
     }
 
     if (barcode_start < 0) {
+        usage(argv[0]);
         fprintf(stderr, "--barcode-start is not set.\n");
         return -1;
     }
 
     if (barcode_length < 0) {
+        usage(argv[0]);
         fprintf(stderr, "--barcode-length is not set.\n");
         return -1;
     }
 
     if (barcodes == NULL) {
+        usage(argv[0]);
         fprintf(stderr, "--sample is not set.\n");
         return -1;
     }
 
     if (writercmd == NULL) {
+        usage(argv[0]);
         fprintf(stderr, "--writer-command is not set.\n");
         return -1;
     }
