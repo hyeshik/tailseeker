@@ -119,7 +119,7 @@ static const int8_t DNABASE2NUM[128] = {
 #define CONTROL_ALIGN_MISMATCH_SCORE        2
 #define CONTROL_ALIGN_GAP_OPEN_SCORE        4
 #define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
-#define CONTROL_ALIGN_MINIMUM_SCORE         0.8
+#define CONTROL_ALIGN_MINIMUM_SCORE         0.65
 
 
 static struct CIFData *
@@ -576,8 +576,9 @@ load_control_sequence(const char *filename, int8_t **control_seq)
 {
     gzFile fp;
     kseq_t *ctlseq_reader;
-    int8_t *ctlseq;
+    int8_t *ctlseq, *pctlseq;
     ssize_t len, i;
+    static const int8_t reverse_base[]={3, 2, 1, 0, 4};
 
     fp = gzopen(filename, "rt");
     if (fp == NULL)
@@ -596,8 +597,9 @@ load_control_sequence(const char *filename, int8_t **control_seq)
         return -1;
     }
 
+#define CONTROL_SEQUENCE_SPACING 20 /* space between forward and reverse strands */
     len = ctlseq_reader->seq.l;
-    ctlseq = malloc(len);
+    ctlseq = malloc(len * 2 + CONTROL_SEQUENCE_SPACING);
     if (ctlseq == NULL) {
         perror("load_control_sequence");
         kseq_destroy(ctlseq_reader);
@@ -605,15 +607,23 @@ load_control_sequence(const char *filename, int8_t **control_seq)
         return -1;
     }
 
-    for (i = 0; i < len; i++)
-        ctlseq[i] = DNABASE2NUM[(int)ctlseq_reader->seq.s[i]];
+    /* forward strand */
+    for (i = 0, pctlseq = ctlseq; i < len; i++)
+        *pctlseq++ = DNABASE2NUM[(int)ctlseq_reader->seq.s[i]];
+
+    for (i = 0, pctlseq = ctlseq + len; i < CONTROL_SEQUENCE_SPACING; i++)
+        *pctlseq++ = 4;
+
+    /* reverse strand */
+    for (i = 0, pctlseq = ctlseq + len * 2 + CONTROL_SEQUENCE_SPACING - 1; i < len; i++)
+        *pctlseq-- = reverse_base[(int)DNABASE2NUM[(int)ctlseq_reader->seq.s[i]]];
 
     kseq_destroy(ctlseq_reader);
     gzclose(fp);
 
     *control_seq = ctlseq;
 
-    return len;
+    return len * 2 + CONTROL_SEQUENCE_SPACING;
 }
 
 
