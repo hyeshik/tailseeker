@@ -34,6 +34,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <endian.h>
+#include <zlib.h>
 
 #define NUM_CHANNELS        4
 #define NOCALL_QUALITY      2
@@ -55,7 +56,7 @@ struct CIFHeader {
     char filemagic[3];
     uint8_t version;
     uint8_t datasize;
-    uint16_t firstcycle;
+    uint16_t first_cycle;
     uint16_t ncycles;
     uint32_t nclusters;
 };
@@ -76,6 +77,13 @@ struct BarcodeInfo {
     int maximum_mismatches;
     FILE *stream;
     struct BarcodeInfo *next;
+};
+
+struct AlternativeCallInfo;
+struct AlternativeCallInfo {
+    char *filename;
+    int first_cycle; /* the last cycle number will be determined from the file content */
+    struct AlternativeCallInfo *next;
 };
 
 static const char CALL_BASES[4] = "ACGT";
@@ -119,7 +127,7 @@ load_cif_file(const char *filename)
     }
 
     /* read first cycle and number of cycles */
-    if (fread(&header.firstcycle, 2, 2, fp) < 2) {
+    if (fread(&header.first_cycle, 2, 2, fp) < 2) {
         fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
         goto onError;
     }
@@ -128,7 +136,7 @@ load_cif_file(const char *filename)
         goto onError;
     }
 
-    header.firstcycle = le16toh(header.firstcycle);
+    header.first_cycle = le16toh(header.first_cycle);
     header.ncycles = le16toh(header.ncycles);
     header.nclusters = le32toh(header.nclusters);
 
@@ -238,6 +246,187 @@ free_bcl_data(struct BCLData *data)
     free(data->base);
     free(data->quality);
     free(data);
+}
+
+
+static int
+load_alternative_basecalls(const char *filename, struct BCLData **basecalls,
+                           uint32_t nclusters)
+{
+    char buf[BUFSIZ];
+    gzFile hdl;
+    uint32_t clusterno;
+    int ncycles, j;
+
+    ncycles = -1;
+
+    hdl = gzopen(filename, "rt");
+    if (hdl == NULL) {
+        perror("load_alternative_basecalls");
+        return -1;
+    }
+
+    for (clusterno = 0; clusterno < nclusters; clusterno++) {
+        size_t seqlen;
+
+        /* header 1 */
+        if (gzgets(hdl, buf, BUFSIZ) == NULL) {
+            fprintf(stderr, "Not enough sequences from %s\n", filename);
+            return -1;
+        }
+
+        if (buf[0] != '@') {
+            fprintf(stderr, "%s is not in FASTQ format.\n", filename);
+            return -1;
+        }
+
+        /* sequence */
+        if (gzgets(hdl, buf, BUFSIZ) == NULL) {
+            fprintf(stderr, "Unexpected EOF while reading %s\n", filename);
+            return -1;
+        }
+
+        seqlen = strlen(buf) - 1;
+        if (ncycles == -1) {
+            /* Initialize here */
+            ncycles = seqlen;
+
+            for (j = 0; j < ncycles; j++) {
+                basecalls[j] = malloc(sizeof(struct BCLData));
+                if (basecalls[j] == NULL) {
+                    perror("load_alternative_basecalls");
+                    gzclose(hdl);
+                    basecalls[j]->base = basecalls[j]->quality = NULL;
+                    return -1;
+                }
+
+                basecalls[j]->nclusters = nclusters;
+                basecalls[j]->base = malloc(nclusters);
+                basecalls[j]->quality = malloc(nclusters);
+                if (basecalls[j]->base == NULL || basecalls[j]->quality == NULL) {
+                    perror("load_alternative_basecalls");
+                    gzclose(hdl);
+                    return -1;
+                }
+            }
+        }
+        else if (seqlen != ncycles) {
+            fprintf(stderr, "Sequence length in the FASTQ is inconsistent.\n");
+            return -1;
+        }
+
+        for (j = 0; j < ncycles; j++)
+            basecalls[j]->base[clusterno] = buf[j];
+
+        /* header 2 */
+        if (gzgets(hdl, buf, BUFSIZ) == NULL) {
+            fprintf(stderr, "Unexpected EOF while reading %s\n", filename);
+            return -1;
+        }
+
+        if (buf[0] != '+') {
+            fprintf(stderr, "%s is not in FASTQ format.\n", filename);
+            return -1;
+        }
+
+        /* quality */
+        if (gzgets(hdl, buf, BUFSIZ) == NULL) {
+            fprintf(stderr, "Unexpected EOF while reading %s\n", filename);
+            return -1;
+        }
+
+        seqlen = strlen(buf) - 1;
+        if (seqlen != ncycles) {
+            fprintf(stderr, "Sequence length in the FASTQ is inconsistent.\n");
+            return -1;
+        }
+
+        for (j = 0; j < ncycles; j++)
+            basecalls[j]->quality[clusterno] = buf[j];
+    }
+
+    if (gzgets(hdl, buf, BUFSIZ) != NULL) {
+        fprintf(stderr, "Extra sequences found in %s\n", filename);
+        return -1;
+    }
+
+    gzclose(hdl);
+
+    return ncycles;
+}
+
+
+static int
+load_intensities_and_basecalls(const char *datadir, const char *laneid, int lane, int tile,
+                               int ncycles, struct AlternativeCallInfo *altcalls,
+                               struct CIFData **intensities, struct BCLData **basecalls)
+{
+    char path[PATH_MAX];
+    char altcall_loaded[ncycles];
+    uint32_t cycleno;
+    struct AlternativeCallInfo *paltcall;
+    int bcllaststart;
+
+    memset(altcall_loaded, 0, ncycles);
+    bcllaststart = -1;
+
+    printf("[%s%d] - CIF data source: %s\n", laneid, tile, datadir);
+
+    for (cycleno = 0; cycleno < ncycles; cycleno++) {
+        snprintf(path, PATH_MAX, "%s/L%03d/C%d.1/s_%d_%04d.cif", datadir, lane, cycleno+1,
+                 lane, tile);
+
+        intensities[cycleno] = load_cif_file(path);
+        if (intensities[cycleno] == NULL)
+            return -1;
+
+        if (altcall_loaded[cycleno])
+            continue;
+
+        for (paltcall = altcalls; paltcall != NULL; paltcall = paltcall->next) {
+            if (paltcall->first_cycle == cycleno) {
+                int loaded, j;
+
+                loaded = load_alternative_basecalls(paltcall->filename, basecalls + cycleno,
+                                                    intensities[cycleno]->nclusters);
+                if (loaded < 0)
+                    return -1;
+
+                for (j = cycleno; j < cycleno + loaded; j++)
+                    altcall_loaded[j] = 1;
+
+                if (bcllaststart >= 0) {
+                    printf("[%s%d] - BCL basecall source [%d-%d]: %s\n", laneid, tile,
+                            bcllaststart+1, cycleno, datadir);
+                    bcllaststart = -1;
+                }
+
+                printf("[%s%d] - FASTQ basecall source [%d-%d]: %s\n", laneid, tile,
+                        cycleno+1, cycleno+loaded, paltcall->filename);
+
+                break;
+            }
+        }
+
+        if (paltcall != NULL) /* exited after loading an alternative basecall file. */
+            continue;
+
+        snprintf(path, PATH_MAX, "%s/BaseCalls/L%03d/C%d.1/s_%d_%04d.bcl", datadir, lane,
+                 cycleno+1, lane, tile);
+
+        basecalls[cycleno] = load_bcl_file(path);
+        if (basecalls[cycleno] == NULL)
+            return -1;
+
+        if (bcllaststart < 0)
+            bcllaststart = cycleno;
+    }
+
+    if (bcllaststart >= 0)
+        printf("[%s%d] - BCL basecall source [%d-%d]: %s\n", laneid, tile,
+                bcllaststart+1, cycleno, datadir);
+
+    return 0;
 }
 
 
@@ -363,11 +552,14 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, double scalefac
 
         bc = assign_barcode(sequence_formatted + barcode_start, barcode_length, barcodes);
         delimiter_end = find_delimiter_end_position(sequence_formatted, bc);
-        if (delimiter_end < 0 && !keep_no_delimiter)
+        if (bc->delimiter_length > 0 && delimiter_end < 0 && !keep_no_delimiter)
             continue;
 
-        fprintf(bc->stream, "%s%04d\t%d\t0\t%s\t%s\t%s\t%d\n", laneid, tile, clusterno,
-                sequence_formatted, quality_formatted, intensity_formatted, delimiter_end);
+        if (fprintf(bc->stream, "%s%04d\t%d\t0\t%s\t%s\t%s\t%d\n", laneid, tile, clusterno,
+             sequence_formatted, quality_formatted, intensity_formatted, delimiter_end) < 0) {
+            perror("demultiplex_and_write");
+            return -1;
+        }
     }
 
     return 0;
@@ -405,13 +597,13 @@ terminate_writers(struct BarcodeInfo *barcodes)
 static int
 process(const char *datadir, const char *laneid, int lane, int tile, int ncycles,
         double scalefactor, int barcode_start, int barcode_length,
-        struct BarcodeInfo *barcodes, const char *writercmd, int keep_no_delimiter)
+        struct BarcodeInfo *barcodes, const char *writercmd,
+        struct AlternativeCallInfo *altcalls, int keep_no_delimiter)
 {
     struct CIFData **intensities;
     struct BCLData **basecalls;
-    char path[PATH_MAX];
-    uint32_t cycleno;
-    
+    int cycleno;
+
     intensities = malloc(sizeof(struct CIFData *) * ncycles);
     if (intensities == NULL) {
         perror("process");
@@ -428,42 +620,22 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
     memset(intensities, 0, sizeof(struct CIFData *) * ncycles);
     memset(basecalls, 0, sizeof(struct BCLData *) * ncycles);
 
-    printf("[%s%d] Loading CIF and BCL files ...", laneid, tile);
-    fflush(stdout);
+    printf("[%s%d] Loading CIF and BCL files\n", laneid, tile);
 
-    for (cycleno = 0; cycleno < ncycles; cycleno++) {
-        snprintf(path, PATH_MAX, "%s/L%03d/C%d.1/s_%d_%04d.cif", datadir, lane, cycleno+1,
-                 lane, tile);
+    if (load_intensities_and_basecalls(datadir, laneid, lane, tile, ncycles, altcalls,
+                                       intensities, basecalls) == -1)
+        goto onError;
 
-        intensities[cycleno] = load_cif_file(path);
-        if (intensities[cycleno] == NULL)
-            goto onError;
-
-        snprintf(path, PATH_MAX, "%s/BaseCalls/L%03d/C%d.1/s_%d_%04d.bcl", datadir, lane,
-                 cycleno+1, lane, tile);
-
-        basecalls[cycleno] = load_bcl_file(path);
-        if (basecalls[cycleno] == NULL)
-            goto onError;
-    }
-
-    printf("  done.\n");
-
-    printf("[%s%d] Opening writer subprocesses ...", laneid, tile);
-    fflush(stdout);
+    printf("[%s%d] Opening writer subprocesses\n", laneid, tile);
     if (spawn_writers(writercmd, barcodes) == -1)
         goto onError;
 
-    printf("  done.\n");
-    printf("[%s%d] Demultiplexing and writing ...", laneid, tile);
-    fflush(stdout);
+    printf("[%s%d] Demultiplexing and writing\n", laneid, tile);
 
     if (demultiplex_and_write(laneid, tile, ncycles, scalefactor, barcode_start,
                               barcode_length, barcodes, intensities, basecalls,
                               keep_no_delimiter) == -1)
         goto onError;
-
-    printf("  done.\n");
 
     for (cycleno = 0; cycleno < ncycles; cycleno++) {
         free_cif_data(intensities[cycleno]);
@@ -503,6 +675,7 @@ main(int argc, char *argv[])
     int barcode_start, barcode_length;
     double scalefactor;
     struct BarcodeInfo *barcodes;
+    struct AlternativeCallInfo *altcalls;
     int c, r;
 
     struct option long_options[] =
@@ -513,6 +686,7 @@ main(int argc, char *argv[])
         {"lane",                required_argument,  0,                          'l'},
         {"tile",                required_argument,  0,                          't'},
         {"ncycles",             required_argument,  0,                          'n'},
+        {"alternative-call",    required_argument,  0,                          'c'},
         {"signal-scale",        required_argument,  0,                          's'},
         {"barcode-start",       required_argument,  0,                          'b'},
         {"barcode-length",      required_argument,  0,                          'a'},
@@ -527,6 +701,7 @@ main(int argc, char *argv[])
     scalefactor = -1.0;
     barcode_length = 6;
     barcodes = NULL;
+    altcalls = NULL;
 
     while (1) {
         int option_index=0;
@@ -567,6 +742,44 @@ main(int argc, char *argv[])
 
             case 'n': /* --ncycles */
                 ncycles = atoi(optarg);
+                break;
+
+            case 'c': /* --alternative-call */
+                {
+#define ALTCALL_OPTION_TOKENS   2
+                    struct AlternativeCallInfo *newac;
+                    char *str, *saveptr;
+                    char *tokens[ALTCALL_OPTION_TOKENS];
+                    int j;
+
+                    for (j = 0, str = optarg; j < ALTCALL_OPTION_TOKENS; j++, str = NULL) {
+                        tokens[j] = strtok_r(str, ",", &saveptr);
+                        if (tokens[j] == NULL)
+                            break;
+                    }
+
+                    if (j != ALTCALL_OPTION_TOKENS) {
+                        fprintf(stderr, "An alternative call specified with illegal format.\n");
+                        return -1;
+                    }
+
+                    newac = malloc(sizeof(struct AlternativeCallInfo));
+                    if (newac == NULL) {
+                        perror("main");
+                        return -1;
+                    }
+
+                    newac->filename = strdup(tokens[0]);
+                    newac->first_cycle = atoi(tokens[1]) - 1;
+
+                    if (newac->filename == NULL) {
+                        perror("main");
+                        return -1;
+                    }
+
+                    newac->next = altcalls;
+                    altcalls = newac;
+                }
                 break;
 
             case 's': /* --signal-scale */
@@ -736,7 +949,7 @@ main(int argc, char *argv[])
     }
 
     r = process(datadir, runid, lane, tile, ncycles, scalefactor, barcode_start,
-                barcode_length, barcodes, writercmd, keep_no_delimiter_flag);
+                barcode_length, barcodes, writercmd, altcalls, keep_no_delimiter_flag);
     
     free(datadir);
     free(runid);

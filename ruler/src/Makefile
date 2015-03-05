@@ -16,4 +16,4 @@ sqi2fq: sqi2fq.c
 	cc -O3 -Wall -o $@ $<
 
 tailseq-retrieve-signals: tailseq-retrieve-signals.c
-	cc -O3 -Wall -o $@ $<
+	cc -O3 -Wall -o $@ $< -lz
