@@ -35,8 +35,8 @@
 #include <limits.h>
 #include <endian.h>
 #include <zlib.h>
-#include "kseq.h"
 #include "ssw.h"
+#include "phix_control.h"
 
 #define NUM_CHANNELS        4
 #define NOCALL_QUALITY      2
@@ -91,13 +91,10 @@ struct AlternativeCallInfo {
 #define CONTROL_NAME_MAX    128
 struct ControlFilterInfo {
     char name[CONTROL_NAME_MAX];
-    char filename[PATH_MAX];
     int first_cycle;
     int read_length;
     struct BarcodeInfo *barcode;
 };
-
-KSEQ_INIT(gzFile, gzread)
 
 static const char CALL_BASES[4] = "ACGT";
 static const char BASE64_ENCODE_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
@@ -572,54 +569,30 @@ initialize_ssw_score_matrix(int8_t *score_mat, int8_t match_score, int8_t mismat
 
 
 static size_t
-load_control_sequence(const char *filename, int8_t **control_seq)
+load_control_sequence(int8_t **control_seq)
 {
-    gzFile fp;
-    kseq_t *ctlseq_reader;
     int8_t *ctlseq, *pctlseq;
     ssize_t len, i;
     static const int8_t reverse_base[]={3, 2, 1, 0, 4};
 
-    fp = gzopen(filename, "rt");
-    if (fp == NULL)
-        return -1;
-
-    ctlseq_reader = kseq_init(fp);
-    if (ctlseq_reader == NULL) {
-        perror("load_control_sequence");
-        gzclose(fp);
-        return -1;
-    }
-
-    if (kseq_read(ctlseq_reader) < 0) {
-        fprintf(stderr, "Can't find any sequence from %s.", filename);
-        gzclose(fp);
-        return -1;
-    }
-
 #define CONTROL_SEQUENCE_SPACING 20 /* space between forward and reverse strands */
-    len = ctlseq_reader->seq.l;
+    len = strlen(phix_control_sequence);
     ctlseq = malloc(len * 2 + CONTROL_SEQUENCE_SPACING);
     if (ctlseq == NULL) {
         perror("load_control_sequence");
-        kseq_destroy(ctlseq_reader);
-        gzclose(fp);
         return -1;
     }
 
     /* forward strand */
     for (i = 0, pctlseq = ctlseq; i < len; i++)
-        *pctlseq++ = DNABASE2NUM[(int)ctlseq_reader->seq.s[i]];
+        *pctlseq++ = DNABASE2NUM[(int)phix_control_sequence[i]];
 
     for (i = 0, pctlseq = ctlseq + len; i < CONTROL_SEQUENCE_SPACING; i++)
         *pctlseq++ = 4;
 
     /* reverse strand */
     for (i = 0, pctlseq = ctlseq + len * 2 + CONTROL_SEQUENCE_SPACING - 1; i < len; i++)
-        *pctlseq-- = reverse_base[(int)DNABASE2NUM[(int)ctlseq_reader->seq.s[i]]];
-
-    kseq_destroy(ctlseq_reader);
-    gzclose(fp);
+        *pctlseq-- = reverse_base[(int)DNABASE2NUM[(int)phix_control_sequence[i]]];
 
     *control_seq = ctlseq;
 
@@ -699,7 +672,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, double scalefac
         initialize_ssw_score_matrix(ssw_score_mat, CONTROL_ALIGN_MATCH_SCORE,
                                     CONTROL_ALIGN_MISMATCH_SCORE);
 
-        control_seq_length = load_control_sequence(control_info->filename, &control_seq);
+        control_seq_length = load_control_sequence(&control_seq);
         if (control_seq_length < 0)
             return -1;
 
@@ -897,8 +870,8 @@ tailseq-retrieve-signals 1.0\
 \n            \"name,index,maximum_mismatches,delimiter,delimiter_position\".\
 \n       --keep-no-delimiter          don't skip reads where a delimiter\
 \n                                    is not found.\
-\n  -f,  --filter-control=SPEC        sort out control reads by sequence in\
-\n                                    \"name,fasta_file,first_cycle,length\".\
+\n  -f,  --filter-control=SPEC        sort out PhiX control reads by sequence\
+\n                                    in \"name,first_cycle,length\".\
 \n\
 \nAll cycle numbers or positions are in 1-based inclusive system.\
 \n\
@@ -945,7 +918,7 @@ main(int argc, char *argv[])
     barcode_length = 6;
     barcodes = NULL;
     altcalls = NULL;
-    controlinfo.name[0] = controlinfo.filename[0] = 0;
+    controlinfo.name[0] = 0;
     controlinfo.first_cycle = controlinfo.read_length = -1;
 
     while (1) {
@@ -1115,7 +1088,7 @@ main(int argc, char *argv[])
 
             case 'f':
                 {
-#define FILTER_CONTROL_OPTION_TOKENS    4
+#define FILTER_CONTROL_OPTION_TOKENS    3
                     char *str, *saveptr;
                     char *tokens[FILTER_CONTROL_OPTION_TOKENS];
                     int j;
@@ -1133,9 +1106,8 @@ main(int argc, char *argv[])
                     }
 
                     strncpy(controlinfo.name, tokens[0], CONTROL_NAME_MAX);
-                    strncpy(controlinfo.filename, tokens[1], PATH_MAX);
-                    controlinfo.first_cycle = atoi(tokens[2]) - 1;
-                    controlinfo.read_length = atoi(tokens[3]);
+                    controlinfo.first_cycle = atoi(tokens[1]) - 1;
+                    controlinfo.read_length = atoi(tokens[2]);
                     controlinfo.barcode = NULL;
                 }
                 break;
