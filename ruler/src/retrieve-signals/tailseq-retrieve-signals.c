@@ -35,14 +35,9 @@
 #include <limits.h>
 #include <endian.h>
 #include <zlib.h>
+#include "tailseq-retrieve-signals.h"
 #include "ssw.h"
-#include "phix_control.h"
 
-#define NUM_CHANNELS        4
-#define NOCALL_QUALITY      2
-#define NOCALL_BASE         'N'
-#define PHRED_BASE          33
-#define MAX_INDEX_LENGTH    16
 #define BATCH_BLOCK_SIZE    65536
 
 #define CONTROL_ALIGN_BASE_COUNT            5
@@ -52,41 +47,6 @@
 #define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
 #define CONTROL_ALIGN_MINIMUM_SCORE         0.65
 
-
-struct IntensitySet {
-    uint16_t value[NUM_CHANNELS];
-};
-
-struct CIFHandler {
-    char filemagic[3];
-    uint8_t version;
-    uint8_t datasize;
-    uint16_t first_cycle;
-    uint16_t ncycles;
-    uint32_t nclusters;
-
-    FILE *fptr;
-    uint32_t read;
-};
-
-struct CIFData {
-    size_t nclusters;
-    struct IntensitySet intensity[1];
-};
-
-struct BCLHandler {
-    uint16_t ncycles;
-    uint32_t nclusters;
-
-    FILE *fptr;
-    uint32_t read;
-};
-
-struct BCLData {
-    size_t nclusters;
-    uint8_t *base;
-    uint8_t *quality;
-};
 
 struct BarcodeInfo;
 struct BarcodeInfo {
@@ -115,10 +75,6 @@ struct ControlFilterInfo {
     struct BarcodeInfo *barcode;
 };
 
-static const char CALL_BASES[4] = "ACGT";
-static const char BASE64_ENCODE_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
-                                          "ghijklmnopqrstuvwxyz0123456789+/";
-
 static const int8_t DNABASE2NUM[128] = { 
     4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
     4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -129,164 +85,6 @@ static const int8_t DNABASE2NUM[128] = {
     4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
     4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
 };
-
-
-static struct CIFData *
-load_cif_file(const char *filename)
-{
-    FILE *fp;
-    struct CIFHandler header;
-    struct CIFData *data;
-
-    fp = fopen(filename, "rb");
-    if (fp == NULL) {
-        fprintf(stderr, "load_cif_file: Can't open file %s.\n", filename);
-        return NULL;
-    }
-
-    if (fread(header.filemagic, 3, 1, fp) < 1)
-        goto onError;
-
-    if (memcmp(header.filemagic, "CIF", 3) != 0) {
-        fprintf(stderr, "File %s does not seem to be a CIF file.", filename);
-        goto onError;
-    }
-
-    /* read version and data size */
-    if (fread(&header.version, 2, 1, fp) < 1) {
-        fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
-        goto onError;
-    }
-    if (header.version != 1) {
-        fprintf(stderr, "Unsupported CIF version: %d.\n", header.version);
-        goto onError;
-    }
-    if (header.datasize != 2) {
-        fprintf(stderr, "Unsupported data size (%d).\n", header.datasize);
-        goto onError;
-    }
-
-    /* read first cycle and number of cycles */
-    if (fread(&header.first_cycle, 2, 2, fp) < 2) {
-        fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
-        goto onError;
-    }
-    if (fread(&header.nclusters, 4, 1, fp) < 1) {
-        fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
-        goto onError;
-    }
-
-    header.first_cycle = le16toh(header.first_cycle);
-    header.ncycles = le16toh(header.ncycles);
-    header.nclusters = le32toh(header.nclusters);
-
-    data = malloc(sizeof(int) + sizeof(struct IntensitySet) * header.nclusters);
-    if (data == NULL) {
-        perror("load_cif_file");
-        goto onError;
-    }
-
-    data->nclusters = header.nclusters;
-    if (fread(data->intensity, sizeof(struct IntensitySet), header.nclusters, fp) !=
-            header.nclusters) {
-        fprintf(stderr, "Not all data were loaded from %s.", filename);
-        goto onError;
-    }
-
-    fclose(fp);
-
-    return data;
-
-  onError:
-    fclose(fp);
-    return NULL;
-}
-
-
-static void
-free_cif_data(struct CIFData *data)
-{
-    free(data);
-}
-
-
-static struct BCLData *
-load_bcl_file(const char *filename)
-{
-    struct BCLData *bcl=NULL;
-    uint32_t nclusters, i;
-    uint8_t *base, *quality;
-    FILE *fp;
-
-    fp = fopen(filename, "rb");
-    if (fp == NULL) {
-        fprintf(stderr, "load_bcl_file: Can't open file %s.\n", filename);
-        return NULL;
-    }
-
-    if (fread(&nclusters, sizeof(nclusters), 1, fp) < 1) {
-        fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
-        goto onError;
-    }
-
-    nclusters = le32toh(nclusters);
-    bcl = malloc(sizeof(struct BCLData));
-    if (bcl == NULL) {
-        perror("load_bcl_file");
-        goto onError;
-    }
-
-    bcl->nclusters = nclusters;
-    base = bcl->base = malloc(nclusters);
-    quality = bcl->quality = malloc(nclusters);
-    if (base == NULL || quality == NULL) {
-        perror("load_bcl_file");
-        goto onError;
-    }
-
-    if (fread(base, nclusters, 1, fp) < 1) {
-        fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
-        printf("nclusters=%u file=%s\n", nclusters, filename);
-        goto onError;
-    }
-
-    fclose(fp);
-
-    for (i = 0; i < nclusters; i++, base++, quality++) {
-        if (*base == 0) {
-            *quality = NOCALL_QUALITY + PHRED_BASE;
-            *base = NOCALL_BASE;
-        }
-        else {
-            *quality = (*base >> 2) + PHRED_BASE;
-            *base = CALL_BASES[*base & 3];
-        }
-    }
-
-    return bcl;
-
-  onError:
-    if (bcl != NULL) {
-        if (bcl->base != NULL)
-            free(bcl->base);
-        if (bcl->quality != NULL)
-            free(bcl->quality);
-        free(bcl);
-    }
-
-    fclose(fp);
-
-    return NULL;
-}
-
-
-static void
-free_bcl_data(struct BCLData *data)
-{
-    free(data->base);
-    free(data->quality);
-    free(data);
-}
 
 
 static int
@@ -467,46 +265,6 @@ load_intensities_and_basecalls(const char *datadir, const char *laneid, int lane
                 bcllaststart+1, cycleno, datadir);
 
     return 0;
-}
-
-
-static void
-format_basecalls(char *seq, char *qual, struct BCLData **basecalls,
-                 int ncycles, uint32_t clusterno)
-{
-    uint32_t i;
-
-    for (i = 0; i < ncycles; i++) {
-        *seq++ = basecalls[i]->base[clusterno];
-        *qual++ = basecalls[i]->quality[clusterno];
-    }
-
-    *seq = *qual = 0;
-}
-
-
-static void
-format_intensity(char *inten, struct CIFData **intensities,
-                 int ncycles, uint32_t clusterno, double scalefactor)
-{
-    uint32_t i;
-    int value, chan;
-
-    for (i = 0; i < ncycles; i++) {
-        for (chan = 0; chan < NUM_CHANNELS; chan++) {
-            value = scalefactor * intensities[i]->intensity[clusterno].value[chan];
-            value += 255;
-            if (value >= 4096)
-                value = 4095;
-            else if (value < 0)
-                value = 0;
-
-            *inten++ = BASE64_ENCODE_TABLE[value >> 6];
-            *inten++ = BASE64_ENCODE_TABLE[value & 63];
-        }
-    }
-
-    *inten = 0;
 }
 
 
