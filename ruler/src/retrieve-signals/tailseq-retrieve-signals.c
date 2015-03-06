@@ -43,10 +43,30 @@
 #define NOCALL_BASE         'N'
 #define PHRED_BASE          33
 #define MAX_INDEX_LENGTH    16
+#define BATCH_BLOCK_SIZE    65536
+
+#define CONTROL_ALIGN_BASE_COUNT            5
+#define CONTROL_ALIGN_MATCH_SCORE           1
+#define CONTROL_ALIGN_MISMATCH_SCORE        2
+#define CONTROL_ALIGN_GAP_OPEN_SCORE        4
+#define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
+#define CONTROL_ALIGN_MINIMUM_SCORE         0.65
 
 
 struct IntensitySet {
     uint16_t value[NUM_CHANNELS];
+};
+
+struct CIFHandler {
+    char filemagic[3];
+    uint8_t version;
+    uint8_t datasize;
+    uint16_t first_cycle;
+    uint16_t ncycles;
+    uint32_t nclusters;
+
+    FILE *fptr;
+    uint32_t read;
 };
 
 struct CIFData {
@@ -54,13 +74,12 @@ struct CIFData {
     struct IntensitySet intensity[1];
 };
 
-struct CIFHeader {
-    char filemagic[3];
-    uint8_t version;
-    uint8_t datasize;
-    uint16_t first_cycle;
+struct BCLHandler {
     uint16_t ncycles;
     uint32_t nclusters;
+
+    FILE *fptr;
+    uint32_t read;
 };
 
 struct BCLData {
@@ -111,19 +130,12 @@ static const int8_t DNABASE2NUM[128] = {
     4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
 };
 
-#define CONTROL_ALIGN_BASE_COUNT            5
-#define CONTROL_ALIGN_MATCH_SCORE           1
-#define CONTROL_ALIGN_MISMATCH_SCORE        2
-#define CONTROL_ALIGN_GAP_OPEN_SCORE        4
-#define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
-#define CONTROL_ALIGN_MINIMUM_SCORE         0.65
-
 
 static struct CIFData *
 load_cif_file(const char *filename)
 {
     FILE *fp;
-    struct CIFHeader header;
+    struct CIFHandler header;
     struct CIFData *data;
 
     fp = fopen(filename, "rb");
@@ -845,7 +857,7 @@ static void
 usage(const char *prog)
 {
     printf("\
-tailseq-retrieve-signals 1.0\
+tailseq-retrieve-signals 2.0\
 \n - collects intensities and base calls from Illumina sequencing for TAIL-seq\
 \n\
 \nUsage: %s [OPTION]...\

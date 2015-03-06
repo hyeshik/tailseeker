@@ -1,9 +1,12 @@
-all: sqi2fq tailseq-retrieve-signals
+CC=	gcc
+
+all: bin/sqi2fq bin/tailseq-retrieve-signals
 #	python setup.py install --user
 #	python test.py
 
-sqi2fq: sqi2fq.c
-	cc -O3 -Wall -o $@ $<
+bin/sqi2fq: src/sqi2fq/sqi2fq.c
+	mkdir -p bin
+	${CC} -O3 -Wall -o $@ $<
 
-tailseq-retrieve-signals: tailseq-retrieve-signals.c ssw.c ssw.h
-	cc -O3 -Wall -o $@ tailseq-retrieve-signals.c ssw.c ssw.h -lz
+bin/tailseq-retrieve-signals: src/retrieve-signals/tailseq-retrieve-signals.c src/retrieve-signals/ssw.c src/retrieve-signals/ssw.h
+	${CC} -O3 -Wall -o $@ src/retrieve-signals/tailseq-retrieve-signals.c src/retrieve-signals/ssw.c src/retrieve-signals/ssw.h -lz
