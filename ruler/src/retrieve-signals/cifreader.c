@@ -35,10 +35,6 @@
 #include "tailseq-retrieve-signals.h"
 
 
-static const char BASE64_ENCODE_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
-                                          "ghijklmnopqrstuvwxyz0123456789+/";
-
-
 struct CIFReader *
 open_cif_file(const char *filename)
 {
@@ -165,23 +161,54 @@ free_cif_data(struct CIFData *data)
 
 void
 format_intensity(char *inten, struct CIFData **intensities,
-                 int ncycles, uint32_t clusterno, double scalefactor)
+                 int ncycles, uint32_t clusterno, int scalefactor)
 {
+    /* This function consumes CPU time than most of the other parts in this program.
+     * It is optimized with some black magics. */
+    static const char base64_encode_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
+                                              "ghijklmnopqrstuvwxyz0123456789+/";
     uint32_t i;
-    int value, chan;
+    int value_a, value_c, value_g, value_t;
 
-    for (i = 0; i < ncycles; i++) {
-        for (chan = 0; chan < NUM_CHANNELS; chan++) {
-            value = scalefactor * intensities[i]->intensity[clusterno].value[chan];
-            value += 255;
-            if (value >= 4096)
-                value = 4095;
-            else if (value < 0)
-                value = 0;
+#define FORMAT_INTENSITY(valueexpr)                                         \
+    for (i = 0; i < ncycles; i++) {                                         \
+        uint16_t *valueset;                                                 \
+        valueset = intensities[i]->intensity[clusterno].value;              \
+                                                                            \
+        value_a = (valueset[0] valueexpr) + 255;                            \
+        value_c = (valueset[1] valueexpr) + 255;                            \
+        value_g = (valueset[2] valueexpr) + 255;                            \
+        value_t = (valueset[3] valueexpr) + 255;                            \
+                                                                            \
+        value_a = (value_a >= 4096) ? 4095 : ((value_a < 0) ? 0 : value_a); \
+        value_c = (value_c >= 4096) ? 4095 : ((value_c < 0) ? 0 : value_c); \
+        value_g = (value_g >= 4096) ? 4095 : ((value_g < 0) ? 0 : value_g); \
+        value_t = (value_t >= 4096) ? 4095 : ((value_t < 0) ? 0 : value_t); \
+                                                                            \
+        inten[0] = base64_encode_table[value_a >> 6];                       \
+        inten[1] = base64_encode_table[value_a & 63];                       \
+        inten[2] = base64_encode_table[value_c >> 6];                       \
+        inten[3] = base64_encode_table[value_c & 63];                       \
+        inten[4] = base64_encode_table[value_g >> 6];                       \
+        inten[5] = base64_encode_table[value_g & 63];                       \
+        inten[6] = base64_encode_table[value_t >> 6];                       \
+        inten[7] = base64_encode_table[value_t & 63];                       \
+        inten += 8;                                                         \
+    }
 
-            *inten++ = BASE64_ENCODE_TABLE[value >> 6];
-            *inten++ = BASE64_ENCODE_TABLE[value & 63];
-        }
+    switch (scalefactor) { /* fast paths for usual scales. */
+    case 0:
+        FORMAT_INTENSITY(>> 0)
+        break;
+    case 1:
+        FORMAT_INTENSITY(>> 1)
+        break;
+    case 2:
+        FORMAT_INTENSITY(>> 2)
+        break;
+    default:
+        FORMAT_INTENSITY(>> scalefactor)
+        break;
     }
 
     *inten = 0;

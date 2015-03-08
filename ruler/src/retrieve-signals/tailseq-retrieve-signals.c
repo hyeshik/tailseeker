@@ -98,7 +98,7 @@ find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode)
 
 static int
 demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstclusterno,
-                      double scalefactor, int barcode_start, int barcode_length,
+                      int scalefactor, int barcode_start, int barcode_length,
                       struct BarcodeInfo *barcodes,
                       struct CIFData **intensities, struct BCLData **basecalls,
                       struct ControlFilterInfo *control_info, int keep_no_delimiter)
@@ -314,7 +314,7 @@ load_intensities_and_basecalls(struct CIFReader **cifreader, struct BCLReader **
 
 static int
 process(const char *datadir, const char *laneid, int lane, int tile, int ncycles,
-        double scalefactor, int barcode_start, int barcode_length,
+        int scalefactor, int barcode_start, int barcode_length,
         struct BarcodeInfo *barcodes, const char *writercmd,
         struct AlternativeCallInfo *altcalls, struct ControlFilterInfo *control_info,
         int blocksize, int keep_no_delimiter)
@@ -439,14 +439,14 @@ tailseq-retrieve-signals 2.0\
 \n  -l,  --lane=NUM                   lane number.\
 \n  -t,  --tile=NUM                   tile number.\
 \n  -n,  --ncycles=NUM                number of cycles.\
-\n  -s,  --signal-scale=NUM           coefficient to multiply to signal\
-\n                                    intensity values.\
 \n  -b,  --barcode-start=NUM          the first cycle of index read.\
 \n  -a,  --barcode-length=NUM         length of index read.\
 \n  -w,  --writer-command=COMMAND     shell command to run to write .sqi\
 \n                                    output (usually a stream compressor.)\
 \n\
 \nOptional parameters:\
+\n  -s,  --signal-scale=NUM           number of digits in radix 2 to scale\
+\n                                    signal intensity down. (default: 0)\
 \n  -c,  --alternative-call=SPEC      FASTQ file to replace base calls.\
 \n                                    specify as \"filename,first_cycle\".\
 \n  -m,  --sample=SPEC                sample information as formatted in\
@@ -471,7 +471,7 @@ main(int argc, char *argv[])
     int keep_no_delimiter_flag;
     int lane, tile, ncycles, blocksize;
     int barcode_start, barcode_length;
-    double scalefactor;
+    int scalefactor;
     struct BarcodeInfo *barcodes;
     struct AlternativeCallInfo *altcalls;
     struct ControlFilterInfo controlinfo;
@@ -500,7 +500,7 @@ main(int argc, char *argv[])
     datadir = runid = writercmd = NULL;
     keep_no_delimiter_flag = 0;
     lane = tile = ncycles = barcode_start = -1;
-    scalefactor = -1.0;
+    scalefactor = 0;
     barcode_length = 6;
     barcodes = NULL;
     altcalls = NULL;
@@ -578,7 +578,7 @@ main(int argc, char *argv[])
                 break;
 
             case 's': /* --signal-scale */
-                scalefactor = atof(optarg);
+                scalefactor = atoi(optarg);
                 break;
 
             case 'b': /* --barcode-start */
@@ -734,12 +734,6 @@ main(int argc, char *argv[])
     if (ncycles < 0) {
         usage(argv[0]);
         fprintf(stderr, "--ncycles is not set.\n");
-        return -1;
-    }
-
-    if (scalefactor < 0.) {
-        usage(argv[0]);
-        fprintf(stderr, "--signal-scale is not set.\n");
         return -1;
     }
 

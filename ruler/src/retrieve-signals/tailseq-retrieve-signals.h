@@ -136,7 +136,7 @@ extern struct CIFData *new_cif_data(uint32_t size);
 extern int load_cif_data(struct CIFReader *cif, struct CIFData *data, uint32_t nclusters);
 extern void free_cif_data(struct CIFData *data);
 extern void format_intensity(char *inten, struct CIFData **intensities,
-                             int ncycles, uint32_t clusterno, double scalefactor);
+                             int ncycles, uint32_t clusterno, int scalefactor);
 extern struct CIFReader **open_cif_readers(const char *msgprefix, const char *datadir,
                                            int lane, int tile, int ncycles);
 extern void close_cif_readers(struct CIFReader **readers, int ncycles);
