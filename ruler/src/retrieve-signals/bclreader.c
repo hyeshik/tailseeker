@@ -42,12 +42,10 @@
 static const char CALL_BASES[4] = "ACGT";
 
 
-struct BCLData *
-load_bcl_file(const char *filename)
+struct BCLReader *
+open_bcl_file(const char *filename)
 {
-    struct BCLData *bcl=NULL;
-    uint32_t nclusters, i;
-    uint8_t *base, *quality;
+    struct BCLReader *bcl;
     FILE *fp;
 
     fp = fopen(filename, "rb");
@@ -56,35 +54,66 @@ load_bcl_file(const char *filename)
         return NULL;
     }
 
-    if (fread(&nclusters, sizeof(nclusters), 1, fp) < 1) {
-        fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
-        goto onError;
-    }
-
-    nclusters = le32toh(nclusters);
-    bcl = malloc(sizeof(struct BCLData));
+    bcl = malloc(sizeof(struct BCLReader));
     if (bcl == NULL) {
-        perror("load_bcl_file");
-        goto onError;
+        fclose(fp);
+        return NULL;
     }
 
-    bcl->nclusters = nclusters;
-    base = bcl->base = malloc(nclusters);
-    quality = bcl->quality = malloc(nclusters);
-    if (base == NULL || quality == NULL) {
-        perror("load_bcl_file");
-        goto onError;
-    }
-
-    if (fread(base, nclusters, 1, fp) < 1) {
+    if (fread(&bcl->nclusters, sizeof(bcl->nclusters), 1, fp) < 1) {
         fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
-        printf("nclusters=%u file=%s\n", nclusters, filename);
-        goto onError;
+        fclose(fp);
+        free(bcl);
+        return NULL;
     }
 
-    fclose(fp);
+    bcl->nclusters = le32toh(bcl->nclusters);
+    bcl->fptr = fp;
+    bcl->read = 0;
 
-    for (i = 0; i < nclusters; i++, base++, quality++) {
+    return bcl;
+}
+
+
+void
+close_bcl_file(struct BCLReader *bcl)
+{
+    if (bcl == BCLREADER_OVERRIDDEN)
+        return;
+
+    if (bcl->fptr == NULL)
+        fclose(bcl->fptr);
+    free(bcl);
+}
+
+
+int
+load_bcl_data(struct BCLReader *bcl, struct BCLData *data, uint32_t nclusters)
+{
+    uint32_t toread, i;
+    uint8_t *base, *quality;
+
+    if (bcl->read >= bcl->nclusters) {
+        data->nclusters = 0;
+        return 0;
+    }
+
+    if (bcl->read + nclusters >= bcl->nclusters) /* does file has enough clusters to read? */
+        toread = bcl->nclusters - bcl->read; /* all clusters left */
+    else
+        toread = nclusters;
+
+    if (fread(data->base, toread, 1, bcl->fptr) < 1) {
+        fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
+        return -1;
+    }
+
+    data->nclusters = toread;
+
+    base = data->base;
+    quality = data->quality;
+
+    for (i = 0; i < toread; i++, base++, quality++) {
         if (*base == 0) {
             *quality = NOCALL_QUALITY + PHRED_BASE;
             *base = NOCALL_BASE;
@@ -95,20 +124,41 @@ load_bcl_file(const char *filename)
         }
     }
 
-    return bcl;
+    bcl->read += toread;
 
-  onError:
-    if (bcl != NULL) {
-        if (bcl->base != NULL)
-            free(bcl->base);
-        if (bcl->quality != NULL)
-            free(bcl->quality);
-        free(bcl);
+    return 0;
+}
+
+
+struct BCLData *
+new_bcl_data(uint32_t size)
+{
+    struct BCLData *bcl;
+
+    bcl = malloc(sizeof(struct BCLData));
+    if (bcl == NULL) {
+        perror("new_bcl_data");
+        return NULL;
     }
 
-    fclose(fp);
+    bcl->base = malloc(size);
+    if (bcl->base == NULL) {
+        perror("new_bcl_data");
+        free(bcl);
+        return NULL;
+    }
 
-    return NULL;
+    bcl->quality = malloc(size);
+    if (bcl->quality == NULL) {
+        perror("new_bcl_data");
+        free(bcl->base);
+        free(bcl);
+        return NULL;
+    }
+
+    bcl->nclusters = 0;
+
+    return bcl;
 }
 
 
@@ -133,4 +183,72 @@ format_basecalls(char *seq, char *qual, struct BCLData **basecalls,
     }
 
     *seq = *qual = 0;
+}
+
+
+struct BCLReader **
+open_bcl_readers(const char *msgprefix, const char *datadir, int lane, int tile, int ncycles,
+                 struct AlternativeCallInfo *altcalls)
+{
+    int16_t cycleno, bcllaststart;
+    char path[PATH_MAX];
+    struct BCLReader **readers;
+
+    readers = malloc(sizeof(struct BCLReader *) * ncycles);
+    if (readers == NULL) {
+        perror("open_bcl_readers");
+        return NULL;
+    }
+
+    memset(readers, 0, sizeof(struct BCLReader *) * ncycles);
+
+    /* mark overridden cycles by alternative calls not to open a reader for them. */
+    for (; altcalls != NULL; altcalls = altcalls->next) {
+        int16_t last_cycle=altcalls->first_cycle + altcalls->reader->ncycles;
+
+        for (cycleno = altcalls->first_cycle; cycleno < last_cycle; cycleno++)
+            readers[cycleno] = BCLREADER_OVERRIDDEN;
+    }
+
+    bcllaststart = -1;
+
+    for (cycleno = 0; cycleno < ncycles; cycleno++) {
+        if (readers[cycleno] != NULL) {
+            if (bcllaststart >= 0) {
+                printf("%sUsing BCL base calls for cycle %d-%d.\n", msgprefix,
+                        bcllaststart+1, cycleno);
+                bcllaststart = -1; 
+            }
+
+            continue;
+        }
+
+        snprintf(path, PATH_MAX, "%s/BaseCalls/L%03d/C%d.1/s_%d_%04d.bcl", datadir, lane,
+                 cycleno+1, lane, tile);
+
+        readers[cycleno] = open_bcl_file(path);
+        if (readers[cycleno] == NULL) {
+            while (--cycleno >= 0)
+                close_bcl_file(readers[cycleno]);
+            return NULL;
+        }
+
+        if (bcllaststart < 0)
+            bcllaststart = cycleno;
+    }
+
+    if (bcllaststart >= 0)
+        printf("%sUsing BCL base calls for cycle %d-%d.\n", msgprefix,
+                bcllaststart+1, cycleno);
+
+    return readers;
+}
+
+void
+close_bcl_readers(struct BCLReader **readers, int ncycles)
+{
+    int cycleno;
+
+    for (cycleno = 0; cycleno < ncycles; cycleno++)
+        close_bcl_file(readers[cycleno]);
 }

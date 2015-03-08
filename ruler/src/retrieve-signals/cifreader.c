@@ -35,81 +35,124 @@
 #include "tailseq-retrieve-signals.h"
 
 
-#define BATCH_BLOCK_SIZE    65536
-
 static const char BASE64_ENCODE_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
                                           "ghijklmnopqrstuvwxyz0123456789+/";
 
 
-struct CIFData *
-load_cif_file(const char *filename)
+struct CIFReader *
+open_cif_file(const char *filename)
 {
     FILE *fp;
-    struct CIFHandler header;
-    struct CIFData *data;
+    struct CIFReader *hdl;
 
     fp = fopen(filename, "rb");
     if (fp == NULL) {
-        fprintf(stderr, "load_cif_file: Can't open file %s.\n", filename);
+        fprintf(stderr, "open_cif_file: Can't open file %s.\n", filename);
         return NULL;
     }
 
-    if (fread(header.filemagic, 3, 1, fp) < 1)
+    hdl = malloc(sizeof(struct CIFReader));
+    if (hdl == NULL) {
+        perror("open_cif_file");
+        return NULL;
+    }
+
+    if (fread(hdl->filemagic, 3, 1, fp) < 1)
         goto onError;
 
-    if (memcmp(header.filemagic, "CIF", 3) != 0) {
+    if (memcmp(hdl->filemagic, "CIF", 3) != 0) {
         fprintf(stderr, "File %s does not seem to be a CIF file.", filename);
         goto onError;
     }
 
     /* read version and data size */
-    if (fread(&header.version, 2, 1, fp) < 1) {
+    if (fread(&hdl->version, 2, 1, fp) < 1) {
         fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
         goto onError;
     }
-    if (header.version != 1) {
-        fprintf(stderr, "Unsupported CIF version: %d.\n", header.version);
+    if (hdl->version != 1) {
+        fprintf(stderr, "Unsupported CIF version: %d.\n", hdl->version);
         goto onError;
     }
-    if (header.datasize != 2) {
-        fprintf(stderr, "Unsupported data size (%d).\n", header.datasize);
+    if (hdl->datasize != 2) {
+        fprintf(stderr, "Unsupported data size (%d).\n", hdl->datasize);
         goto onError;
     }
 
     /* read first cycle and number of cycles */
-    if (fread(&header.first_cycle, 2, 2, fp) < 2) {
+    if (fread(&hdl->first_cycle, 2, 2, fp) < 2) {
         fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
         goto onError;
     }
-    if (fread(&header.nclusters, 4, 1, fp) < 1) {
+    if (fread(&hdl->nclusters, 4, 1, fp) < 1) {
         fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
         goto onError;
     }
 
-    header.first_cycle = le16toh(header.first_cycle);
-    header.ncycles = le16toh(header.ncycles);
-    header.nclusters = le32toh(header.nclusters);
+    hdl->first_cycle = le16toh(hdl->first_cycle);
+    hdl->ncycles = le16toh(hdl->ncycles);
+    hdl->nclusters = le32toh(hdl->nclusters);
+    hdl->fptr = fp;
+    hdl->read = 0;
 
-    data = malloc(sizeof(int) + sizeof(struct IntensitySet) * header.nclusters);
-    if (data == NULL) {
-        perror("load_cif_file");
-        goto onError;
-    }
-
-    data->nclusters = header.nclusters;
-    if (fread(data->intensity, sizeof(struct IntensitySet), header.nclusters, fp) !=
-            header.nclusters) {
-        fprintf(stderr, "Not all data were loaded from %s.", filename);
-        goto onError;
-    }
-
-    fclose(fp);
-
-    return data;
+    return hdl;
 
   onError:
+    free(hdl);
     fclose(fp);
     return NULL;
+}
+
+
+void
+close_cif_file(struct CIFReader *cif)
+{
+    if (cif->fptr != NULL)
+        fclose(cif->fptr);
+    free(cif);
+}
+
+
+int
+load_cif_data(struct CIFReader *cif, struct CIFData *data, uint32_t nclusters)
+{
+    uint32_t toread;
+
+    if (cif->read >= cif->nclusters) {
+        data->nclusters = 0;
+        return 0;
+    }
+
+    if (cif->read + nclusters >= cif->nclusters) /* does file has enough clusters to read? */
+        toread = cif->nclusters - cif->read; /* all clusters left */
+    else
+        toread = nclusters;
+
+    data->nclusters = toread;
+    if (fread(data->intensity, sizeof(struct IntensitySet), toread, cif->fptr) != toread) {
+        fprintf(stderr, "Not all data were loaded from a CIF.");
+        return -1;
+    }
+
+    cif->read += toread;
+
+    return 0;
+}
+
+
+struct CIFData *
+new_cif_data(uint32_t size)
+{
+    struct CIFData *cdata;
+
+    cdata = malloc(sizeof(size_t) + sizeof(struct IntensitySet) * size);
+    if (cdata == NULL) {
+        perror("new_cif_data");
+        return NULL;
+    }
+
+    cdata->nclusters = 0;
+    return cdata;
 }
 
 
@@ -142,4 +185,44 @@ format_intensity(char *inten, struct CIFData **intensities,
     }
 
     *inten = 0;
+}
+
+
+struct CIFReader **
+open_cif_readers(const char *msgprefix, const char *datadir, int lane, int tile, int ncycles)
+{
+    int cycleno;
+    char path[PATH_MAX];
+    struct CIFReader **readers;
+
+    readers = malloc(sizeof(struct CIFReader *) * ncycles);
+    if (readers == NULL) {
+        perror("open_cif_readers");
+        return NULL;
+    }
+
+    printf("%sUsing cluster intensities from %s.\n", msgprefix, datadir);
+
+    for (cycleno = 0; cycleno < ncycles; cycleno++) {
+        snprintf(path, PATH_MAX, "%s/L%03d/C%d.1/s_%d_%04d.cif", datadir, lane, cycleno+1,
+                 lane, tile);
+
+        readers[cycleno] = open_cif_file(path);
+        if (readers[cycleno] == NULL) {
+            while (--cycleno >= 0)
+                close_cif_file(readers[cycleno]);
+            return NULL;
+        }
+    }
+
+    return readers;
+}
+
+void
+close_cif_readers(struct CIFReader **readers, int ncycles)
+{
+    int cycleno;
+
+    for (cycleno = 0; cycleno < ncycles; cycleno++)
+        close_cif_file(readers[cycleno]);
 }

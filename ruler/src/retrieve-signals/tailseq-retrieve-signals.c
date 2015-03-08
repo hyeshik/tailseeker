@@ -33,239 +33,14 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include <endian.h>
-#include <zlib.h>
 #include "tailseq-retrieve-signals.h"
-#include "ssw.h"
-
-#define BATCH_BLOCK_SIZE    65536
-
-#define CONTROL_ALIGN_BASE_COUNT            5
-#define CONTROL_ALIGN_MATCH_SCORE           1
-#define CONTROL_ALIGN_MISMATCH_SCORE        2
-#define CONTROL_ALIGN_GAP_OPEN_SCORE        4
-#define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
-#define CONTROL_ALIGN_MINIMUM_SCORE         0.65
 
 
-struct BarcodeInfo;
-struct BarcodeInfo {
-    char *name;
-    char *index;
-    char *delimiter;
-    int delimiter_pos;
-    int delimiter_length;
-    int maximum_mismatches;
-    FILE *stream;
-    struct BarcodeInfo *next;
-};
-
-struct AlternativeCallInfo;
-struct AlternativeCallInfo {
-    char *filename;
-    int first_cycle; /* the last cycle number will be determined from the file content */
-    struct AlternativeCallInfo *next;
-};
-
-#define CONTROL_NAME_MAX    128
-struct ControlFilterInfo {
-    char name[CONTROL_NAME_MAX];
-    int first_cycle;
-    int read_length;
-    struct BarcodeInfo *barcode;
-};
-
-static const int8_t DNABASE2NUM[128] = { 
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
-    4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
-    4, 4, 4, 4, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
-};
-
-
-static int
-load_alternative_basecalls(const char *filename, struct BCLData **basecalls,
-                           uint32_t nclusters)
-{
-    char buf[BUFSIZ];
-    gzFile hdl;
-    uint32_t clusterno;
-    int ncycles, j;
-
-    ncycles = -1;
-
-    hdl = gzopen(filename, "rt");
-    if (hdl == NULL) {
-        perror("load_alternative_basecalls");
-        return -1;
-    }
-
-    for (clusterno = 0; clusterno < nclusters; clusterno++) {
-        size_t seqlen;
-
-        /* header 1 */
-        if (gzgets(hdl, buf, BUFSIZ) == NULL) {
-            fprintf(stderr, "Not enough sequences from %s\n", filename);
-            return -1;
-        }
-
-        if (buf[0] != '@') {
-            fprintf(stderr, "%s is not in FASTQ format.\n", filename);
-            return -1;
-        }
-
-        /* sequence */
-        if (gzgets(hdl, buf, BUFSIZ) == NULL) {
-            fprintf(stderr, "Unexpected EOF while reading %s\n", filename);
-            return -1;
-        }
-
-        seqlen = strlen(buf) - 1;
-        if (ncycles == -1) {
-            /* Initialize here */
-            ncycles = seqlen;
-
-            for (j = 0; j < ncycles; j++) {
-                basecalls[j] = malloc(sizeof(struct BCLData));
-                if (basecalls[j] == NULL) {
-                    perror("load_alternative_basecalls");
-                    gzclose(hdl);
-                    basecalls[j]->base = basecalls[j]->quality = NULL;
-                    return -1;
-                }
-
-                basecalls[j]->nclusters = nclusters;
-                basecalls[j]->base = malloc(nclusters);
-                basecalls[j]->quality = malloc(nclusters);
-                if (basecalls[j]->base == NULL || basecalls[j]->quality == NULL) {
-                    perror("load_alternative_basecalls");
-                    gzclose(hdl);
-                    return -1;
-                }
-            }
-        }
-        else if (seqlen != ncycles) {
-            fprintf(stderr, "Sequence length in the FASTQ is inconsistent.\n");
-            return -1;
-        }
-
-        for (j = 0; j < ncycles; j++)
-            basecalls[j]->base[clusterno] = buf[j];
-
-        /* header 2 */
-        if (gzgets(hdl, buf, BUFSIZ) == NULL) {
-            fprintf(stderr, "Unexpected EOF while reading %s\n", filename);
-            return -1;
-        }
-
-        if (buf[0] != '+') {
-            fprintf(stderr, "%s is not in FASTQ format.\n", filename);
-            return -1;
-        }
-
-        /* quality */
-        if (gzgets(hdl, buf, BUFSIZ) == NULL) {
-            fprintf(stderr, "Unexpected EOF while reading %s\n", filename);
-            return -1;
-        }
-
-        seqlen = strlen(buf) - 1;
-        if (seqlen != ncycles) {
-            fprintf(stderr, "Sequence length in the FASTQ is inconsistent.\n");
-            return -1;
-        }
-
-        for (j = 0; j < ncycles; j++)
-            basecalls[j]->quality[clusterno] = buf[j];
-    }
-
-    if (gzgets(hdl, buf, BUFSIZ) != NULL) {
-        fprintf(stderr, "Extra sequences found in %s\n", filename);
-        return -1;
-    }
-
-    gzclose(hdl);
-
-    return ncycles;
-}
-
-
-static int
-load_intensities_and_basecalls(const char *datadir, const char *laneid, int lane, int tile,
-                               int ncycles, struct AlternativeCallInfo *altcalls,
-                               struct CIFData **intensities, struct BCLData **basecalls)
-{
-    char path[PATH_MAX];
-    char altcall_loaded[ncycles];
-    uint32_t cycleno;
-    struct AlternativeCallInfo *paltcall;
-    int bcllaststart;
-
-    memset(altcall_loaded, 0, ncycles);
-    bcllaststart = -1;
-
-    printf("[%s%d] - CIF data source: %s\n", laneid, tile, datadir);
-
-    for (cycleno = 0; cycleno < ncycles; cycleno++) {
-        snprintf(path, PATH_MAX, "%s/L%03d/C%d.1/s_%d_%04d.cif", datadir, lane, cycleno+1,
-                 lane, tile);
-
-        intensities[cycleno] = load_cif_file(path);
-        if (intensities[cycleno] == NULL)
-            return -1;
-
-        if (altcall_loaded[cycleno])
-            continue;
-
-        for (paltcall = altcalls; paltcall != NULL; paltcall = paltcall->next) {
-            if (paltcall->first_cycle == cycleno) {
-                int loaded, j;
-
-                loaded = load_alternative_basecalls(paltcall->filename, basecalls + cycleno,
-                                                    intensities[cycleno]->nclusters);
-                if (loaded < 0)
-                    return -1;
-
-                for (j = cycleno; j < cycleno + loaded; j++)
-                    altcall_loaded[j] = 1;
-
-                if (bcllaststart >= 0) {
-                    printf("[%s%d] - BCL basecall source [%d-%d]: %s\n", laneid, tile,
-                            bcllaststart+1, cycleno, datadir);
-                    bcllaststart = -1;
-                }
-
-                printf("[%s%d] - FASTQ basecall source [%d-%d]: %s\n", laneid, tile,
-                        cycleno+1, cycleno+loaded, paltcall->filename);
-
-                break;
-            }
-        }
-
-        if (paltcall != NULL) /* exited after loading an alternative basecall file. */
-            continue;
-
-        snprintf(path, PATH_MAX, "%s/BaseCalls/L%03d/C%d.1/s_%d_%04d.bcl", datadir, lane,
-                 cycleno+1, lane, tile);
-
-        basecalls[cycleno] = load_bcl_file(path);
-        if (basecalls[cycleno] == NULL)
-            return -1;
-
-        if (bcllaststart < 0)
-            bcllaststart = cycleno;
-    }
-
-    if (bcllaststart >= 0)
-        printf("[%s%d] - BCL basecall source [%d-%d]: %s\n", laneid, tile,
-                bcllaststart+1, cycleno, datadir);
-
-    return 0;
-}
+#define DEFAULT_BATCH_BLOCK_SIZE    262144
+/* BCL - 2 bytes per cluster per cycle
+ * CIF - 8 bytes per cluster per cycle
+ * 3080 bytes per cluster for regular 51+251 set-up.
+ * then, 262144 clusters takes 770 MiB up for storing data. */
 
 
 static struct BarcodeInfo *
@@ -321,102 +96,15 @@ find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode)
 }
 
 
-static void
-initialize_ssw_score_matrix(int8_t *score_mat, int8_t match_score, int8_t mismatch_score)
-{
-    int l, m, k;
-
-    /* initialize score matrix for Smith-Waterman alignment */
-    for (l = k = 0; l < 4; l++) {
-        for (m = 0; m < 4; m++)
-            score_mat[k++] = (l == m) ? match_score : -mismatch_score;
-        score_mat[k++] = 0; /* no penalty for ambiguous base */
-    }
-
-    for (m = 0; m < 5; m++)
-        score_mat[k++] = 0;
-}
-
-
-static size_t
-load_control_sequence(int8_t **control_seq)
-{
-    int8_t *ctlseq, *pctlseq;
-    ssize_t len, i;
-    static const int8_t reverse_base[]={3, 2, 1, 0, 4};
-
-#define CONTROL_SEQUENCE_SPACING 20 /* space between forward and reverse strands */
-    len = strlen(phix_control_sequence);
-    ctlseq = malloc(len * 2 + CONTROL_SEQUENCE_SPACING);
-    if (ctlseq == NULL) {
-        perror("load_control_sequence");
-        return -1;
-    }
-
-    /* forward strand */
-    for (i = 0, pctlseq = ctlseq; i < len; i++)
-        *pctlseq++ = DNABASE2NUM[(int)phix_control_sequence[i]];
-
-    for (i = 0, pctlseq = ctlseq + len; i < CONTROL_SEQUENCE_SPACING; i++)
-        *pctlseq++ = 4;
-
-    /* reverse strand */
-    for (i = 0, pctlseq = ctlseq + len * 2 + CONTROL_SEQUENCE_SPACING - 1; i < len; i++)
-        *pctlseq-- = reverse_base[(int)DNABASE2NUM[(int)phix_control_sequence[i]]];
-
-    *control_seq = ctlseq;
-
-    return len * 2 + CONTROL_SEQUENCE_SPACING;
-}
-
-
 static int
-try_alignment_to_control(const char *sequence_read, const int8_t *control_seq,
-                         ssize_t control_seq_length,
-                         struct ControlFilterInfo *control_info,
-                         int8_t *ssw_score_mat, int32_t min_control_alignment_score,
-                         int32_t control_alignment_mask_len)
-{
-    s_profile *alnprof;
-    s_align *alnresult;
-    int8_t read_seq[control_info->read_length];
-    size_t i, j;
-    int r;
-
-    for (i = 0, j = control_info->first_cycle; i < control_info->read_length; i++, j++)
-        read_seq[i] = DNABASE2NUM[(int)sequence_read[j]];
-
-    alnprof = ssw_init(read_seq, control_info->read_length, ssw_score_mat, 5, 0);
-    if (alnprof == NULL) {
-        perror("try_alignment_to_control");
-        return -1;
-    }
-
-    alnresult = ssw_align(alnprof, control_seq, control_seq_length,
-                          CONTROL_ALIGN_GAP_OPEN_SCORE,
-                          CONTROL_ALIGN_GAP_EXTENSION_SCORE, 2,
-                          min_control_alignment_score,
-                          0, control_alignment_mask_len);
-    r = (alnresult != NULL && alnresult->score1 >= min_control_alignment_score);
-
-    if (alnresult != NULL)
-        align_destroy(alnresult);
-
-    init_destroy(alnprof);
-
-    return r;
-}
-
-
-static int
-demultiplex_and_write(const char *laneid, int tile, int ncycles, double scalefactor,
-                      int barcode_start, int barcode_length,
+demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstclusterno,
+                      double scalefactor, int barcode_start, int barcode_length,
                       struct BarcodeInfo *barcodes,
                       struct CIFData **intensities, struct BCLData **basecalls,
                       struct ControlFilterInfo *control_info, int keep_no_delimiter)
 {
     uint32_t cycleno, clusterno;
-    uint32_t totalclusters;
+    uint32_t clustersinblock;
     char sequence_formatted[ncycles+1], quality_formatted[ncycles+1];
     char intensity_formatted[ncycles*8+1];
     struct BarcodeInfo *noncontrol_barcodes;
@@ -450,15 +138,15 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, double scalefac
         control_alignment_mask_len = control_info->read_length / 2;
     }
 
-    totalclusters = intensities[0]->nclusters;
+    clustersinblock = intensities[0]->nclusters;
     for (cycleno = 0; cycleno < ncycles; cycleno++)
-        if (totalclusters != intensities[cycleno]->nclusters ||
-                totalclusters != basecalls[cycleno]->nclusters) {
+        if (clustersinblock != intensities[cycleno]->nclusters ||
+                clustersinblock != basecalls[cycleno]->nclusters) {
             fprintf(stderr, "Inconsistent number of clusters in cycle %d.\n", cycleno);
             return -1;
         }
 
-    for (clusterno = 0; clusterno < totalclusters; clusterno++) {
+    for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
         struct BarcodeInfo *bc;
         int delimiter_end;
 
@@ -493,8 +181,9 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, double scalefac
         if (bc->delimiter_length > 0 && delimiter_end < 0 && !keep_no_delimiter)
             continue;
 
-        if (fprintf(bc->stream, "%s%04d\t%d\t0\t%s\t%s\t%s\t%d\n", laneid, tile, clusterno,
-             sequence_formatted, quality_formatted, intensity_formatted, delimiter_end) < 0) {
+        if (fprintf(bc->stream, "%s%04d\t%d\t0\t%s\t%s\t%s\t%d\n", laneid, tile,
+                    firstclusterno + clusterno, sequence_formatted, quality_formatted,
+                    intensity_formatted, delimiter_end) < 0) {
             perror("demultiplex_and_write");
 
             if (control_seq != NULL)
@@ -533,8 +222,93 @@ static void
 terminate_writers(struct BarcodeInfo *barcodes)
 {
     for (; barcodes != NULL; barcodes = barcodes->next)
-        if (barcodes->stream != NULL)
+        if (barcodes->stream != NULL) {
             pclose(barcodes->stream);
+            barcodes->stream = NULL;
+        }
+}
+
+
+static int
+initialize_cif_bcl_buffers(int ncycles, int blocksize, struct CIFData ***intensities,
+                           struct BCLData ***basecalls)
+{
+    struct CIFData **cifdata;
+    struct BCLData **bcldata;
+    int i;
+
+    cifdata = malloc(sizeof(struct CIFData *) * ncycles);
+    if (cifdata == NULL) {
+        perror("initialize_cif_bcl_buffers");
+        return -1;
+    }
+
+    bcldata = malloc(sizeof(struct BCLData *) * ncycles);
+    if (bcldata == NULL) {
+        free(cifdata);
+        perror("initialize_cif_bcl_buffers");
+        return -1;
+    }
+
+    memset(cifdata, 0, sizeof(struct CIFData *) * ncycles);
+    memset(bcldata, 0, sizeof(struct BCLData *) * ncycles);
+
+    for (i = 0; i < ncycles; i++) {
+        cifdata[i] = new_cif_data(blocksize);
+        if (cifdata[i] == NULL)
+            goto onError;
+
+        bcldata[i] = new_bcl_data(blocksize);
+        if (bcldata[i] == NULL)
+            goto onError;
+    }
+
+    *intensities = cifdata;
+    *basecalls = bcldata;
+
+    return 0;
+
+  onError:
+    perror("initialize_cif_bcl_buffers");
+
+    for (i = 0; i < ncycles; i++) {
+        if (cifdata[i] != NULL)
+            free_cif_data(cifdata[i]);
+        if (bcldata[i] != NULL)
+            free_bcl_data(bcldata[i]);
+    }
+
+    free(bcldata);
+    free(cifdata);
+
+    return -1;
+}
+
+
+static int
+load_intensities_and_basecalls(struct CIFReader **cifreader, struct BCLReader **bclreader,
+                               struct AlternativeCallInfo *altcalls, int ncycles,
+                               int blocksize, struct CIFData **intensities,
+                               struct BCLData **basecalls)
+{
+    int cycleno;
+
+    for (; altcalls != NULL; altcalls = altcalls->next)
+        if (load_alternative_calls(altcalls->reader, basecalls + altcalls->first_cycle,
+                                   blocksize) == -1)
+            return -1;
+
+    for (cycleno = 0; cycleno < ncycles; cycleno++) {
+        if (load_cif_data(cifreader[cycleno], intensities[cycleno], blocksize) == -1)
+            return -1;
+
+        if (bclreader[cycleno] == BCLREADER_OVERRIDDEN)
+            /* do nothing */;
+        else if (load_bcl_data(bclreader[cycleno], basecalls[cycleno], blocksize) == -1)
+            return -1;
+    }
+
+    return 0;
 }
 
 
@@ -543,49 +317,80 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
         double scalefactor, int barcode_start, int barcode_length,
         struct BarcodeInfo *barcodes, const char *writercmd,
         struct AlternativeCallInfo *altcalls, struct ControlFilterInfo *control_info,
-        int keep_no_delimiter)
+        int blocksize, int keep_no_delimiter)
 {
+    struct CIFReader **cifreader;
+    struct BCLReader **bclreader;
     struct CIFData **intensities;
     struct BCLData **basecalls;
-    int cycleno;
+    uint32_t clusters_to_go, blockno, nclusters, totalblocks;
+    int cycleno, clusters_to_read;
+    char msgprefix[BUFSIZ];
 
-    intensities = malloc(sizeof(struct CIFData *) * ncycles);
-    if (intensities == NULL) {
-        perror("process");
-        return -1;
-    }
+    snprintf(msgprefix, BUFSIZ, "[%s%d] ", laneid, tile);
 
-    basecalls = malloc(sizeof(struct BCLData *) * ncycles);
-    if (basecalls == NULL) {
-        free(intensities);
-        perror("process");
-        return -1;
-    }
-
-    memset(intensities, 0, sizeof(struct CIFData *) * ncycles);
-    memset(basecalls, 0, sizeof(struct BCLData *) * ncycles);
-
-    printf("[%s%d] Loading CIF and BCL files\n", laneid, tile);
-
-    if (load_intensities_and_basecalls(datadir, laneid, lane, tile, ncycles, altcalls,
-                                       intensities, basecalls) == -1)
-        goto onError;
-
-    printf("[%s%d] Opening writer subprocesses\n", laneid, tile);
+    printf("%sOpening writer subprocesses\n", msgprefix);
     if (spawn_writers(writercmd, barcodes) == -1)
+        return -1;
+
+    printf("%sOpening input sources\n", msgprefix);
+
+    cifreader = NULL;
+    bclreader = NULL;
+    intensities = NULL;
+    basecalls = NULL;
+
+    if (open_alternative_calls_bundle(msgprefix, altcalls) == -1)
+        return -1;
+
+    cifreader = open_cif_readers(msgprefix, datadir, lane, tile, ncycles);
+    if (cifreader == NULL)
         goto onError;
 
-    printf("[%s%d] Demultiplexing and writing\n", laneid, tile);
-
-    if (demultiplex_and_write(laneid, tile, ncycles, scalefactor, barcode_start,
-                              barcode_length, barcodes, intensities, basecalls,
-                              control_info, keep_no_delimiter) == -1)
+    bclreader = open_bcl_readers(msgprefix, datadir, lane, tile, ncycles, altcalls);
+    if (bclreader == NULL)
         goto onError;
 
+    if (initialize_cif_bcl_buffers(ncycles, blocksize, &intensities, &basecalls) == -1)
+        return -1;
+
+    clusters_to_go = nclusters = cifreader[0]->nclusters;
+    totalblocks = nclusters / blocksize + ((nclusters % blocksize > 0) ? 1 : 0);
+    printf("%sProcessing %u clusters.\n", msgprefix, nclusters);
+
+    for (blockno = 0; clusters_to_go > 0; blockno++) {
+        clusters_to_read = (clusters_to_go >= blocksize) ? blocksize : clusters_to_go;
+
+        snprintf(msgprefix, BUFSIZ, "[%s%d#%d/%d] ", laneid, tile, blockno + 1, totalblocks);
+        printf("%sLoading CIF and BCL files\n", msgprefix);
+
+        if (load_intensities_and_basecalls(cifreader, bclreader, altcalls, ncycles,
+                                           clusters_to_read, intensities, basecalls) == -1)
+            goto onError;
+
+        printf("%sDemultiplexing and writing\n", msgprefix);
+        if (demultiplex_and_write(laneid, tile, ncycles, nclusters - clusters_to_go,
+                                  scalefactor, barcode_start, barcode_length, barcodes,
+                                  intensities, basecalls, control_info,
+                                  keep_no_delimiter) == -1)
+            goto onError;
+
+        clusters_to_go -= clusters_to_read;
+    }
+
+    printf("%sClearing\n", msgprefix);
     for (cycleno = 0; cycleno < ncycles; cycleno++) {
         free_cif_data(intensities[cycleno]);
         free_bcl_data(basecalls[cycleno]);
     }
+
+    free(intensities);
+    free(basecalls);
+
+    close_bcl_readers(bclreader, ncycles);
+    close_cif_readers(cifreader, ncycles);
+    if (close_alternative_calls_bundle(altcalls, 1) < 0)
+        goto onError;
 
     terminate_writers(barcodes);
 
@@ -594,11 +399,19 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
     return 0;
 
   onError:
+    close_alternative_calls_bundle(altcalls, 0);
+
+    if (cifreader != NULL)
+        close_cif_readers(cifreader, ncycles);
+
+    if (bclreader != NULL)
+        close_bcl_readers(bclreader, ncycles);
+
     for (cycleno = 0; cycleno < ncycles; cycleno++) {
-        if (intensities[cycleno] != NULL)
+        if (intensities != NULL && intensities[cycleno] != NULL)
             free_cif_data(intensities[cycleno]);
 
-        if (basecalls[cycleno] != NULL)
+        if (basecalls != NULL && basecalls[cycleno] != NULL)
             free_bcl_data(basecalls[cycleno]);
     }
 
@@ -642,6 +455,8 @@ tailseq-retrieve-signals 2.0\
 \n                                    is not found.\
 \n  -f,  --filter-control=SPEC        sort out PhiX control reads by sequence\
 \n                                    in \"name,first_cycle,length\".\
+\n  -B,  --block-size=NUM             number of clusters in a processing unit\
+\n                                    (default: 262144).\
 \n\
 \nAll cycle numbers or positions are in 1-based inclusive system.\
 \n\
@@ -654,7 +469,7 @@ main(int argc, char *argv[])
 {
     char *datadir, *runid, *writercmd;
     int keep_no_delimiter_flag;
-    int lane, tile, ncycles;
+    int lane, tile, ncycles, blocksize;
     int barcode_start, barcode_length;
     double scalefactor;
     struct BarcodeInfo *barcodes;
@@ -677,6 +492,7 @@ main(int argc, char *argv[])
         {"sample",              required_argument,  0,                          'm'},
         {"writer-command",      required_argument,  0,                          'w'},
         {"filter-control",      required_argument,  0,                          'f'},
+        {"block-size",          required_argument,  0,                          'B'},
         {"help",                no_argument,        0,                          'h'},
         {0, 0, 0, 0}
     };
@@ -690,28 +506,18 @@ main(int argc, char *argv[])
     altcalls = NULL;
     controlinfo.name[0] = 0;
     controlinfo.first_cycle = controlinfo.read_length = -1;
+    blocksize = DEFAULT_BATCH_BLOCK_SIZE;
 
     while (1) {
         int option_index=0;
 
-        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:hf:", long_options, &option_index);
+        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:hf:B:", long_options, &option_index);
 
         /* Detect the end of the options. */
         if (c == -1)
             break;
 
         switch (c) {
-            case 0:
-                printf("zero??\n");
-                /* If this option set a flag, do nothing else now. */
-                if (long_options[option_index].flag != 0)
-                    break;
-                printf("option %s", long_options[option_index].name);
-                if (optarg)
-                    printf(" with arg %s", optarg);
-                printf("\n");
-                break;
-
             case 'd': /* --data-dir */
                 datadir = strdup(optarg);
                 break;
@@ -759,6 +565,7 @@ main(int argc, char *argv[])
 
                     newac->filename = strdup(tokens[0]);
                     newac->first_cycle = atoi(tokens[1]) - 1;
+                    newac->reader = NULL;
 
                     if (newac->filename == NULL) {
                         perror("main");
@@ -880,6 +687,10 @@ main(int argc, char *argv[])
                     controlinfo.read_length = atoi(tokens[2]);
                     controlinfo.barcode = NULL;
                 }
+                break;
+
+            case 'B': /* --block-size */
+                blocksize = atoi(optarg);
                 break;
 
             case 'h':
@@ -1008,7 +819,7 @@ main(int argc, char *argv[])
 
         r = process(datadir, runid, lane, tile, ncycles, scalefactor, barcode_start,
                     barcode_length, barcodes, writercmd, altcalls,
-                    pctlinfo, keep_no_delimiter_flag);
+                    pctlinfo, blocksize, keep_no_delimiter_flag);
     }
     
     free(datadir);
@@ -1018,12 +829,23 @@ main(int argc, char *argv[])
     while (barcodes != NULL) {
         struct BarcodeInfo *bk;
 
+        if (barcodes->stream != NULL)
+            pclose(barcodes->stream);
+
         free(barcodes->name);
         free(barcodes->index);
         free(barcodes->delimiter);
         bk = barcodes->next;
         free(barcodes);
         barcodes = bk;
+    }
+
+    while (altcalls != NULL) {
+        struct AlternativeCallInfo *ac;
+
+        ac = altcalls->next;
+        free(altcalls);
+        altcalls = ac;
     }
 
     return r;
