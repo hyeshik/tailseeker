@@ -1,4 +1,5 @@
 CC=	gcc
+#CFLAGS=	-O3 -Wall -Werror -pg
 CFLAGS=	-O3 -Wall -Werror
 
 PROG=	bin/sqi2fq bin/tailseq-retrieve-signals
@@ -10,6 +11,7 @@ RETRIEVE_SIGNALS_OBJECTS=	\
 	src/retrieve-signals/altcalls.o \
 	src/retrieve-signals/phix_control.o \
 	src/retrieve-signals/controlaligner.o \
+	src/retrieve-signals/my_strstr.o \
 	src/retrieve-signals/ssw.o
 
 SQI2FQ_OBJECTS=	\
