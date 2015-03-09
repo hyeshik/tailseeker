@@ -90,8 +90,7 @@ close_bcl_file(struct BCLReader *bcl)
 int
 load_bcl_data(struct BCLReader *bcl, struct BCLData *data, uint32_t nclusters)
 {
-    uint32_t toread, i;
-    uint8_t *base, *quality;
+    uint32_t toread;
 
     if (bcl->read >= bcl->nclusters) {
         data->nclusters = 0;
@@ -103,27 +102,12 @@ load_bcl_data(struct BCLReader *bcl, struct BCLData *data, uint32_t nclusters)
     else
         toread = nclusters;
 
-    if (fread(data->base, toread, 1, bcl->fptr) < 1) {
+    if (fread(data->basequality, toread, 1, bcl->fptr) < 1) {
         fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
         return -1;
     }
 
     data->nclusters = toread;
-
-    base = data->base;
-    quality = data->quality;
-
-    for (i = 0; i < toread; i++, base++, quality++) {
-        if (*base == 0) {
-            *quality = NOCALL_QUALITY + PHRED_BASE;
-            *base = NOCALL_BASE;
-        }
-        else {
-            *quality = (*base >> 2) + PHRED_BASE;
-            *base = CALL_BASES[*base & 3];
-        }
-    }
-
     bcl->read += toread;
 
     return 0;
@@ -135,24 +119,9 @@ new_bcl_data(uint32_t size)
 {
     struct BCLData *bcl;
 
-    bcl = malloc(sizeof(struct BCLData));
+    bcl = malloc(sizeof(size_t) + size);
     if (bcl == NULL) {
         perror("new_bcl_data");
-        return NULL;
-    }
-
-    bcl->base = malloc(size);
-    if (bcl->base == NULL) {
-        perror("new_bcl_data");
-        free(bcl);
-        return NULL;
-    }
-
-    bcl->quality = malloc(size);
-    if (bcl->quality == NULL) {
-        perror("new_bcl_data");
-        free(bcl->base);
-        free(bcl);
         return NULL;
     }
 
@@ -165,8 +134,6 @@ new_bcl_data(uint32_t size)
 void
 free_bcl_data(struct BCLData *data)
 {
-    free(data->base);
-    free(data->quality);
     free(data);
 }
 
@@ -178,8 +145,16 @@ format_basecalls(char *seq, char *qual, struct BCLData **basecalls,
     uint32_t i;
 
     for (i = 0; i < ncycles; i++) {
-        *seq++ = basecalls[i]->base[clusterno];
-        *qual++ = basecalls[i]->quality[clusterno];
+        uint8_t bq=basecalls[i]->basequality[clusterno];
+
+        if (bq == 0) {
+            *qual++ = NOCALL_QUALITY + PHRED_BASE;
+            *seq++ = NOCALL_BASE;
+        }
+        else {
+            *qual++ = (bq >> 2) + PHRED_BASE;
+            *seq++ = CALL_BASES[bq & 3];
+        }
     }
 
     *seq = *qual = 0;

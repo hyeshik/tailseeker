@@ -46,8 +46,7 @@ struct BCLReader {
 
 struct BCLData {
     size_t nclusters;
-    uint8_t *base;
-    uint8_t *quality;
+    uint8_t basequality[1];
 };
 
 struct IntensitySet {

@@ -182,7 +182,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
             continue;
 
         if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%s\t%s\t%s\n", laneid, tile,
-                    delimiter_end, firstclusterno + clusterno, sequence_formatted,
+                    firstclusterno + clusterno, delimiter_end, sequence_formatted,
                     quality_formatted, intensity_formatted) < 0) {
             perror("demultiplex_and_write");
 

@@ -34,6 +34,18 @@
 #include "tailseq-retrieve-signals.h"
 
 
+static const uint8_t DNABASE2NUM_ac[128] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+
 static int16_t
 check_fastq_read_length(gzFile hdl, const char *filename)
 {
@@ -128,7 +140,7 @@ int
 load_alternative_calls(struct AlternativeCallReader *acall, struct BCLData **basecalls,
                        uint32_t nclusters)
 {
-    char buf[BUFSIZ];
+    char buf[BUFSIZ], seqbuf[BUFSIZ], qualbuf[BUFSIZ];
     uint32_t clusterno;
     int16_t ncycles, j;
 
@@ -149,21 +161,18 @@ load_alternative_calls(struct AlternativeCallReader *acall, struct BCLData **bas
         }
 
         /* sequence */
-        if (gzgets(acall->fptr, buf, BUFSIZ) == NULL) {
+        if (gzgets(acall->fptr, seqbuf, BUFSIZ) == NULL) {
             fprintf(stderr, "Unexpected EOF while reading %s\n", acall->filename);
             return -1;
         }
 
-        seqlen = strlen(buf) - 1;
+        seqlen = strlen(seqbuf) - 1;
         if (ncycles == -1)
             ncycles = acall->ncycles = seqlen;
         else if (seqlen != ncycles) {
             fprintf(stderr, "Sequence length in the FASTQ is inconsistent.\n");
             return -1;
         }
-
-        for (j = 0; j < ncycles; j++)
-            basecalls[j]->base[clusterno] = buf[j];
 
         /* header 2 */
         if (gzgets(acall->fptr, buf, BUFSIZ) == NULL) {
@@ -177,19 +186,20 @@ load_alternative_calls(struct AlternativeCallReader *acall, struct BCLData **bas
         }
 
         /* quality */
-        if (gzgets(acall->fptr, buf, BUFSIZ) == NULL) {
+        if (gzgets(acall->fptr, qualbuf, BUFSIZ) == NULL) {
             fprintf(stderr, "Unexpected EOF while reading %s\n", acall->filename);
             return -1;
         }
 
-        seqlen = strlen(buf) - 1;
+        seqlen = strlen(qualbuf) - 1;
         if (seqlen != ncycles) {
             fprintf(stderr, "Sequence length in the FASTQ is inconsistent.\n");
             return -1;
         }
 
         for (j = 0; j < ncycles; j++)
-            basecalls[j]->quality[clusterno] = buf[j];
+            basecalls[j]->basequality[clusterno] = (
+                DNABASE2NUM_ac[(int)seqbuf[j]] | (((uint8_t)(buf[j] - 33)) << 2));
     }
 
     for (j = 0; j < ncycles; j++)
