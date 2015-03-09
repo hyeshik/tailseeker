@@ -165,10 +165,10 @@ format_intensity(char *inten, struct CIFData **intensities,
 {
     /* This function consumes CPU time than most of the other parts in this program.
      * It is optimized with some black magics. */
-    static const char base64_encode_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
-                                              "ghijklmnopqrstuvwxyz0123456789+/";
     uint32_t i;
-    int value_a, value_c, value_g, value_t;
+    uint16_t value_a, value_c, value_g, value_t;
+
+#define INTENSITY_ASCII_CODING_BASE 33
 
 #define FORMAT_INTENSITY(valueexpr)                                         \
     for (i = 0; i < ncycles; i++) {                                         \
@@ -185,14 +185,14 @@ format_intensity(char *inten, struct CIFData **intensities,
         value_g = (value_g >= 4096) ? 4095 : ((value_g < 0) ? 0 : value_g); \
         value_t = (value_t >= 4096) ? 4095 : ((value_t < 0) ? 0 : value_t); \
                                                                             \
-        inten[0] = base64_encode_table[value_a >> 6];                       \
-        inten[1] = base64_encode_table[value_a & 63];                       \
-        inten[2] = base64_encode_table[value_c >> 6];                       \
-        inten[3] = base64_encode_table[value_c & 63];                       \
-        inten[4] = base64_encode_table[value_g >> 6];                       \
-        inten[5] = base64_encode_table[value_g & 63];                       \
-        inten[6] = base64_encode_table[value_t >> 6];                       \
-        inten[7] = base64_encode_table[value_t & 63];                       \
+        inten[0] = (value_a >> 6) + INTENSITY_ASCII_CODING_BASE;            \
+        inten[1] = (value_a & 63) + INTENSITY_ASCII_CODING_BASE;            \
+        inten[2] = (value_c >> 6) + INTENSITY_ASCII_CODING_BASE;            \
+        inten[3] = (value_c & 63) + INTENSITY_ASCII_CODING_BASE;            \
+        inten[4] = (value_g >> 6) + INTENSITY_ASCII_CODING_BASE;            \
+        inten[5] = (value_g & 63) + INTENSITY_ASCII_CODING_BASE;            \
+        inten[6] = (value_t >> 6) + INTENSITY_ASCII_CODING_BASE;            \
+        inten[7] = (value_t & 63) + INTENSITY_ASCII_CODING_BASE;            \
         inten += 8;                                                         \
     }
 
