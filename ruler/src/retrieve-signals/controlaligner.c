@@ -71,12 +71,11 @@ initialize_ssw_score_matrix(int8_t *score_mat, int8_t match_score, int8_t mismat
 }
 
 
-size_t
+ssize_t
 load_control_sequence(int8_t **control_seq)
 {
     int8_t *ctlseq, *pctlseq;
     ssize_t len, i;
-    static const int8_t reverse_base[]={3, 2, 1, 0, 4};
 
     len = strlen(phix_control_sequence);
     ctlseq = malloc(len * 2 + CONTROL_SEQUENCE_SPACING);
@@ -85,16 +84,22 @@ load_control_sequence(int8_t **control_seq)
         return -1;
     }
 
+    if (len != strlen(phix_control_sequence_rev)) {
+        fprintf(stderr, "The lengths of forward and reverse strand for PhiX control sequences "
+                        "don't match.\n");
+        return -1;
+    }
+
     /* forward strand */
     for (i = 0, pctlseq = ctlseq; i < len; i++)
         *pctlseq++ = DNABASE2NUM[(int)phix_control_sequence[i]];
 
-    for (i = 0, pctlseq = ctlseq + len; i < CONTROL_SEQUENCE_SPACING; i++)
+    for (i = 0; i < CONTROL_SEQUENCE_SPACING; i++)
         *pctlseq++ = 4;
 
     /* reverse strand */
-    for (i = 0, pctlseq = ctlseq + len * 2 + CONTROL_SEQUENCE_SPACING - 1; i < len; i++)
-        *pctlseq-- = reverse_base[(int)DNABASE2NUM[(int)phix_control_sequence[i]]];
+    for (i = 0; i < len; i++)
+        *pctlseq++ = DNABASE2NUM[(int)phix_control_sequence_rev[i]];
 
     *control_seq = ctlseq;
 
@@ -114,6 +119,11 @@ try_alignment_to_control(const char *sequence_read, const int8_t *control_seq,
     int8_t read_seq[control_info->read_length];
     size_t i, j;
     int r;
+
+    /* fast path for perfect matches */
+    if (my_strnstr(phix_control_sequence, sequence_read, control_info->read_length) != NULL ||
+        my_strnstr(phix_control_sequence_rev, sequence_read, control_info->read_length) != NULL)
+        return 1;
 
     for (i = 0, j = control_info->first_cycle; i < control_info->read_length; i++, j++)
         read_seq[i] = DNABASE2NUM[(int)sequence_read[j]];

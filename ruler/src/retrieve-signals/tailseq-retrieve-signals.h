@@ -153,15 +153,19 @@ extern int close_alternative_calls_bundle(struct AlternativeCallInfo *altcallinf
 
 /* phix_control.c */
 extern const char *phix_control_sequence;
+extern const char *phix_control_sequence_rev;
 
 /* controlaligner.c */
 extern void initialize_ssw_score_matrix(int8_t *score_mat, int8_t match_score,
                                         int8_t mismatch_score);
-extern size_t load_control_sequence(int8_t **control_seq);
+extern ssize_t load_control_sequence(int8_t **control_seq);
 extern int try_alignment_to_control(const char *sequence_read, const int8_t *control_seq,
                                     ssize_t control_seq_length,
                                     struct ControlFilterInfo *control_info,
                                     int8_t *ssw_score_mat, int32_t min_control_alignment_score,
                                     int32_t control_alignment_mask_len);
+
+/* my_strstr.c */
+extern char *my_strnstr(const char *s, const char *find, size_t len);
 
 #endif
