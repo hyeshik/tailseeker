@@ -79,6 +79,7 @@ BINDIR = os.path.join(TAILOR_DIR, 'bin')
 SCRATCHDIR = (CONF['scratch_dir'] if 'scratch_dir' in CONF
                                   else os.path.join(TAILOR_DIR, 'scratch'))
 SCRIPTSDIR = os.path.join(TAILOR_DIR, 'scripts')
+CONF.export_paths(globals())
 create_scratch_link()
 
 # Predefined constants

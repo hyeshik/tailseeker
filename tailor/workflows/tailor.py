@@ -23,12 +23,6 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-# TODO: move these to global configuration
-THREADS_MAXIMUM_CORE = 32
-AYB_BINDIR = '/atp/hyeshik/gh/AYB2/bin'
-HTSLIB_BINDIR = '/usr/local/bin'
-#=======================
-
 TARGETS = []
 
 include: 'tailor/workflows/snakesupport.py'
@@ -52,6 +46,11 @@ NUM_CYCLES = LAST_CYCLE - FIRST_CYCLE + 1
 
 PHIX_ID_REF = ['R5', 6, 40] # identify PhiX reads using 40 bases from the 6th cycle.
 CONTAMINANT_ID_REF = ['R5', 1, inf] # use the full length of R5 to identify contamintants
+
+THREADS_MAXIMUM_CORE = CONF['maximum_threads']
+
+GSNAP_SUFFIX = '.201303' # XXX: to be removed!
+BIGALIGNMENTPARTS = 8 # XXX: to be moved somewhere.
 
 # Variable validations
 if len(INDEX_READS) != 1:
@@ -193,5 +192,51 @@ rule generate_fastq_for_contaminant_filter:
         idseqstart = refreadcycles[0] + CONTAMINANT_ID_REF[1] - 1
         shell('gzip -cd {input} | {BINDIR}/sqi2fq {idseqstart} {idseqend} | \
                 gzip -c - > {output}')
+
+
+if CONF['sequence_aligner'] == 'gsnap':
+    rule align_confilter_gsnap:
+        input: 'confilter/{sample}-con.fastq.gz'
+        output: temp('confilter/{sample}-con.bam-{part}')
+        threads: THREADS_MAXIMUM_CORE
+        run:
+            indexdir = os.path.dirname(CONF['contaminant_index'])
+            indexname = os.path.basename(CONF['contaminant_index'])
+            shell('{GSNAP_BINDIR}/gsnap{GSNAP_SUFFIX} -D {indexdir} --gunzip -d {indexname} \
+                        -B 4 -O -A sam -m 0.06 -q {wildcards.part}/{BIGALIGNMENTPARTS} \
+                        -t {threads} {input} | \
+                   {SAMTOOLS_BINDIR}/samtools view -F 4 -bS - > {output}')
+
+    rule merge_parted_alignments:
+        input: expand('{{dir}}/{{sample}}-{{kind}}.bam-{part}', part=range(BIGALIGNMENTPARTS))
+        output: '{dir}/{sample}-{kind,[^-]+}.bam'
+        threads: THREADS_MAXIMUM_CORE
+        run:
+            viewcommands = ';'.join('{}/samtools view {}'.format(SAMTOOLS_BINDIR, inpbam)
+                                    for inpbam in input)
+            scratch_dir = make_scratch_dir('merge_parted_alignments.{}.{}'.format(
+                                           wildcards.sample, wildcards.kind))
+
+            shell('({SAMTOOLS_BINDIR}/samtools view -H {input[0]}; ({viewcommands}) | \
+                    sort -k1,1 -k2,2n --parallel={threads} -T "{scratch_dir}") | \
+                   {SAMTOOLS_BINDIR}/samtools view -@ {threads} -bS - > {output}')
+
+elif CONF['sequence_aligner'] == 'star':
+    rule align_confilter_star:
+        input: 'confilter/{sample}-con.fastq.gz'
+        output: 'confilter/{sample}-con.bam' # STAR is too fast to split jobs on-the-fly
+        threads: THREADS_MAXIMUM_CORE
+        run:
+            scratchdir = make_scratch_dir('staralign.' + wildcards.sample)
+            indexdir = CONF['contaminant_index']
+
+            shell("{STAR_BINDIR}/STAR --genomeDir {indexdir} \
+                    --readFilesIn {input} --runThreadN {threads} \
+                    --outFilterMultimapNmax 4 --readFilesCommand zcat \
+                    --outStd SAM --outFileNamePrefix {scratchdir}/ | \
+                   {SAMTOOLS_BINDIR}/samtools view -@ 4 -F 4 -bS -o {output} -")
+else:
+    raise ValueError('Unknown aligner: {}'.format(ALIGNER))
+
 
 # ex: syntax=snakemake

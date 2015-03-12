@@ -66,6 +66,10 @@ class Configurations:
             user_specified.clear()
             user_specified.update(finalized)
 
+    def export_paths(self, namespace):
+        for progname, path in self.confdata['paths'].items():
+            namespace['{}_BINDIR'.format(progname.upper())] = path
+
     @property
     def all_samples(self):
         return sorted(map(str, list(self['experimental_samples'].keys()) +
