@@ -51,6 +51,7 @@ LAST_CYCLE = max(l for f, l in CONF['read_cycles'].values())
 NUM_CYCLES = LAST_CYCLE - FIRST_CYCLE + 1
 
 PHIX_ID_REF = ['R5', 6, 40] # identify PhiX reads using 40 bases from the 6th cycle.
+CONTAMINANT_ID_REF = ['R5', 1, inf] # use the full length of R5 to identify contamintants
 
 # Variable validations
 if len(INDEX_READS) != 1:
@@ -157,15 +158,40 @@ rule demultiplex_signals:
               ' '.join('"{}"'.format(opt) for opt in options))
 
 
+TARGETS.extend(expand('scratch/merged-sqi/{sample}.sqi.gz',
+                      sample=(ALL_SAMPLES + ['PhiX', 'Unknown'])))
 rule merge_sqi:
+    """
+    Merges split sqi.gz files demultiplexed from the original Illumina internal formats
+    into one. This will be indexed using tabix for efficient searching and parallel processing.
+    Although the official design goal of the BGZF format includes simple concatenations
+    of BGZF files, EOF record at the end of the files must be removed during the concatenation.
+    """
     input: expand('scratch/demux-sqi/{{sample}}_{tile}.sqi.gz', tile=TILES)
     output: 'scratch/merged-sqi/{sample}.sqi.gz'
     run:
         input = sorted(input) # to make tabix happy.
         shell('{SCRIPTSDIR}/bgzf-merge.py --output {output} {input}')
 
-TARGETS.extend(expand('scratch/merged-sqi/{sample}.sqi.gz', sample=ALL_SAMPLES))
-TARGETS.extend(expand('scratch/demux-sqi/{sample}_{tile}.sqi.gz', sample=['Unknown', 'PhiX'],
-                      tile=TILES))
+
+TARGETS.extend(expand('scratch/merged-sqi/{sample}.sqi.gz.tbi',
+                      sample=(ALL_SAMPLES + ['PhiX', 'Unknown'])))
+rule index_tabix:
+    input: '{name}.gz'
+    output: '{name}.gz.tbi'
+    shell: '{HTSLIB_BINDIR}/tabix -s1 -b2 -e2 -0 {input}'
+
+
+rule generate_fastq_for_contaminant_filter:
+    input: 'scratch/merged-sqi/{sample}.sqi.gz'
+    output: 'confilter/{sample}-con.fastq.gz'
+    threads: 2
+    run:
+        refreadcycles = CONF['read_cycles'][CONTAMINANT_ID_REF[0]]
+        refreadlength = refreadcycles[1] - refreadcycles[0] + 1
+        idseqend = min(refreadlength, CONTAMINANT_ID_REF[2])
+        idseqstart = refreadcycles[0] + CONTAMINANT_ID_REF[1] - 1
+        shell('gzip -cd {input} | {BINDIR}/sqi2fq {idseqstart} {idseqend} | \
+                gzip -c - > {output}')
 
 # ex: syntax=snakemake

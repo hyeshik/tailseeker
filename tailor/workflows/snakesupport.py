@@ -81,6 +81,10 @@ SCRATCHDIR = (CONF['scratch_dir'] if 'scratch_dir' in CONF
 SCRIPTSDIR = os.path.join(TAILOR_DIR, 'scripts')
 create_scratch_link()
 
+# Predefined constants
+inf = float('inf')
+nan = float('nan')
+
 # Commands needs to be run with bash with these options to terminate on errors correctly.
 shell.prefix('set -e; set -o pipefail; ' \
              'export PYTHONPATH="{PYTHONPATH}"; ' \
