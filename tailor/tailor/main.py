@@ -316,8 +316,12 @@ rule generate_lint_sqi:
             balanceopt = ('--balance-region {}:{} --balance-minimum {}').format(*
                             CONF['balance_check'][sample])
 
+        # This script uses three threads per a parallel job. Process jobs as many as half of
+        # the allowed threads which is optimal as there are some bottlenecks in the first two
+        # processes in each pipe.
+        paralleljobs = max(1, threads // 2)
         shell('{SCRIPTSDIR}/lint-sequences-sqi.py --id-list {input.whitelist} \
                 --output {output} \
-                --parallel {threads} {preambleopt} {balanceopt} {input.sqi}')
+                --parallel {paralleljobs} {preambleopt} {balanceopt} {input.sqi}')
 
 # ex: syntax=snakemake
