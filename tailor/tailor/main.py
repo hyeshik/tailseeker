@@ -25,9 +25,9 @@
 
 TARGETS = []
 
-include: 'tailor/workflows/snakesupport.py'
+include: 'tailor/tailor/snakesupport.py'
 
-from workflows import sequencers
+from tailor import sequencers
 
 # Variable settings
 TILES = sequencers.get_tiles(CONF)
@@ -77,8 +77,6 @@ rule basecall_ayb:
     output: temp('scratch/aybcalls/{read}_{tile}.fastq.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
-        import shutil
-
         tileinfo = TILES[wildcards.tile]
         readname = wildcards.read
         first_cycle, last_cycle = CONF['read_cycles'][readname]
@@ -157,8 +155,6 @@ rule demultiplex_signals:
               ' '.join('"{}"'.format(opt) for opt in options))
 
 
-TARGETS.extend(expand('scratch/merged-sqi/{sample}.sqi.gz',
-                      sample=(ALL_SAMPLES + ['PhiX', 'Unknown'])))
 rule merge_sqi:
     """
     Merges split sqi.gz files demultiplexed from the original Illumina internal formats
@@ -173,8 +169,6 @@ rule merge_sqi:
         shell('{SCRIPTSDIR}/bgzf-merge.py --output {output} {input}')
 
 
-TARGETS.extend(expand('scratch/merged-sqi/{sample}.sqi.gz.tbi',
-                      sample=(ALL_SAMPLES + ['PhiX', 'Unknown'])))
 rule index_tabix:
     input: '{name}.gz'
     output: '{name}.gz.tbi'
@@ -220,6 +214,7 @@ if CONF['sequence_aligner'] == 'gsnap':
             shell('({SAMTOOLS_BINDIR}/samtools view -H {input[0]}; ({viewcommands}) | \
                     sort -k1,1 -k2,2n --parallel={threads} -T "{scratch_dir}") | \
                    {SAMTOOLS_BINDIR}/samtools view -@ {threads} -bS - > {output}')
+            shutil.rmtree(scratch_dir)
 
 elif CONF['sequence_aligner'] == 'star':
     rule align_confilter_star:
@@ -238,5 +233,91 @@ elif CONF['sequence_aligner'] == 'star':
 else:
     raise ValueError('Unknown aligner: {}'.format(ALIGNER))
 
+
+rule generate_contaminant_list:
+    input: 'confilter/{sample}-con.bam'
+    output: 'confilter/{sample}.conlist.gz'
+    shell: '{SAMTOOLS_BINDIR}/samtools view {input} | \
+            cut -f1 | uniq | sed -e "s,:0*,\t," -e "s/\t$/\t0/" | gzip -c - > {output}'
+
+
+rule find_duplicated_reads:
+    input: sqi='scratch/merged-sqi/{sample}.sqi.gz', \
+           sqiindex='scratch/merged-sqi/{sample}.sqi.gz.tbi'
+    output: duplist='dupfilter/{sample}.duplist.gz', \
+            dupstats='stats/{sample}.duplicates.csv', \
+            dupcounts='dupfilter/{sample}.dupcounts.gz'
+    threads: THREADS_MAXIMUM_CORE
+    run:
+        if wildcards.sample in CONF['dupcheck_regions']:
+            checkregions = CONF['dupcheck_regions'][wildcards.sample]
+            regionsspec = ' '.join('--region {}:{}'.format(begin, end)
+                                   for begin, end in checkregions)
+            shell('{SCRIPTSDIR}/find-duplicates.py \
+                    --parallel {threads} --output-dupcounts {output.dupcounts} \
+                    --output-stats {output.dupstats} {regionsspec} {input.sqi} | \
+                    sort -k1,1 -k2,2n | gzip -c - > {output.duplist}')
+        else:
+            # create null lists to make subsequent rules happy
+            import gzip
+            gzip.open(output.duplist, 'w')
+            open(output.dupstats, 'w')
+            gzip.open(output.dupcounts, 'w')
+
+
+def determine_inputs_for_nondup_id_list(wildcards):
+    sample = wildcards.sample
+    if sample in EXP_SAMPLES:
+        return ['confilter/{}-con.fastq.gz'.format(sample),
+                'dupfilter/{}.duplist.gz'.format(sample),
+                'confilter/{}.conlist.gz'.format(sample)]
+    elif sample in SPIKEIN_SAMPLES:
+        return ['scratch/merged-sqi/{}.sqi.gz'.format(sample)]
+    else:
+        raise ValueError("Unknown sample {}.".format(sample))
+
+rule make_nondup_id_list:
+    input: determine_inputs_for_nondup_id_list
+    output: 'confilter/{sample}.lint_ids.gz'
+    run:
+        if len(input) == 3: # experimental samples
+            input = SuffixFilter(input)
+            shell('{SCRIPTSDIR}/make-nondup-list.py --fastq {input[fastq.gz]} \
+                        --exclude {input[duplist.gz]} --exclude {input[conlist.gz]} | \
+                        {HTSLIB_BINDIR}/bgzip -c /dev/stdin > {output}')
+        elif len(input) == 1: # spikein samples
+            shell('zcat {input} | cut -f1,2 | {HTSLIB_BINDIR}/bgzip -c /dev/stdin > {output}')
+        else:
+            raise ValueError("make_nondup_id_list: programming error")
+
+
+TARGETS.extend(expand('sequences/{sample}.sqi.gz', sample=ALL_SAMPLES))
+rule generate_lint_sqi:
+    input:
+        sqi='scratch/merged-sqi/{sample}.sqi.gz',
+        sqi_index='scratch/merged-sqi/{sample}.sqi.gz.tbi',
+        whitelist='confilter/{sample}.lint_ids.gz',
+        whitelist_index='confilter/{sample}.lint_ids.gz.tbi'
+    output: 'sequences/{sample}.sqi.gz'
+    threads: THREADS_MAXIMUM_CORE
+    run:
+        sample = wildcards.sample
+        preambleopt = balanceopt = ''
+
+        if sample in CONF['preamble_sequence']:
+            preambleopt = ('--preamble-sequence {} --preamble-position {} '
+                           '--preamble-mismatch 1').format(CONF['preamble_sequence'][sample],
+                                                           CONF['read_cycles']['R3'][0])
+        elif sample in CONF['preamble_size']:
+            preambleend = CONF['read_cycles']['R3'][0] - 1 + CONF['preamble_size'][sample]
+            preambleopt = '--preamble-end {}'.format(preambleend)
+
+        if sample in CONF['balance_check']:
+            balanceopt = ('--balance-region {}:{} --balance-minimum {}').format(*
+                            CONF['balance_check'][sample])
+
+        shell('{SCRIPTSDIR}/lint-sequences-sqi.py --id-list {input.whitelist} \
+                --output {output} \
+                --parallel {threads} {preambleopt} {balanceopt} {input.sqi}')
 
 # ex: syntax=snakemake

@@ -23,6 +23,7 @@
 
 import sys
 import os
+import shutil
 
 
 def setdefault(name, value):
@@ -57,7 +58,15 @@ def init_default_dirs():
     setdefault('SCRATCHDIR', os.path.join(WRKDIR, 'scratch'))
     create_scratch_link()
 
+class SuffixFilter:
+    def __init__(self, values):
+        self.values = values
 
+    def __getitem__(self, key):
+        matches = [el for el in self.values if el.endswith(key)]
+        if len(matches) != 1:
+            raise ValueError("No single match found for {} in {}".format(key, self.values))
+        return matches[0]
 
 
 
@@ -69,7 +78,7 @@ sys.path.append(TAILOR_DIR)
 # Load and parse configuration settings.
 SETTINGS_FILE = os.path.abspath('tailorconf.yaml')
 
-from workflows import configurations
+from tailor import configurations
 CONF = configurations.Configurations(open(SETTINGS_FILE))
 
 # Verify directories and links.
@@ -89,7 +98,9 @@ nan = float('nan')
 # Commands needs to be run with bash with these options to terminate on errors correctly.
 shell.prefix('set -e; set -o pipefail; ' \
              'export PYTHONPATH="{PYTHONPATH}"; ' \
+             'export BGZIP_CMD="{HTSLIB_BINDIR}/bgzip"; ' \
+             'export TABIX_CMD="{HTSLIB_BINDIR}/tabix"; ' \
              'export TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}"; '.format(
-                PYTHONPATH=TAILOR_DIR, SCRATCHDIR=SCRATCHDIR))
+                PYTHONPATH=TAILOR_DIR, SCRATCHDIR=SCRATCHDIR, HTSLIB_BINDIR=HTSLIB_BINDIR))
 shell.executable(os.popen('which bash').read().strip()) # pipefail is supported by bash only.
 

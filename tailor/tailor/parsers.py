@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2014 Institute for Basic Science
-# Copyright (c) 2014 Hyeshik Chang
+# Copyright (c) 2013-2015 Institute for Basic Science
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,23 +23,31 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-
-def parse_arguments():
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Merges multiple bgzf files into one.')
-    parser.add_argument('inputs', metavar='BGZF', type=str, nargs='+',
-                        help='Input BGZF files.')
-    parser.add_argument('--output', dest='output', metavar='OUTPUT', type=str,
-                        help='Merged output BGZF file.', required=True)
-    options = parser.parse_args()
-
-    return options
+from tailor.fileutils import LineParser, open_gzip_buffered
+import numpy as np
 
 
-if __name__ == '__main__':
-    from tailor.fileutils import clone_bgzf_blocks, merge_bgzf_files
+readid_key = lambda x: (x.tile, x.cluster)
+decode_ascii = lambda x: x.decode('ascii')
 
-    options = parse_arguments()
-    merge_bgzf_files(options.output, options.inputs)
 
+def unpack_readid(s):
+    tile, cluster = s.split(b':')
+    return tile, int(cluster)
+
+def pack_readid(tile, cluster):
+    return '{}:{:08d}'.format(tile, cluster)
+
+parse_readid_list = LineParser([
+    ('tile', decode_ascii),
+    ('cluster', int),
+], linefeed=b'\r\n', separator=b':')
+
+parse_sqi_lite = LineParser([
+    ('tile', decode_ascii),
+    ('cluster', int),
+    ('istart', int),
+    ('seq', decode_ascii),
+    ('qual', None),
+    ('intensity', None),
+], linefeed=b'\r\n')
