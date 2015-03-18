@@ -35,6 +35,9 @@
 #include "tailseq-retrieve-signals.h"
 
 
+#define CIF_HEADER_SIZE 13
+
+
 struct CIFReader *
 open_cif_file(const char *filename)
 {
@@ -90,6 +93,8 @@ open_cif_file(const char *filename)
     hdl->nclusters = le32toh(hdl->nclusters);
     hdl->fptr = fp;
     hdl->read = 0;
+    hdl->readbuf = NULL;
+    hdl->readbuf_size = 0;
 
     return hdl;
 
@@ -103,8 +108,12 @@ open_cif_file(const char *filename)
 void
 close_cif_file(struct CIFReader *cif)
 {
+    if (cif->readbuf != NULL)
+        free(cif->readbuf);
+
     if (cif->fptr != NULL)
         fclose(cif->fptr);
+
     free(cif);
 }
 
@@ -112,7 +121,8 @@ close_cif_file(struct CIFReader *cif)
 int
 load_cif_data(struct CIFReader *cif, struct CIFData *data, uint32_t nclusters)
 {
-    uint32_t toread;
+    uint32_t toread, i;
+    int chan;
 
     if (cif->read >= cif->nclusters) {
         data->nclusters = 0;
@@ -124,10 +134,37 @@ load_cif_data(struct CIFReader *cif, struct CIFData *data, uint32_t nclusters)
     else
         toread = nclusters;
 
+    if (cif->readbuf_size < toread) {
+        free(cif->readbuf);
+        cif->readbuf = NULL;
+        cif->readbuf_size = 0;
+    }
+
+    if (cif->readbuf == NULL) {
+        cif->readbuf = calloc(sizeof(int16_t), toread);
+        if (cif->readbuf == NULL) {
+            perror("load_cif_data");
+            return -1;
+        }
+    }
+
     data->nclusters = toread;
-    if (fread(data->intensity, sizeof(struct IntensitySet), toread, cif->fptr) != toread) {
-        fprintf(stderr, "Not all data were loaded from a CIF.");
-        return -1;
+    for (chan = 0; chan < NUM_CHANNELS; chan++) {
+        long readpos;
+
+        readpos = CIF_HEADER_SIZE + (cif->nclusters * chan + cif->read) * sizeof(int16_t);
+        if (fseek(cif->fptr, readpos, SEEK_SET) != 0) {
+            fprintf(stderr, "Failed to seek cluster intensity values in a CIF.\n");
+            return -1;
+        }
+
+        if (fread(cif->readbuf, sizeof(int16_t), toread, cif->fptr) != toread) {
+            fprintf(stderr, "Not all data were loaded from a CIF.\n");
+            return -1;
+        }
+
+        for (i = 0; i < toread; i++)
+            data->intensity[i].value[chan] = le16toh(cif->readbuf[i]);
     }
 
     cif->read += toread;
@@ -198,7 +235,7 @@ format_intensity(char *inten, struct CIFData **intensities,
 
     switch (scalefactor) { /* fast paths for usual scales. */
     case 0:
-        FORMAT_INTENSITY(>> 0)
+        FORMAT_INTENSITY(+ 0)
         break;
     case 1:
         FORMAT_INTENSITY(>> 1)

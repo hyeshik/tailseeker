@@ -63,6 +63,8 @@ struct CIFReader {
 
     FILE *fptr;
     uint32_t read;
+    int16_t *readbuf;
+    size_t readbuf_size;
 };
 
 struct CIFData {
