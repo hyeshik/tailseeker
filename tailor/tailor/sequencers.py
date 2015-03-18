@@ -21,6 +21,9 @@
 # THE SOFTWARE.
 #
 
+import os
+
+
 TILE_LIST = {
     'HiSeq-RapidV1': """
         1101 1102 1103 1104 1105 1106 1107 1108
@@ -41,6 +44,11 @@ SIGNAL_SCALES = {
     'MiSeq-V2': 0,
 }
 
+INTENSITIES_SUBDIR = {
+    'HiSeq-RapidV1': 'Data/Intensities',
+    'MiSeq-V2': 'Data/Intensities',
+}
+
 
 def get_tiles(conf):
     tilemaps = {}
@@ -56,6 +64,8 @@ def get_tiles(conf):
             tileid = source['id'] + tile
             tilemaps[tileid] = {
                 'datadir': source['dir'],
+                'intensitiesdir':
+                    os.path.join(source['dir'], INTENSITIES_SUBDIR[source['type']]),
                 'lane': source['lane'],
                 'type': source['type'],
                 'tile': tile,

@@ -127,7 +127,7 @@ rule demultiplex_signals:
         phix_cycle_length = PHIX_ID_REF[2]
 
         options = [
-            '--data-dir', os.path.join(tileinfo['datadir'], 'Data', 'Intensities'),
+            '--data-dir', tileinfo['intensitiesdir'],
             '--run-id', tileinfo['laneid'], '--lane', tileinfo['lane'],
             '--tile', tileinfo['tile'], '--ncycles', NUM_CYCLES,
             '--signal-scale', sequencers.get_signalscale(tileinfo['type']),
@@ -323,5 +323,25 @@ rule generate_lint_sqi:
         shell('{SCRIPTSDIR}/lint-sequences-sqi.py --id-list {input.whitelist} \
                 --output {output} \
                 --parallel {paralleljobs} {preambleopt} {balanceopt} {input.sqi}')
+
+
+rule collect_color_matrices:
+    output: 'signalproc/colormatrix.pickle'
+    run:
+        import base64, pickle
+
+        matrix_files = {}
+        for vtile, tileinfo in TILES.items():
+            matrix_dir = os.path.join(tileinfo['intensitiesdir'], 'BaseCalls', 'Matrix')
+            matrix_filename = 's_{tileinfo[lane]}_READNO_{tileinfo[tile]}_matrix.txt'.format(
+                                tileinfo=tileinfo)
+            matrix_fn_pattern = os.path.join(matrix_dir, matrix_filename)
+            matrix_files[vtile] = matrix_fn_pattern
+
+        tilemapping = base64.encodebytes(pickle.dumps(matrix_files, 0)).decode('ascii')
+        shell('{SCRIPTSDIR}/collect-color-matrices.py \
+                    --tile-mapping \'{tilemapping}\' --output {output}')
+
+
 
 # ex: syntax=snakemake

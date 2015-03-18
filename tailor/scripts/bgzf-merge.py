@@ -39,7 +39,7 @@ def parse_arguments():
 
 
 if __name__ == '__main__':
-    from tailor.fileutils import clone_bgzf_blocks, merge_bgzf_files
+    from tailor.fileutils import merge_bgzf_files
 
     options = parse_arguments()
     merge_bgzf_files(options.output, options.inputs)
