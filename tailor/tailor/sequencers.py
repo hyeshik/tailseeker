@@ -40,7 +40,7 @@ TILE_LIST = {
 }
 
 SIGNAL_SCALES = {
-    'HiSeq-RapidV1': 2,
+    'HiSeq-RapidV1': 1,
     'MiSeq-V2': 0,
 }
 

@@ -26,6 +26,14 @@
 from tailor.fileutils import LineParser, open_gzip_buffered
 import numpy as np
 
+try:
+    from tailseqext import decode_intensity
+except ImportError:
+    import warnings
+    warnings.warn("Could not import tailseqext module. CIF-related functions will not work.")
+    def decode_intensity(*args, **kwds):
+        raise ImportError("Need tailseqext module.")
+
 
 readid_key = lambda x: (x.tile, x.cluster)
 decode_ascii = lambda x: x.decode('ascii')
@@ -51,3 +59,16 @@ parse_sqi_lite = LineParser([
     ('qual', None),
     ('intensity', None),
 ], linefeed=b'\r\n')
+
+def decode_phred_quality(s, scale=33):
+    return np.fromstring(s, np.uint8) - scale
+
+parse_sqi = LineParser([
+    ('tile', decode_ascii),
+    ('cluster', int),
+    ('istart', int), # optional 0-based coordinate of insert start position
+    ('seq', decode_ascii),
+    ('qual', decode_phred_quality),
+    ('intensity', decode_intensity),
+], linefeed=b'\r\n')
+

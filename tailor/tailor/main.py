@@ -40,8 +40,8 @@ INSERT_READS = sorted(readname for readname in CONF['read_cycles'] if readname[1
 INDEX_READS = sorted(readname for readname in CONF['read_cycles'] if readname[1] == 'i')
 ALL_READS = INSERT_READS + INDEX_READS
 
-FIRST_CYCLE = min(f for f, l in CONF['read_cycles'].values())
-LAST_CYCLE = max(l for f, l in CONF['read_cycles'].values())
+FIRST_CYCLE = min(f for f, l, _ in CONF['read_cycles'].values())
+LAST_CYCLE = max(l for f, l, _ in CONF['read_cycles'].values())
 NUM_CYCLES = LAST_CYCLE - FIRST_CYCLE + 1
 
 PHIX_ID_REF = ['R5', 6, 40] # identify PhiX reads using 40 bases from the 6th cycle.
@@ -79,7 +79,7 @@ rule basecall_ayb:
     run:
         tileinfo = TILES[wildcards.tile]
         readname = wildcards.read
-        first_cycle, last_cycle = CONF['read_cycles'][readname]
+        first_cycle, last_cycle, read_no = CONF['read_cycles'][readname]
         read_length = last_cycle - first_cycle + 1
 
         tempdir = make_scratch_dir('aybcalls/{}_{}'.format(readname, tileinfo['id']))
@@ -117,7 +117,7 @@ rule demultiplex_signals:
     threads: min(len(EXP_SAMPLES) + 2, 8)
     run:
         tileinfo = TILES[wildcards.tile]
-        index_read_start, index_read_end = CONF['read_cycles'][INDEX_READS[0]]
+        index_read_start, index_read_end, read_no = CONF['read_cycles'][INDEX_READS[0]]
         index_read_length = index_read_end - index_read_start + 1
 
         output_filename = 'scratch/demux-sqi/XX_{tile}.sqi.gz'.format(tile=wildcards.tile)
@@ -342,6 +342,21 @@ rule collect_color_matrices:
         shell('{SCRIPTSDIR}/collect-color-matrices.py \
                     --tile-mapping \'{tilemapping}\' --output {output}')
 
+
+TARGETS.extend(expand('scratch/merged-sqi/{sample}.sqi.gz', sample=['PhiX', 'Unknown'])) ## XXX temp
+rule calculate_phix_signal_scaling_factor:
+    input:
+        phix='scratch/merged-sqi/PhiX.sqi.gz',
+        phix_index='scratch/merged-sqi/PhiX.sqi.gz.tbi',
+        colormatrix='signalproc/colormatrix.pickle'
+    output: 'signalproc/signal-scaling-phix-ref.pickle'
+    threads: THREADS_MAXIMUM_CORE
+    resources: high_end_cpu=1
+    run:
+        readstart, readend, readno = CONF['read_cycles']['R3']
+        shell('{SCRIPTSDIR}/prepare-phix-signal-scaler.py --parallel {threads} \
+                --output {output} --read {readno} --read-range {readstart}:{readend} \
+                --color-matrix {input.colormatrix} {input.phix}')
 
 
 # ex: syntax=snakemake
