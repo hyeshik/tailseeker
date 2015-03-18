@@ -205,32 +205,39 @@ format_intensity(char *inten, struct CIFData **intensities,
     uint32_t i;
     uint16_t value_a, value_c, value_g, value_t;
 
-#define INTENSITY_ASCII_CODING_BASE 33
+#define INTENSITY_CODING_BASE       33
+#define INTENSITY_CODING_RADIX      91
+#define INTENSITY_CODING_WIDTH      8192
+#define INTENSITY_BOTTOM_SHIFT      255
 
-#define FORMAT_INTENSITY(valueexpr)                                         \
-    for (i = 0; i < ncycles; i++) {                                         \
-        uint16_t *valueset;                                                 \
-        valueset = intensities[i]->intensity[clusterno].value;              \
-                                                                            \
-        value_a = (valueset[0] valueexpr) + 255;                            \
-        value_c = (valueset[1] valueexpr) + 255;                            \
-        value_g = (valueset[2] valueexpr) + 255;                            \
-        value_t = (valueset[3] valueexpr) + 255;                            \
-                                                                            \
-        value_a = (value_a >= 4096) ? 4095 : ((value_a < 0) ? 0 : value_a); \
-        value_c = (value_c >= 4096) ? 4095 : ((value_c < 0) ? 0 : value_c); \
-        value_g = (value_g >= 4096) ? 4095 : ((value_g < 0) ? 0 : value_g); \
-        value_t = (value_t >= 4096) ? 4095 : ((value_t < 0) ? 0 : value_t); \
-                                                                            \
-        inten[0] = (value_a >> 6) + INTENSITY_ASCII_CODING_BASE;            \
-        inten[1] = (value_a & 63) + INTENSITY_ASCII_CODING_BASE;            \
-        inten[2] = (value_c >> 6) + INTENSITY_ASCII_CODING_BASE;            \
-        inten[3] = (value_c & 63) + INTENSITY_ASCII_CODING_BASE;            \
-        inten[4] = (value_g >> 6) + INTENSITY_ASCII_CODING_BASE;            \
-        inten[5] = (value_g & 63) + INTENSITY_ASCII_CODING_BASE;            \
-        inten[6] = (value_t >> 6) + INTENSITY_ASCII_CODING_BASE;            \
-        inten[7] = (value_t & 63) + INTENSITY_ASCII_CODING_BASE;            \
-        inten += 8;                                                         \
+#define FORMAT_INTENSITY(valueexpr)                                             \
+    for (i = 0; i < ncycles; i++) {                                             \
+        uint16_t *valueset;                                                     \
+        valueset = intensities[i]->intensity[clusterno].value;                  \
+                                                                                \
+        value_a = (valueset[0] valueexpr) + INTENSITY_BOTTOM_SHIFT;             \
+        value_c = (valueset[1] valueexpr) + INTENSITY_BOTTOM_SHIFT;             \
+        value_g = (valueset[2] valueexpr) + INTENSITY_BOTTOM_SHIFT;             \
+        value_t = (valueset[3] valueexpr) + INTENSITY_BOTTOM_SHIFT;             \
+                                                                                \
+        value_a = (value_a >= INTENSITY_CODING_WIDTH) ?                         \
+                     INTENSITY_CODING_WIDTH-1 : ((value_a < 0) ? 0 : value_a);  \
+        value_c = (value_c >= INTENSITY_CODING_WIDTH) ?                         \
+                     INTENSITY_CODING_WIDTH-1 : ((value_c < 0) ? 0 : value_c);  \
+        value_g = (value_g >= INTENSITY_CODING_WIDTH) ?                         \
+                     INTENSITY_CODING_WIDTH-1 : ((value_g < 0) ? 0 : value_g);  \
+        value_t = (value_t >= INTENSITY_CODING_WIDTH) ?                         \
+                     INTENSITY_CODING_WIDTH-1 : ((value_t < 0) ? 0 : value_t);  \
+                                                                                \
+        inten[0] = (value_a / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
+        inten[1] = (value_a % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
+        inten[2] = (value_c / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
+        inten[3] = (value_c % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
+        inten[4] = (value_g / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
+        inten[5] = (value_g % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
+        inten[6] = (value_t / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
+        inten[7] = (value_t % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
+        inten += 8;                                                             \
     }
 
     switch (scalefactor) { /* fast paths for usual scales. */

@@ -30,11 +30,11 @@
 #include "Python.h"
 #include <numpy/arrayobject.h>
 
-#define NCHANNELS   4
-
-#define SIGNAL_MIN  -255
-#define CODED_MAX   4095
-
+#define NCHANNELS                   4
+#define INTENSITY_CODING_BASE       33
+#define INTENSITY_CODING_RADIX      91
+#define INTENSITY_CODING_WIDTH      8192
+#define INTENSITY_BOTTOM_SHIFT      255
 
 static int
 decode_intensity(const char *encoded, int length, int16_t *signals)
@@ -45,15 +45,16 @@ decode_intensity(const char *encoded, int length, int16_t *signals)
         for (chan = 0; chan < NCHANNELS; chan++) {
             int16_t high, low;
 
-            high = (int16_t)*(encoded++) - 33;
-            low = (int16_t)*(encoded++) - 33;
+            high = (int16_t)*(encoded++) - INTENSITY_CODING_BASE;
+            low = (int16_t)*(encoded++) - INTENSITY_CODING_BASE;
 
-            if (high < 0 || high >= 64 || low < 0 || low >= 64) {
+            if (high < 0 || high >= INTENSITY_CODING_RADIX ||
+                    low < 0 || low >= INTENSITY_CODING_RADIX) {
                 PyErr_SetString(PyExc_ValueError, "Illegal character found.");
                 return -1;
             }
 
-            *(signals++) = ((high << 6) | low) + SIGNAL_MIN;
+            *(signals++) = (high * INTENSITY_CODING_RADIX + low) - INTENSITY_BOTTOM_SHIFT;
         }
     }
 
@@ -87,131 +88,6 @@ Py_decode_intensity(PyObject *self, PyObject *args)
         Py_XDECREF(r);
 
     return (PyObject *)r;
-}
-
-static void
-encode_intensity(int length, const int16_t *signals, char *outbuf)
-{
-    int chan, cycle;
-    int16_t v;
-
-    for (cycle = 0; cycle < length; cycle++) {
-        for (chan = 0; chan < NCHANNELS; chan++) {
-            v = *(signals++) - SIGNAL_MIN;
-            v = (v <= CODED_MAX ? v : CODED_MAX);
-            v = (v >= 0 ? v : 0);
-            *(outbuf++) = 33 + (v >> 6);
-            *(outbuf++) = 33 + (v & 63);
-        }
-    }
-}
-
-static PyObject *
-Py_encode_intensity(PyObject *self, PyObject *args)
-{
-    PyArrayObject *signals;
-    PyObject *r;
-    int length;
-
-    if (!PyArg_ParseTuple(args, "O:encode_intensity", (PyObject **)&signals))
-        return NULL;
-
-    if (!PyArray_Check(signals)) {
-        PyErr_SetString(PyExc_TypeError, "needs a numpy array.");
-        return NULL;
-    }
-
-    if (PyArray_NDIM(signals) != 2 ||
-            PyArray_DIMS(signals)[1] != NCHANNELS ||
-            PyArray_DESCR(signals) != PyArray_DescrFromType(NPY_INT16)) {
-        PyErr_Format(PyExc_TypeError, "array must be N x %d int16.", NCHANNELS);
-        return NULL;
-    }
-
-    length = PyArray_DIMS(signals)[0];
-    if ((r = PyBytes_FromStringAndSize(NULL, length * 8)) == NULL)
-        return NULL;
-
-    encode_intensity(length, PyArray_DATA(signals), PyBytes_AS_STRING(r));
-    return r;
-}
-
-static int
-encode_intensity_from_string(const char *intxt, int ncycles, char *outbuf)
-{
-    int chan, cycle;
-    int16_t v;
-
-    for (cycle = 0; cycle < ncycles; cycle++) {
-        int readchars, intensity[NCHANNELS];
-
-        /* The next line is hard coded with fixed number of channels. Change it when needed */
-#if NCHANNELS == 4
-        if (sscanf(intxt, "%d %d %d %d%n", intensity, intensity+1, intensity+2, intensity+3,
-                    &readchars) < NCHANNELS)
-#endif
-            return -1;
-
-        intxt += readchars;
-
-        for (chan = 0; chan < NCHANNELS; chan++) {
-            v = intensity[chan] - SIGNAL_MIN;
-            v = (v <= CODED_MAX ? v : CODED_MAX);
-            v = (v >= 0 ? v : 0);
-            *(outbuf++) = 33 + (v >> 6);
-            *(outbuf++) = 33 + (v & 63);
-        }
-    }
-
-    return 0;
-}
-
-static PyObject *
-Py_encode_intensity_from_string(PyObject *self, PyObject *args)
-{
-    PyObject *r;
-    int length;
-    char *instr, *outstr;
-
-    if (!PyArg_ParseTuple(args, "si:encode_intensity_from_string", &instr, &length))
-        return NULL;
-
-    r = PyBytes_FromStringAndSize(NULL, length * NCHANNELS * 2);
-    if (r == NULL)
-        return NULL;
-
-    outstr = PyBytes_AS_STRING(r);
-    outstr[length * NCHANNELS * 2] = 0;
-
-    if (encode_intensity_from_string(instr, length, outstr)) {
-        PyErr_SetString(PyExc_ValueError, "Couldn't parse the string.");
-        return NULL;
-    }
-
-    return r;
-}
-
-static PyObject *
-Py_phred_64to33(PyObject *self, PyObject *args)
-{
-    PyObject *r;
-    Py_ssize_t length;
-    char *instr, *outstr;
-
-    if (!PyArg_ParseTuple(args, "s#:phred_64to33", &instr, &length))
-        return NULL;
-
-    r = PyBytes_FromStringAndSize(NULL, length);
-    if (r == NULL)
-        return NULL;
-
-    outstr = PyBytes_AS_STRING(r);
-    outstr[length] = 0;
-
-    while (*instr != 0)
-        *(outstr++) = *(instr++) - 31;
-
-    return r;
 }
 
 
@@ -382,12 +258,6 @@ PolyALocator_new(PyObject *self, PyObject *args)
 static PyMethodDef tailseqext_methods[] = {
     {"decode_intensity", Py_decode_intensity, METH_VARARGS,
         PyDoc_STR("decode_intensity(str) -> array")},
-    {"encode_intensity", Py_encode_intensity, METH_VARARGS,
-        PyDoc_STR("encode_intensity(array) -> str")},
-    {"encode_intensity_from_string", Py_encode_intensity_from_string, METH_VARARGS,
-        PyDoc_STR("encode_intensity_from_string(str) -> str")},
-    {"phred_64to33", Py_phred_64to33, METH_VARARGS,
-        PyDoc_STR("phred_64to33(str) -> str")},
     {"PolyALocator", PolyALocator_new, METH_VARARGS,
         PyDoc_STR("PolyALocator(weights) -> object")},
     {NULL, NULL}           /* sentinel */
