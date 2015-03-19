@@ -199,7 +199,7 @@ load_alternative_calls(struct AlternativeCallReader *acall, struct BCLData **bas
 
         for (j = 0; j < ncycles; j++)
             basecalls[j]->basequality[clusterno] = (
-                DNABASE2NUM_ac[(int)seqbuf[j]] | (((uint8_t)(buf[j] - 33)) << 2));
+                DNABASE2NUM_ac[(int)seqbuf[j]] | (((uint8_t)(qualbuf[j] - 33)) << 2));
     }
 
     for (j = 0; j < ncycles; j++)
