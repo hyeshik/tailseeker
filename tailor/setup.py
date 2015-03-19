@@ -24,6 +24,11 @@
 import sys
 from distutils.core import setup, Extension
 
+if sys.version_info[0] <= 2:
+    srcfile = 'src/pythonext/tailseqext-py2.c'
+else:
+    srcfile = 'src/pythonext/tailseqext.c'
+
 setup(name = 'tailseqext',
       version = '0.2',
       description = 'extension modules for TAIL-seq',
@@ -31,5 +36,5 @@ setup(name = 'tailseqext',
       author_email = 'hyeshik@snu.ac.kr',
       url = 'http://highthroughput.org',
       license = 'MIT',
-      ext_modules = [Extension('tailseqext', ['src/pythonext/tailseqext.c'])]
+      ext_modules = [Extension('tailseqext', [srcfile])]
 )
