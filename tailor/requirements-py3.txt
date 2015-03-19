@@ -1,0 +1,7 @@
+numpy
+biopython
+scipy
+rpy2
+matplotlib
+PyYAML
+snakemake
