@@ -1,6 +1,20 @@
 ## Tailseeker 2.0
 
-Copyright (c) 2015 Institute for Basic Science
+Dependencies:
+
+ * GSNAP or STAR
+ * samtools
+ * htslib
+ * GHMM
+ * Python 2.7.x "and" Python 3.4 or higher
+ * AYB2 (optional) -- install my patched version from https://github.com/hyeshik/AYB2
+ * pip2 install -r requirements-py2.txt
+ * pip3 install -r requirements-py3.txt
+
+
+## Tailseeker/Tailor package
+
+Copyright (c) 2013-2015 Institute for Basic Science
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),

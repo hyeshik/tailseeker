@@ -79,7 +79,7 @@ sys.path.append(TAILOR_DIR)
 SETTINGS_FILE = os.path.abspath('tailorconf.yaml')
 
 from tailor import configurations
-CONF = configurations.Configurations(open(SETTINGS_FILE))
+CONF = configurations.Configurations(TAILOR_DIR, open(SETTINGS_FILE))
 
 # Verify directories and links.
 WRKDIR = os.getcwd()
@@ -107,11 +107,12 @@ inf = float('inf')
 nan = float('nan')
 
 # Commands needs to be run with bash with these options to terminate on errors correctly.
-shell.prefix('set -e; set -o pipefail; ' \
-             'export PYTHONPATH="{PYTHONPATH}"; ' \
-             'export BGZIP_CMD="{HTSLIB_BINDIR}/bgzip"; ' \
-             'export TABIX_CMD="{HTSLIB_BINDIR}/tabix"; ' \
-             'export TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}"; '.format(
+shell.prefix(('set -e; set -o pipefail; '
+              'export PYTHONPATH="{PYTHONPATH}" '
+                     'BGZIP_CMD="{HTSLIB_BINDIR}/bgzip" '
+                     'TABIX_CMD="{HTSLIB_BINDIR}/tabix" '
+                     'TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}" '
+                     + CONF.get('envvars', '') + '; ').format(
                 PYTHONPATH=TAILOR_DIR, SCRATCHDIR=SCRATCHDIR, HTSLIB_BINDIR=HTSLIB_BINDIR))
 shell.executable(os.popen('which bash').read().strip()) # pipefail is supported by bash only.
 

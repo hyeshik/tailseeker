@@ -22,6 +22,8 @@
 #
 
 import yaml
+import os
+
 
 class Configurations:
 
@@ -29,9 +31,24 @@ class Configurations:
         spikein_training_length preamble_size preamble_sequence delimiter
         balance_check dupcheck_regions maximum_index_mismatches""".split()
 
-    def __init__(self, settings_file):
-        self.confdata = yaml.load(settings_file)
+    def __init__(self, tailor_dir, settings_file):
+        self.confdata = self.load_config(tailor_dir, settings_file)
         self.expand_sample_settings()
+
+    def load_config(self, tailor_dir, settings_file):
+        usersettings = yaml.load(settings_file)
+        if 'using' in usersettings:
+            confdict = {}
+
+            for predfile in usersettings['using']:
+                confpath = os.path.join(tailor_dir, 'conf', predfile)
+                predconf = yaml.load(open(confpath))
+                confdict.update(predconf)
+
+            confdict.update(usersettings)
+            return confdict
+        else:
+            return usersettings
 
     def __getitem__(self, name):
         return self.confdata[name]
