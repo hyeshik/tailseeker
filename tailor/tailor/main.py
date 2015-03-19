@@ -353,7 +353,7 @@ rule calculate_phix_signal_scaling_factor:
         phix_index='scratch/merged-sqi/PhiX.sqi.gz.tbi',
         colormatrix='signalproc/colormatrix.pickle'
     output:
-        paramout='signalproc/signal-scaling-phix-ref.pickle',
+        paramout='signalproc/signal-scaling.phix-ref.pickle',
         statsout='stats/signal-scaling-basis.csv'
     threads: THREADS_MAXIMUM_CORE
     resources: high_end_cpu=1
@@ -371,8 +371,8 @@ rule prepare_signal_stabilizer:
         colormatrix='signalproc/colormatrix.pickle',
         signals='sequences/{sample}.sqi.gz',
         signals_index='sequences/{sample}.sqi.gz.tbi',
-        cyclescaling='signalproc/signal-scaling-phix-ref.pickle'
-    output: 'signalproc/signal-scaling-{sample}.pickle'
+        cyclescaling='signalproc/signal-scaling.phix-ref.pickle'
+    output: 'signalproc/signal-scaling-{sample}.stabilizer.pickle'
     threads: THREADS_MAXIMUM_CORE
     run:
         preamble_size = CONF['preamble_size'][wildcards.sample]
@@ -396,5 +396,47 @@ rule prepare_signal_stabilizer:
                 --high-probe-scale-basis {high_probe_scale_basis} \
                 --read-range {cyclestart}:{cycleend} --spot-norm-length {preamble_size} \
                 {input.signals}')
+
+
+def determine_inputs_calc_pasignals_v2(wildcards):
+    sample = wildcards.sample
+    stabilizer_ref = sample if sample in EXP_SAMPLES else CONF['spikein_scaling_ref']
+
+    return ['signalproc/colormatrix.pickle',
+            'sequences/{sample}.sqi.gz'.format(sample=sample),
+            'sequences/{sample}.sqi.gz.tbi'.format(sample=sample),
+            'signalproc/signal-scaling.phix-ref.pickle',
+            'signalproc/signal-scaling-{sample}.stabilizer.pickle'.format(
+                sample=stabilizer_ref)]
+
+rule calculate_pasignals_v2:
+    input: determine_inputs_calc_pasignals_v2
+    output: 'scores/{sample}.pa2score.gz'
+    threads: THREADS_MAXIMUM_CORE
+    run:
+        input = SuffixFilter(input)
+        shell('{SCRIPTSDIR}/calculate-pasignals.py --parallel {threads} \
+                --scaling-params {input[stabilizer.pickle]} {input[sqi.gz]} \
+                > {output}')
+
+
+rule pick_spikein_samples_for_training:
+    input: 'scores/{sample}.pa2score.gz'
+    output:
+        result='learning/{sample}.trainer.pickle',
+        qcplot='qcplots/{sample}.trainer.pdf',
+        idlist='learning/{sample}.trainer.idlist'
+    run:
+        trim_len = CONF['spikein_training_length'][wildcards.sample]
+        samples_to_learn = CONF['spikein_learning_num_samples']
+
+        shell('{SCRIPTSDIR}/pick-samples-to-learn.py --input-pascore {input} \
+                --output {output.result} --output-qc-plot {output.qcplot} \
+                --qc-plot-range 0:2 \
+                --pass1 {samples_to_learn[pass1]} \
+                --pass2 {samples_to_learn[pass2]} --quan 0.5 --alpha 0.025 \
+                --granule-size 15 --trim {trim_len} \
+                --output-training-set-list {output.idlist}')
+
 
 # ex: syntax=snakemake

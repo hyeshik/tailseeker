@@ -24,6 +24,7 @@
 #
 
 from tailor.fileutils import LineParser, open_gzip_buffered
+from base64 import b64decode
 import numpy as np
 
 try:
@@ -72,3 +73,13 @@ parse_sqi = LineParser([
     ('intensity', decode_intensity),
 ], linefeed=b'\r\n')
 
+def decode_pascore(s):
+    return np.fromstring(b64decode(s), np.float32)
+
+parse_pascore = LineParser([
+    ('tile', None),
+    ('cluster', int),
+    ('endmod_len', int),
+    ('seqbased_polya_len', int),
+    ('pascore', decode_pascore),
+], linefeed=b'\r\n')
