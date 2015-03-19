@@ -299,8 +299,12 @@ class TemporaryDirectory(object):
     def merge_into_stdout(self):
         return self.merge_into_file(sys.stdout)
 
-    def merge_bgzf(self, outfile):
-        merge_bgzf_files(outfile, self.all_files())
+    def merge_bgzf(self, outfile, prefix=None):
+        files = self.all_files()
+        if prefix is not None:
+            files = [f for f in files
+                     if os.path.basename(f).startswith(prefix)]
+        merge_bgzf_files(outfile, files)
 
     def next_output_file(self):
         newpath = os.path.join(self.path, format(self.output_counter, '08x'))

@@ -64,7 +64,7 @@ def decode_phred_quality(s, scale=33):
 parse_sqi = LineParser([
     ('tile', decode_ascii),
     ('cluster', int),
-    ('istart', int), # optional 0-based coordinate of insert start position
+    ('istart', int), # 0-based coordinate of insert start position
     ('seq', decode_ascii),
     ('qual', decode_phred_quality),
     ('intensity', decode_intensity),
@@ -80,3 +80,14 @@ parse_pascore = LineParser([
     ('seqbased_polya_len', int),
     ('pascore', decode_pascore),
 ], linefeed=b'\r\n')
+
+parse_polya_calls = LineParser([
+    ('tile', decode_ascii),
+    ('cluster', int),
+    ('start_pos', int), # 0-based, relative to the immediate next base to the delimiter
+    ('polya_len', int),
+    ('seqbased_len', int),
+    ('hmmbased_len', int),
+    ('naive_len', int),
+], linefeed=b'\r\n')
+

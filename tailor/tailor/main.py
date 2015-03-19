@@ -163,7 +163,7 @@ rule merge_sqi:
     of BGZF files, EOF record at the end of the files must be removed during the concatenation.
     """
     input: expand('scratch/demux-sqi/{{sample}}_{tile}.sqi.gz', tile=TILES)
-    output: 'scratch/merged-sqi/{sample}.sqi.gz'
+    output: temp('scratch/merged-sqi/{sample}.sqi.gz')
     run:
         input = sorted(input) # to make tabix happy.
         shell('{SCRIPTSDIR}/bgzf-merge.py --output {output} {input}')
@@ -177,7 +177,7 @@ rule index_tabix:
 
 rule generate_fastq_for_contaminant_filter:
     input: 'scratch/merged-sqi/{sample}.sqi.gz'
-    output: 'confilter/{sample}-con.fastq.gz'
+    output: temp('confilter/{sample}-con.fastq.gz')
     threads: 2
     run:
         refreadcycles = CONF['read_cycles'][CONTAMINANT_ID_REF[0]]
@@ -236,7 +236,7 @@ else:
 
 rule generate_contaminant_list:
     input: 'confilter/{sample}-con.bam'
-    output: 'confilter/{sample}.conlist.gz'
+    output: temp('confilter/{sample}.conlist.gz')
     shell: '{SAMTOOLS_BINDIR}/samtools view {input} | \
             cut -f1 | uniq | sed -e "s,:0*,\t," -e "s/\t$/\t0/" | gzip -c - > {output}'
 
@@ -244,7 +244,7 @@ rule generate_contaminant_list:
 rule find_duplicated_reads:
     input: sqi='scratch/merged-sqi/{sample}.sqi.gz', \
            sqiindex='scratch/merged-sqi/{sample}.sqi.gz.tbi'
-    output: duplist='dupfilter/{sample}.duplist.gz', \
+    output: duplist=temp('dupfilter/{sample}.duplist.gz'), \
             dupstats='stats/{sample}.duplicates.csv', \
             dupcounts='dupfilter/{sample}.dupcounts.gz'
     threads: THREADS_MAXIMUM_CORE
@@ -278,7 +278,7 @@ def determine_inputs_for_nondup_id_list(wildcards):
 
 rule make_nondup_id_list:
     input: determine_inputs_for_nondup_id_list
-    output: 'confilter/{sample}.lint_ids.gz'
+    output: temp('confilter/{sample}.lint_ids.gz')
     run:
         if len(input) == 3: # experimental samples
             input = SuffixFilter(input)
@@ -291,7 +291,6 @@ rule make_nondup_id_list:
             raise ValueError("make_nondup_id_list: programming error")
 
 
-TARGETS.extend(expand('sequences/{sample}.sqi.gz', sample=ALL_SAMPLES))
 rule generate_lint_sqi:
     input:
         sqi='scratch/merged-sqi/{sample}.sqi.gz',
@@ -343,10 +342,6 @@ rule collect_color_matrices:
                     --tile-mapping \'{tilemapping}\' --output {output}')
 
 
-TARGETS.extend(expand('scratch/merged-sqi/{sample}.sqi.gz', sample=['PhiX', 'Unknown'])) ## XXX temp
-TARGETS.extend([
-    'signalproc/signal-scaling-phix-ref.pickle',
-    'stats/signal-scaling-basis.csv'])
 rule calculate_phix_signal_scaling_factor:
     input:
         phix='scratch/merged-sqi/PhiX.sqi.gz',
@@ -448,6 +443,7 @@ rule learn_pascores_from_spikeins:
                 --output {output} {input}'
 
 
+TARGETS.extend(expand('polya/{sample}.polya-calls.gz', sample=ALL_SAMPLES))
 rule measure_polya:
     input:
         sqi='sequences/{sample}.sqi.gz',
@@ -460,5 +456,36 @@ rule measure_polya:
     shell: '{SCRIPTSDIR}/measure-polya-tails.py \
                 --input-sqi {input.sqi} --input-pa {input.score} \
                 --model {input.model} --parallel {threads} --output {output}'
+
+
+TARGETS.extend(expand('fastq/{sample}_{readno}.fastq.gz',
+                      sample=EXP_SAMPLES, readno=INSERT_READS))
+rule generate_fastq:
+    input:
+        sqi='sequences/{sample}.sqi.gz',
+        sqiindex='sequences/{sample}.sqi.gz.tbi',
+        pacall='polya/{sample}.polya-calls.gz',
+        pacallindex='polya/{sample}.polya-calls.gz.tbi'
+    output: expand('fastq/{{sample}}_{readno}.fastq.gz', readno=INSERT_READS)
+    params: output='fastq/{sample}_XX.fastq.gz'
+    threads: THREADS_MAXIMUM_CORE
+    run:
+        reads = ''
+        for readname in INSERT_READS:
+            start, end, _ = CONF['read_cycles'][readname]
+            if wildcards.sample not in CONF['delimiter']:
+                trim = 'N'
+            elif start <= CONF['delimiter'][wildcards.sample][0] <= end:
+                delimend = (CONF['delimiter'][wildcards.sample][0] +
+                            len(CONF['delimiter'][wildcards.sample][1]))
+                trim = end - (delimend + MAXIMUM_DELIMITER_MISALIGNMENT - 1)
+            else:
+                trim = 'N'
+
+            reads += ' {},{},{},{}'.format(readname, start, end, trim)
+
+        shell('{SCRIPTSDIR}/generate-fastq.py \
+                --input-sqi {input.sqi} --input-pa-call {input.pacall} \
+                --parallel {threads} --output {params.output} {reads}')
 
 # ex: syntax=snakemake
