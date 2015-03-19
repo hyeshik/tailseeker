@@ -210,7 +210,7 @@ if __name__ == '__main__':
         p1result, p2result = run_specific_picking(options)
 
     if options.output is not None:
-        pickle.dump(p2result, open(options.output, 'wb'))
+        np.save(options.output, p2result)
 
     if options.output_qc_plot is not None:
         plot_qc(p1result, p2result, options.output_qc_plot, options.qc_plot_range)

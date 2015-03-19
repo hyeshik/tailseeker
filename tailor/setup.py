@@ -26,15 +26,17 @@ from distutils.core import setup, Extension
 
 if sys.version_info[0] <= 2:
     srcfile = 'src/pythonext/tailseqext-py2.c'
+    modname = 'tailseqext2' # to avoid name confilct with the previous version of tailseeker
 else:
     srcfile = 'src/pythonext/tailseqext.c'
+    modname = 'tailseqext'
 
-setup(name = 'tailseqext',
+setup(name = modname,
       version = '0.2',
       description = 'extension modules for TAIL-seq',
       author = 'Hyeshik Chang',
       author_email = 'hyeshik@snu.ac.kr',
       url = 'http://highthroughput.org',
       license = 'MIT',
-      ext_modules = [Extension('tailseqext', [srcfile])]
+      ext_modules = [Extension(modname, [srcfile])]
 )

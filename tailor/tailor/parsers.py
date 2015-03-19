@@ -26,15 +26,12 @@
 from tailor.fileutils import LineParser, open_gzip_buffered
 from base64 import b64decode
 import numpy as np
+import sys
 
-try:
+if sys.version_info[0] >= 3:
     from tailseqext import decode_intensity
-except ImportError:
-    import warnings
-    warnings.warn("Could not import tailseqext module. CIF-related functions will not work.")
-    def decode_intensity(*args, **kwds):
-        raise ImportError("Need tailseqext module.")
-
+else:
+    from tailseqext2 import decode_intensity
 
 readid_key = lambda x: (x.tile, x.cluster)
 decode_ascii = lambda x: x.decode('ascii')
@@ -77,7 +74,7 @@ def decode_pascore(s):
     return np.fromstring(b64decode(s), np.float32)
 
 parse_pascore = LineParser([
-    ('tile', None),
+    ('tile', decode_ascii),
     ('cluster', int),
     ('endmod_len', int),
     ('seqbased_polya_len', int),

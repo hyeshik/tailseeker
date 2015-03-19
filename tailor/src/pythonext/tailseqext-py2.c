@@ -7,176 +7,76 @@
 
 #define PY_SSIZE_T_CLEAN
 #include "Python.h"
+#include <numpy/arrayobject.h>
 
 static PyObject *ErrorObject;
 
-/* ======================================================== */
-/* Poly(A) locator */
+#define NCHANNELS                   4
+#define INTENSITY_CODING_BASE       33
+#define INTENSITY_CODING_RADIX      91
+#define INTENSITY_CODING_WIDTH      8192
+#define INTENSITY_BOTTOM_SHIFT      255
 
-typedef struct {
-    PyObject_HEAD
-    int weight[256];
-} PolyALocatorObject;
-
-static PyTypeObject PolyALocator_Type;
-
-#define PolyALocator_Type(v)        (Py_TYPE(v) == &PolyALocator_Type)
-
-static PolyALocatorObject *
-PolyALocator_create(PyObject *args)
+static int 
+decode_intensity(const char *encoded, int length, int16_t *signals)
 {
-    PolyALocatorObject *self;
-    PyObject *weightmap=NULL;
-    char c;
+    int chan, cycle;
 
-    if (!PyArg_ParseTuple(args, "O:PolyALocator", &weightmap))
-        return NULL;
+    for (cycle = 0; cycle < length; cycle++) {
+        for (chan = 0; chan < NCHANNELS; chan++) {
+            int16_t high, low;
 
-    if (!PyDict_Check(weightmap)) {
-        PyErr_SetString(PyExc_TypeError, "Weights must be given in a dict.");
-        return NULL;
-    }
+            high = (int16_t)*(encoded++) - INTENSITY_CODING_BASE;
+            low = (int16_t)*(encoded++) - INTENSITY_CODING_BASE;
 
-    self = PyObject_New(PolyALocatorObject, &PolyALocator_Type);
-    if (self == NULL)
-        return NULL;
+            if (high < 0 || high >= INTENSITY_CODING_RADIX ||
+                    low < 0 || low >= INTENSITY_CODING_RADIX) {
+                PyErr_SetString(PyExc_ValueError, "Illegal character found.");
+                return -1; 
+            }   
 
-    memset(self->weight, 0, sizeof(int) * 256);
-    for (c = 'A'; c <= 'Z'; c++) {
-        char key[2];
-        PyObject *value;
+            *(signals++) = (high * INTENSITY_CODING_RADIX + low) - INTENSITY_BOTTOM_SHIFT;
+        }   
+    }   
 
-        key[0] = c; key[1] = 0;
-
-        value = PyDict_GetItemString(weightmap, key);
-        if (value == NULL)
-            continue;
-
-        if (!PyInt_Check(value)) {
-            PyErr_SetString(PyExc_TypeError, "Values of weight map must be an integer");
-            Py_DECREF(self);
-            return NULL;
-        }
-
-        self->weight[(int)c] = (int)PyInt_AsLong(value);
-    }
-
-    return self;
-}
-
-static void
-PolyALocator_dealloc(PolyALocatorObject *self)
-{
-    PyObject_Del(self);
+    return 0;
 }
 
 static PyObject *
-PolyALocator_call(PolyALocatorObject *self, PyObject *args, PyObject *kw)
+Py_decode_intensity(PyObject *self, PyObject *args)
 {
-    char *inseq;
-    Py_ssize_t inseqlen;
-    int max_term_mod, i, j;
-    int longest_i, longest_j, longest_length;
+    PyObject *r;
+    char *encoded;
+    Py_ssize_t encoded_length;
+    npy_intp dim[2];
 
-    if (!PyArg_ParseTuple(args, "s#i:decode", &inseq, &inseqlen, &max_term_mod))
+    if (!PyArg_ParseTuple(args, "s#:decode_intensity", &encoded, &encoded_length))
         return NULL;
 
-    if (inseqlen < max_term_mod)
-        max_term_mod = inseqlen;
-
-    longest_i = longest_j = inseqlen + 1;
-    longest_length = -1;
-
-    /* calculate match scores for all possible [i, j] */
-    for (i = 0; i < max_term_mod; i++) {
-        int curlength, scoresum;
-
-        scoresum = self->weight[(int)inseq[i]];
-        if (longest_length < 1 && scoresum > 0) {
-            longest_length = 1;
-            longest_i = longest_j = i;
-        }
-
-        for (j = i + 1, curlength = 2; j < inseqlen; j++, curlength++) {
-            scoresum += self->weight[(int)inseq[j]];
-
-            if (scoresum > 0 && curlength > longest_length) {
-                longest_i = i;
-                longest_j = j;
-                longest_length = curlength;
-            }
-        }
+    if (encoded_length % 8 != 0) {
+        PyErr_Format(PyExc_ValueError, "Irregular length of encoded intensity: \"%s\"",
+                     encoded);
+        return NULL;
     }
 
-    if (longest_length < 0)
-        return Py_BuildValue("(ii)", 0, 0);
+    dim[0] = encoded_length / 8;
+    dim[1] = NCHANNELS;
 
-    while (inseq[longest_i] != 'T' && longest_i <= longest_j)
-        longest_i++;
+    if ((r = PyArray_SimpleNew(2, dim, NPY_INT16)) == NULL)
+        return NULL;
 
-    while (inseq[longest_j] != 'T' && longest_j >= longest_i)
-        longest_j--;
+    if (decode_intensity(encoded, dim[0], PyArray_DATA(r)) == -1)
+        Py_XDECREF(r);
 
-    return Py_BuildValue("(ii)", longest_i, longest_j + 1);
-}
-
-
-static PyTypeObject PolyALocator_Type = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    "tailseqext.PolyALocator",           /*tp_name*/
-    sizeof(PolyALocatorObject),          /*tp_basicsize*/
-    0,                      /*tp_itemsize*/
-    /* methods */
-    (destructor)PolyALocator_dealloc, /*tp_dealloc*/
-    0,                      /*tp_print*/
-    0,                      /*tp_getattr*/
-    0,                      /*tp_setattr*/
-    0,                      /*tp_compare*/
-    0,                      /*tp_repr*/
-    0,                      /*tp_as_number*/
-    0,                      /*tp_as_sequence*/
-    0,                      /*tp_as_mapping*/
-    0,                      /*tp_hash*/
-    (ternaryfunc)PolyALocator_call, /*tp_call*/
-    0,                      /*tp_str*/
-    0,                      /*tp_getattro*/
-    0,                      /*tp_setattro*/
-    0,                      /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT,     /*tp_flags*/
-    0,                      /*tp_doc*/
-    0,                      /*tp_traverse*/
-    0,                      /*tp_clear*/
-    0,                      /*tp_richcompare*/
-    0,                      /*tp_weaklistoffset*/
-    0,                      /*tp_iter*/
-    0,                      /*tp_iternext*/
-    0,                      /*tp_methods*/
-    0,                      /*tp_members*/
-    0,                      /*tp_getset*/
-    0,                      /*tp_base*/
-    0,                      /*tp_dict*/
-    0,                      /*tp_descr_get*/
-    0,                      /*tp_descr_set*/
-    0,                      /*tp_dictoffset*/
-    0,                      /*tp_init*/
-    0,                      /*tp_alloc*/
-    0,                      /*tp_new*/
-    0,                      /*tp_free*/
-    0,                      /*tp_is_gc*/
-};
-
-static PyObject *
-PolyALocator_new(PyObject *self, PyObject *args)
-{
-    return (PyObject *)PolyALocator_create(args);
+    return r;
 }
 
 
 /* List of functions defined in the module */
 
 static PyMethodDef tailseqext_methods[] = {
-    {"PolyALocator", PolyALocator_new, METH_VARARGS,
-        PyDoc_STR("PolyALocator(weights) -> object")},
+    {"decode_intensity", Py_decode_intensity, METH_VARARGS,
+        PyDoc_STR("decode_intensity(str) -> array")},
     {NULL, NULL}           /* sentinel */
 };
 
@@ -186,18 +86,20 @@ PyDoc_STRVAR(module_doc,
 /* Initialization function for the module (*must* be called initxx) */
 
 PyMODINIT_FUNC
-inittailseqext(void)
+inittailseqext2(void)
 {
     PyObject *m;
 
+    import_array();
+
     /* Create the module and add the functions */
-    m = Py_InitModule3("tailseqext", tailseqext_methods, module_doc);
+    m = Py_InitModule3("tailseqext2", tailseqext_methods, module_doc);
     if (m == NULL)
         return;
 
     /* Add some symbolic constants to the module */
     if (ErrorObject == NULL) {
-        ErrorObject = PyErr_NewException("tailseqext.error", NULL, NULL);
+        ErrorObject = PyErr_NewException("tailseqext2.error", NULL, NULL);
         if (ErrorObject == NULL)
             return;
     }

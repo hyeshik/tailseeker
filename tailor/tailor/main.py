@@ -423,7 +423,7 @@ rule calculate_pasignals_v2:
 rule pick_spikein_samples_for_training:
     input: 'scores/{sample}.pa2score.gz'
     output:
-        result='learning/{sample}.trainer.pickle',
+        result='learning/{sample}.trainer.npy',
         qcplot='qcplots/{sample}.trainer.pdf',
         idlist='learning/{sample}.trainer.idlist'
     run:
@@ -438,5 +438,27 @@ rule pick_spikein_samples_for_training:
                 --granule-size 15 --trim {trim_len} \
                 --output-training-set-list {output.idlist}')
 
+
+rule learn_pascores_from_spikeins:
+    input: expand('learning/{sample}.trainer.npy', sample=CONF['spikeins_to_learn'])
+    output: 'learning/model.pickle'
+    shell: '{SCRIPTSDIR}/learn-spikein-pa-score.py \
+                --preset v2 \
+                --clip-minimum {PASIGNAL_CLIP_MIN} --clip-maximum {PASIGNAL_CLIP_MAX} \
+                --output {output} {input}'
+
+
+rule measure_polya:
+    input:
+        sqi='sequences/{sample}.sqi.gz',
+        sqiindex='sequences/{sample}.sqi.gz.tbi',
+        score='scores/{sample}.pa2score.gz',
+        scoreinex='scores/{sample}.pa2score.gz.tbi',
+        model='learning/model.pickle'
+    output: 'polya/{sample}.polya-calls.gz'
+    threads: THREADS_MAXIMUM_CORE
+    shell: '{SCRIPTSDIR}/measure-polya-tails.py \
+                --input-sqi {input.sqi} --input-pa {input.score} \
+                --model {input.model} --parallel {threads} --output {output}'
 
 # ex: syntax=snakemake
