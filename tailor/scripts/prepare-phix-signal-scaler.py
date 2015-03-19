@@ -140,9 +140,9 @@ def collect_signal_stats(options, opener, outputname):
 
         if bad_cycle:
             bad_cycles.append(cycleno_full)
-            continue
-
-        num_samples.append(min(map(len, cyclesignals)))
+            num_samples.append(0)
+        else:
+            num_samples.append(min(map(len, cyclesignals)))
 
 
     pickle.dump(({tilenumber: cyclenorm_params},
@@ -178,9 +178,9 @@ def run(options):
 
         if options.samplecountcsv is not None:
             sc_out = csv.writer(open(options.samplecountcsv, 'w'))
-            read_range = map(int, options.readrange.split(':'))
+            read_range = list(map(int, options.readrange.split(':')))
 
-            sc_out.writerow(['Tile'] + range(read_range[0], read_range[1] + 1))
+            sc_out.writerow(['Tile'] + list(range(read_range[0], read_range[1] + 1)))
             for tile, samplecounts in sorted(num_samples_outputs.items()):
                 sc_out.writerow([tile] + samplecounts)
 

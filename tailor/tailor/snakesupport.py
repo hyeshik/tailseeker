@@ -91,6 +91,10 @@ SCRIPTSDIR = os.path.join(TAILOR_DIR, 'scripts')
 CONF.export_paths(globals())
 create_scratch_link()
 
+SIGNAL_STABILIZER_TARGET_RANGE = 1, 50 # in 1-based inclusive coordinate
+SIGNAL_STABILIZER_REFERENCE_RANGE = 51, 55 # 1-based
+SIGNAL_STABILIZER_POLYA_DETECTION_RANGE = 51, 100 # 1-based
+
 # Predefined constants
 inf = float('inf')
 nan = float('nan')

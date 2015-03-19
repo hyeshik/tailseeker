@@ -344,19 +344,57 @@ rule collect_color_matrices:
 
 
 TARGETS.extend(expand('scratch/merged-sqi/{sample}.sqi.gz', sample=['PhiX', 'Unknown'])) ## XXX temp
+TARGETS.extend([
+    'signalproc/signal-scaling-phix-ref.pickle',
+    'stats/signal-scaling-basis.csv'])
 rule calculate_phix_signal_scaling_factor:
     input:
         phix='scratch/merged-sqi/PhiX.sqi.gz',
         phix_index='scratch/merged-sqi/PhiX.sqi.gz.tbi',
         colormatrix='signalproc/colormatrix.pickle'
-    output: 'signalproc/signal-scaling-phix-ref.pickle'
+    output:
+        paramout='signalproc/signal-scaling-phix-ref.pickle',
+        statsout='stats/signal-scaling-basis.csv'
     threads: THREADS_MAXIMUM_CORE
     resources: high_end_cpu=1
     run:
         readstart, readend, readno = CONF['read_cycles']['R3']
         shell('{SCRIPTSDIR}/prepare-phix-signal-scaler.py --parallel {threads} \
-                --output {output} --read {readno} --read-range {readstart}:{readend} \
-                --color-matrix {input.colormatrix} {input.phix}')
+                --output {output.paramout} --read {readno} \
+                --read-range {readstart}:{readend} \
+                --color-matrix {input.colormatrix} \
+                --sample-number-stats {output.statsout} {input.phix}')
 
+
+rule prepare_signal_stabilizer:
+    input:
+        colormatrix='signalproc/colormatrix.pickle',
+        signals='sequences/{sample}.sqi.gz',
+        signals_index='sequences/{sample}.sqi.gz.tbi',
+        cyclescaling='signalproc/signal-scaling-phix-ref.pickle'
+    output: 'signalproc/signal-scaling-{sample}.pickle'
+    threads: THREADS_MAXIMUM_CORE
+    run:
+        preamble_size = CONF['preamble_size'][wildcards.sample]
+        high_probe_range = '{}:{}'.format(
+                preamble_size + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[0],
+                preamble_size + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[1])
+        high_probe_scale_inspection = '{}:{}'.format(
+                preamble_size + SIGNAL_STABILIZER_TARGET_RANGE[0],
+                preamble_size + SIGNAL_STABILIZER_TARGET_RANGE[1])
+        high_probe_scale_basis = '{}:{}'.format(
+                preamble_size + SIGNAL_STABILIZER_REFERENCE_RANGE[0],
+                preamble_size + SIGNAL_STABILIZER_REFERENCE_RANGE[1])
+
+        cyclestart, cycleend, readno = CONF['read_cycles']['R3']
+        shell('{SCRIPTSDIR}/prepare-signal-stabilizer.py \
+                --parallel {threads} --output {output} \
+                --read {readno} --color-matrix {input.colormatrix} \
+                --cycle-scaling {input.cyclescaling} \
+                --high-probe-range {high_probe_range} \
+                --high-probe-scale-inspection {high_probe_scale_inspection} \
+                --high-probe-scale-basis {high_probe_scale_basis} \
+                --read-range {cyclestart}:{cycleend} --spot-norm-length {preamble_size} \
+                {input.signals}')
 
 # ex: syntax=snakemake
