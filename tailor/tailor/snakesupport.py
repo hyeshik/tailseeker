@@ -71,8 +71,6 @@ class SuffixFilter:
 
 
 #========== Initializations ============
-
-TAILOR_DIR = os.path.abspath('tailor')
 sys.path.append(TAILOR_DIR)
 
 # Load and parse configuration settings.

@@ -29,7 +29,8 @@ class Configurations:
 
     EXPANDABLE_CONF_KEYS = """
         spikein_training_length preamble_size preamble_sequence delimiter
-        balance_check dupcheck_regions maximum_index_mismatches""".split()
+        balance_check dupcheck_regions maximum_index_mismatches
+        species""".split()
 
     def __init__(self, tailor_dir, settings_file):
         self.confdata = self.load_config(tailor_dir, settings_file)

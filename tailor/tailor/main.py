@@ -23,9 +23,21 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
+import os
+
+def get_topdir():
+    if os.path.islink('Snakefile'):
+        tailorpkgdir = os.path.dirname(os.readlink('Snakefile'))
+        return os.path.abspath(os.path.dirname(tailorpkgdir))
+    elif 'TAILOR_DIR' in os.environ:
+        return os.environ['TAILOR_DIR']
+    else:
+        raise ValueError("You need to set an environment variable, TAILOR_DIR.")
+
+TAILOR_DIR = get_topdir()
 TARGETS = []
 
-include: 'tailor/tailor/snakesupport.py'
+include: os.path.join(TAILOR_DIR, 'tailor', 'snakesupport.py')
 
 from tailor import sequencers
 
@@ -49,7 +61,6 @@ CONTAMINANT_ID_REF = ['R5', 1, inf] # use the full length of R5 to identify cont
 
 THREADS_MAXIMUM_CORE = CONF['maximum_threads']
 
-GSNAP_SUFFIX = '.201303' # XXX: to be removed!
 BIGALIGNMENTPARTS = 8 # XXX: to be moved somewhere.
 
 # Variable validations
@@ -58,6 +69,11 @@ if len(INDEX_READS) != 1:
 
 if FIRST_CYCLE != 1:
     raise ValueError("The pipeline assumes that one of the reads starts from the first cycle.")
+
+
+subworkflow contaminants_index:
+    workdir: os.path.join(TAILOR_DIR, 'seqdb')
+    snakefile: os.path.join(TAILOR_DIR, 'tailor', 'contaminantsindex.py')
 
 
 localrules: all
@@ -188,17 +204,36 @@ rule generate_fastq_for_contaminant_filter:
                 gzip -c - > {output}')
 
 
+def determine_contaminants_index(aligner):
+    def _determine_contaminants_index_internal(wildcards):
+      try:
+        species = CONF['species'][wildcards.sample].replace(' ', '_')
+        if aligner == 'gsnap':
+            return contaminants_index(
+                'contaminants/{species}.gmap/{species}.gmap.genomecomp'.format(species=species))
+        elif aligner == 'star':
+            return contaminants_index('contaminants/{species}.star/Genome'.format(species=species))
+        else:
+            raise ValueError('Unknown aligner {}'.format(aligner))
+      except:
+        import traceback
+        traceback.print_exc()
+        raise
+    return _determine_contaminants_index_internal
+
 if CONF['sequence_aligner'] == 'gsnap':
     rule align_confilter_gsnap:
-        input: 'confilter/{sample}-con.fastq.gz'
+        input:
+            sequence='confilter/{sample}-con.fastq.gz',
+            index=determine_contaminants_index('gsnap')
         output: temp('confilter/{sample}-con.bam-{part}')
         threads: THREADS_MAXIMUM_CORE
         run:
-            indexdir = os.path.dirname(CONF['contaminant_index'])
-            indexname = os.path.basename(CONF['contaminant_index'])
-            shell('{GSNAP_BINDIR}/gsnap{GSNAP_SUFFIX} -D {indexdir} --gunzip -d {indexname} \
+            indexdir = os.path.dirname(input.index)
+            indexdir, indexname = os.path.split(input.index)
+            shell('{GSNAP_BINDIR}/gsnap -D {indexdir} --gunzip -d {indexname} \
                         -B 4 -O -A sam -m 0.06 -q {wildcards.part}/{BIGALIGNMENTPARTS} \
-                        -t {threads} {input} | \
+                        -t {threads} {input.sequence} | \
                    {SAMTOOLS_BINDIR}/samtools view -F 4 -bS - > {output}')
 
     rule merge_parted_alignments:
@@ -218,15 +253,17 @@ if CONF['sequence_aligner'] == 'gsnap':
 
 elif CONF['sequence_aligner'] == 'star':
     rule align_confilter_star:
-        input: 'confilter/{sample}-con.fastq.gz'
+        input:
+            sequence='confilter/{sample}-con.fastq.gz',
+            index=determine_contaminants_index('star')
         output: 'confilter/{sample}-con.bam' # STAR is too fast to split jobs on-the-fly
         threads: THREADS_MAXIMUM_CORE
         run:
             scratchdir = make_scratch_dir('staralign.' + wildcards.sample)
-            indexdir = CONF['contaminant_index']
+            indexdir = os.path.dirname(input.index)
 
             shell("{STAR_BINDIR}/STAR --genomeDir {indexdir} \
-                    --readFilesIn {input} --runThreadN {threads} \
+                    --readFilesIn {input.sequence} --runThreadN {threads} \
                     --outFilterMultimapNmax 4 --readFilesCommand zcat \
                     --outStd SAM --outFileNamePrefix {scratchdir}/ | \
                    {SAMTOOLS_BINDIR}/samtools view -@ 4 -F 4 -bS -o {output} -")
