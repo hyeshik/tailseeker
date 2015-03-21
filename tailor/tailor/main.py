@@ -230,7 +230,7 @@ if CONF['sequence_aligner'] == 'gsnap':
         threads: THREADS_MAXIMUM_CORE
         run:
             indexdir = os.path.dirname(input.index)
-            indexdir, indexname = os.path.split(input.index)
+            indexdir, indexname = os.path.split(indexdir)
             shell('{GSNAP_BINDIR}/gsnap -D {indexdir} --gunzip -d {indexname} \
                         -B 4 -O -A sam -m 0.06 -q {wildcards.part}/{BIGALIGNMENTPARTS} \
                         -t {threads} {input.sequence} | \
