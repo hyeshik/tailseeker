@@ -103,6 +103,14 @@ def run(options):
         'low_signal_mask': options.lowsignalmask,
     }
 
+    if options.parallel <= 1:
+        for jobno, opener in enumerate(open_tabix_parallel(infile)):
+            scale_factors.update(inspect_signals(options, opener))
+
+        pickle.dump((configuration, scale_factors), open(options.output, 'wb'))
+
+        return
+
     with futures.ProcessPoolExecutor(options.parallel) as executor:
         jobs = []
 
