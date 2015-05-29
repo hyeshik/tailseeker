@@ -26,14 +26,12 @@
 from tailor.parsers import parse_pascore, parse_sqi
 from tailor.stats import sample_iterable, similarity_sort
 from tailor.fileutils import ParallelMatchingReader, open_gzip_buffered
-from rpy2.robjects import numpy2ri; numpy2ri.activate()
-from rpy2 import robjects
 import numpy as np
-from Bio.Cluster import cluster
 import random
 import sys
 import subprocess as sp
 from operator import itemgetter
+from sklearn.covariance import EllipticEnvelope
 
 import matplotlib; matplotlib.use('Agg')
 from matplotlib import pyplot as plt
@@ -48,21 +46,12 @@ def load_pascore_trimmed(pascorefile, trim_length):
             yield '{}:{:08d}'.format(spot.tile, spot.cluster), pascore[:trim_length]
 
 
+def pick_outliers(values, support_fraction, contamination):
+    model = EllipticEnvelope(support_fraction=support_fraction,
+                             contamination=contamination).fit(values)
+    return model.predict(values) != 1
+
 def run_outlier_removal(options):
-    r = robjects.r
-    r.library('mvoutlier', quietly=True)
-    r.library('robustbase', quietly=True)
-    r("""\
-    pickoutliers <- function (x, quan={options.quan}, alpha={options.alpha}) {{
-        rob <- covMcd(x, alpha=quan)
-        xarw <- arw(x, rob$center, rob$cov, alpha=alpha)
-        dist <- mahalanobis(x, center=rob$center, cov=rob$cov)
-        o <- (sqrt(dist) > min(sqrt(xarw$cn), sqrt(qchisq(1-alpha, dim(x)[2]))))
-        l <- list(outliers=o, md=sqrt(dist))
-        l
-    }}""".format(options=options))
-
-
     # random sample for pass 1
     parserfeed = load_pascore_trimmed(options.input_pascore, options.trim)
 
@@ -84,7 +73,8 @@ def run_outlier_removal(options):
                                   options.granule]).sum(axis=2)
 
     # check outliers and remove outliers
-    outliers = np.array(list(r.pickoutliers(p1merged).rx('outliers')[0]))
+    outliers = np.array(pick_outliers(p1merged, options.support_fraction,
+                                      options.contamination))
     nonoutliers = np.array(1 - outliers, 'bool')
 
     survivors = [(name, spot)
@@ -175,10 +165,12 @@ def parse_arguments():
     parser.add_argument('--pass2', dest='pass2', metavar='N', type=int,
                         help='Number of samples in the second pass (after outlier removal)',
                         default=1000)
-    parser.add_argument('--quan', dest='quan', metavar='alpha', type=float,
-                        help='Alpha value for covariance MCD', default=0.5)
-    parser.add_argument('--alpha', dest='alpha', metavar='alpha', type=float,
-                        help='Alpha value for arw', default=0.025)
+    parser.add_argument('--support-fraction', dest='support_fraction',
+                        metavar='value', type=float,
+                        help='Fractions to be included in the support of the raw MCD estimate.',
+                        default=0.75)
+    parser.add_argument('--contamination', dest='contamination', metavar='value', type=float,
+                        help='Proportion of outliers in the data set', default=0.4)
     parser.add_argument('--granule-size', dest='granule', metavar='size', type=int,
                         help='Size of bins for signal averaging.', default=15)
     parser.add_argument('--read-ids', dest='readids', metavar='FILE', type=str,

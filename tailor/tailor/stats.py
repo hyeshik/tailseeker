@@ -26,7 +26,7 @@
 
 __all__ = [
     'similarity_sort', 'sample_iterable', 'ReservoirSampler', 'smooth',
-    'savitzky_golay', 'loess_fit', 'assign_bin',
+    'savitzky_golay',
 ]
 
 from Bio.Cluster import cluster
@@ -55,25 +55,6 @@ def similarity_sort(data, dist='correlation'):
         pushed[clsi] = resolve(node.left) + resolve(node.right)
 
     return next(iter(pushed.values()))
-
-
-def loess_fit(x, y, px=None, model=None, alpha=0.5):
-    import rpy2.robjects as ro
-
-    if model is None:
-        model = ro.r('y ~ x')
-
-    if px is None:
-        px = np.linspace(min(x), max(x), 22)[1:-1]
-
-    fitframe = ro.DataFrame({'x': ro.FloatVector(x), 'y': ro.FloatVector(y)})
-    loessmodel = ro.r.loess(model, fitframe, span=alpha)
-
-    predframe = ro.DataFrame({'x': ro.FloatVector(px)})
-    predy = ro.r.predict(loessmodel, predframe)
-    preddata = [(x, predy[i]) for i, x in enumerate(px)]
-
-    return np.array(preddata).transpose()
 
 
 class ReservoirSampler(object):
@@ -237,12 +218,4 @@ def savitzky_golay(y, window_size, order, deriv=0, rate=1):
     lastvals = y[-1] + np.abs(y[-half_window-1:-1][::-1] - y[-1])
     y = np.concatenate((firstvals, y, lastvals))
     return np.convolve( m[::-1], y, mode='valid')
-
-
-def assign_bin(value, bins):
-    for i, upper in enumerate(bins):
-        if value < upper:
-            return i
-    else:
-        return len(bins)
 

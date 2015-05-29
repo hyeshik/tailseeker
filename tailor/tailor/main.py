@@ -466,7 +466,8 @@ rule pick_spikein_samples_for_training:
                 --output {output.result} --output-qc-plot {output.qcplot} \
                 --qc-plot-range 0:2 \
                 --pass1 {samples_to_learn[pass1]} \
-                --pass2 {samples_to_learn[pass2]} --quan 0.5 --alpha 0.025 \
+                --pass2 {samples_to_learn[pass2]} \
+                --support-fraction 0.75 --contamination 0.4 \
                 --granule-size 15 --trim {trim_len} \
                 --output-training-set-list {output.idlist}')
 
