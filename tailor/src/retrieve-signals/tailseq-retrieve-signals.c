@@ -69,7 +69,8 @@ assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *bar
             secondbestfound = 1;
     }
 
-    if (bestidx == NULL || secondbestfound || bestmismatches > bestidx->maximum_mismatches)
+    if (bestidx == NULL || secondbestfound ||
+            bestmismatches > bestidx->maximum_index_mismatches)
         return NULL;
     else
         return bestidx;
@@ -79,18 +80,27 @@ assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *bar
 static int
 find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode)
 {
+    static const int offsets[]={0, -1, 1, 9999};
+    const int *poffset;
     const char *delimpos;
+
+    if (barcode->maximum_delimiter_mismatches < 0)
+        return -1;
 
     delimpos = sequence + barcode->delimiter_pos;
 
-    if (memcmp(delimpos, barcode->delimiter, barcode->delimiter_length) == 0)
-        return barcode->delimiter_pos + barcode->delimiter_length;
+    for (poffset = &offsets[0]; *poffset < 9999; poffset++) {
+        int i, ndiff;
+        const char *delimpos_offset;
 
-    if (memcmp(delimpos - 1, barcode->delimiter, barcode->delimiter_length) == 0)
-        return barcode->delimiter_pos + barcode->delimiter_length - 1;
+        delimpos_offset = delimpos + *poffset;
 
-    if (memcmp(delimpos + 1, barcode->delimiter, barcode->delimiter_length) == 0)
-        return barcode->delimiter_pos + barcode->delimiter_length + 1;
+        for (i = ndiff = 0; i < barcode->delimiter_length; i++)
+            ndiff += (barcode->delimiter[i] != delimpos_offset[i]);
+
+        if (ndiff <= barcode->maximum_delimiter_mismatches)
+            return barcode->delimiter_pos + barcode->delimiter_length + *poffset;
+    }
 
     return -1;
 }
@@ -450,7 +460,7 @@ tailseq-retrieve-signals 2.0\
 \n  -c,  --alternative-call=SPEC      FASTQ file to replace base calls.\
 \n                                    specify as \"filename,first_cycle\".\
 \n  -m,  --sample=SPEC                sample information as formatted in\
-\n            \"name,index,maximum_mismatches,delimiter,delimiter_position\".\
+\n            \"name,index,max_index_miss,delimiter,delimiter_position,max_delim_miss\".\
 \n       --keep-no-delimiter          don't skip reads where a delimiter\
 \n                                    is not found.\
 \n  -f,  --filter-control=SPEC        sort out PhiX control reads by sequence\
@@ -591,7 +601,7 @@ main(int argc, char *argv[])
 
             case 'm': /* --sample */
                 {
-#define SAMPLE_OPTION_TOKENS        5
+#define SAMPLE_OPTION_TOKENS        6
                     struct BarcodeInfo *newbc;
                     char *str, *saveptr;
                     char *tokens[SAMPLE_OPTION_TOKENS];
@@ -616,10 +626,11 @@ main(int argc, char *argv[])
 
                     newbc->name = strdup(tokens[0]);
                     newbc->index = strdup(tokens[1]);
-                    newbc->maximum_mismatches = atoi(tokens[2]);
+                    newbc->maximum_index_mismatches = atoi(tokens[2]);
                     newbc->delimiter = strdup(tokens[3]);
                     newbc->delimiter_pos = atoi(tokens[4]) - 1;
                     newbc->delimiter_length = strlen(newbc->delimiter);
+                    newbc->maximum_delimiter_mismatches = atoi(tokens[5]);
                     newbc->stream = NULL;
 
                     if (newbc->name == NULL || newbc->index == NULL ||
@@ -628,10 +639,17 @@ main(int argc, char *argv[])
                         return -1;
                     }
 
-                    if (newbc->maximum_mismatches < 0 ||
-                            newbc->maximum_mismatches >= strlen(newbc->index)) {
-                        fprintf(stderr, "Maximum mismatches were out of range for sample "
-                                        "`%s'.\n", newbc->name);
+                    if (newbc->maximum_index_mismatches < 0 ||
+                            newbc->maximum_index_mismatches >= strlen(newbc->index)) {
+                        fprintf(stderr, "Maximum index mismatches were out of range for "
+                                        "sample `%s'.\n", newbc->name);
+                        return -1;
+                    }
+
+                    if (newbc->maximum_delimiter_mismatches < 0 ||
+                            newbc->maximum_delimiter_mismatches >= strlen(newbc->delimiter)) {
+                        fprintf(stderr, "Maximum delimiter mismatches were out of range "
+                                        "for sample `%s'.\n", newbc->name);
                         return -1;
                     }
 
@@ -774,7 +792,8 @@ main(int argc, char *argv[])
         control->delimiter = strdup("");
         control->delimiter_pos = -1;
         control->delimiter_length = 0;
-        control->maximum_mismatches = barcode_length;
+        control->maximum_index_mismatches = barcode_length;
+        control->maximum_delimiter_mismatches = -1;
         control->stream = NULL;
         control->next = barcodes;
         controlinfo.barcode = control;
@@ -796,7 +815,8 @@ main(int argc, char *argv[])
         fallback->delimiter = strdup("");
         fallback->delimiter_pos = -1;
         fallback->delimiter_length = 0;
-        fallback->maximum_mismatches = barcode_length;
+        fallback->maximum_index_mismatches = barcode_length;
+        fallback->maximum_delimiter_mismatches = -1;
         fallback->stream = NULL;
         fallback->next = barcodes;
 

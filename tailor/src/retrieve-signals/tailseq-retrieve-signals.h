@@ -79,7 +79,8 @@ struct BarcodeInfo {
     char *delimiter;
     int delimiter_pos;
     int delimiter_length;
-    int maximum_mismatches;
+    int maximum_index_mismatches;
+    int maximum_delimiter_mismatches;
     FILE *stream;
     struct BarcodeInfo *next;
 };

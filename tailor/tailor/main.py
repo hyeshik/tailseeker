@@ -161,11 +161,12 @@ rule demultiplex_signals:
         for sample in ALL_SAMPLES:
             options.extend([
                 '--sample',
-                '{name},{index},{mismatches},{delimiter},{delimpos}'.format(
+                '{name},{index},{index_mm},{delimiter},{delimpos},{delim_mm}'.format(
                     name=sample, index=CONF.get_sample_index(sample),
-                    mismatches=CONF['maximum_index_mismatches'][sample],
+                    index_mm=CONF['maximum_index_mismatches'][sample],
                     delimiter=CONF['delimiter'][sample][1],
-                    delimpos=CONF['delimiter'][sample][0])])
+                    delimpos=CONF['delimiter'][sample][0],
+                    delim_mm=CONF['delimiter'][sample][2])])
 
         shell('{BINDIR}/tailseq-retrieve-signals ' +
               ' '.join('"{}"'.format(opt) for opt in options))
