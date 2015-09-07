@@ -50,7 +50,7 @@ struct BCLData {
 };
 
 struct IntensitySet {
-    uint16_t value[NUM_CHANNELS];
+    int16_t value[NUM_CHANNELS];
 };
 
 struct CIFReader {

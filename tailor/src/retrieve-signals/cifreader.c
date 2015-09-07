@@ -203,7 +203,7 @@ format_intensity(char *inten, struct CIFData **intensities,
     /* This function consumes CPU time than most of the other parts in this program.
      * It is optimized with some black magics. */
     uint32_t i;
-    uint16_t value_a, value_c, value_g, value_t;
+    int16_t value_a, value_c, value_g, value_t;
 
 #define INTENSITY_CODING_BASE       33
 #define INTENSITY_CODING_RADIX      91
@@ -212,22 +212,27 @@ format_intensity(char *inten, struct CIFData **intensities,
 
 #define FORMAT_INTENSITY(valueexpr)                                             \
     for (i = 0; i < ncycles; i++) {                                             \
-        uint16_t *valueset;                                                     \
+        int16_t *valueset;                                                      \
         valueset = intensities[i]->intensity[clusterno].value;                  \
                                                                                 \
-        value_a = (valueset[0] valueexpr) + INTENSITY_BOTTOM_SHIFT;             \
-        value_c = (valueset[1] valueexpr) + INTENSITY_BOTTOM_SHIFT;             \
-        value_g = (valueset[2] valueexpr) + INTENSITY_BOTTOM_SHIFT;             \
-        value_t = (valueset[3] valueexpr) + INTENSITY_BOTTOM_SHIFT;             \
+        value_a = (valueset[0] + INTENSITY_BOTTOM_SHIFT);                       \
+        value_c = (valueset[1] + INTENSITY_BOTTOM_SHIFT);                       \
+        value_g = (valueset[2] + INTENSITY_BOTTOM_SHIFT);                       \
+        value_t = (valueset[3] + INTENSITY_BOTTOM_SHIFT);                       \
                                                                                 \
-        value_a = (value_a >= INTENSITY_CODING_WIDTH) ?                         \
-                     INTENSITY_CODING_WIDTH-1 : ((value_a < 0) ? 0 : value_a);  \
-        value_c = (value_c >= INTENSITY_CODING_WIDTH) ?                         \
-                     INTENSITY_CODING_WIDTH-1 : ((value_c < 0) ? 0 : value_c);  \
-        value_g = (value_g >= INTENSITY_CODING_WIDTH) ?                         \
-                     INTENSITY_CODING_WIDTH-1 : ((value_g < 0) ? 0 : value_g);  \
-        value_t = (value_t >= INTENSITY_CODING_WIDTH) ?                         \
-                     INTENSITY_CODING_WIDTH-1 : ((value_t < 0) ? 0 : value_t);  \
+        value_a = value_a < 0 ? 0 : (value_a valueexpr);                        \
+        value_c = value_c < 0 ? 0 : (value_c valueexpr);                        \
+        value_g = value_g < 0 ? 0 : (value_g valueexpr);                        \
+        value_t = value_t < 0 ? 0 : (value_t valueexpr);                        \
+                                                                                \
+        if (value_a >= INTENSITY_CODING_WIDTH)                                  \
+            value_a = INTENSITY_CODING_WIDTH - 1;                               \
+        if (value_c >= INTENSITY_CODING_WIDTH)                                  \
+            value_c = INTENSITY_CODING_WIDTH - 1;                               \
+        if (value_g >= INTENSITY_CODING_WIDTH)                                  \
+            value_g = INTENSITY_CODING_WIDTH - 1;                               \
+        if (value_t >= INTENSITY_CODING_WIDTH)                                  \
+            value_t = INTENSITY_CODING_WIDTH - 1;                               \
                                                                                 \
         inten[0] = (value_a / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
         inten[1] = (value_a % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \

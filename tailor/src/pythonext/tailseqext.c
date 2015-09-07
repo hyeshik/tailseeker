@@ -54,7 +54,8 @@ decode_intensity(const char *encoded, int length, int16_t *signals)
                 return -1;
             }
 
-            *(signals++) = (high * INTENSITY_CODING_RADIX + low) - INTENSITY_BOTTOM_SHIFT;
+            *(signals++) = (int16_t)(high * INTENSITY_CODING_RADIX + low)
+                           - INTENSITY_BOTTOM_SHIFT;
         }
     }
 
