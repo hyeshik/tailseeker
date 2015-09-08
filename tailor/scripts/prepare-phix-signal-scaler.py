@@ -65,15 +65,20 @@ def get_calibration_means(seq, intensity, decrosstalkmtx, interval):
 
         noncallpositions = np.where(seqarr != base)[0]
         if len(noncallpositions) < 1:
+            # no positive positions.
             return None
         negmean = adjusted_signals[noncallpositions, basei].mean()
 
         signal_params.append([negmean, posmean - negmean])
 
+        if posmean - negmean < 1:
+            # positive signals are almost indistinguishable from negative signals.
+            return None
+
     return signal_params
 
 
-def normalize_spot_intensity(intensity, decrosstalk_matrix, norm_params, interval):
+def normalize_spot_intensity(intensity, decrosstalk_matrix, norm_params, interval, debug=False):
     adjusted_signals = np.dot(intensity[interval], decrosstalk_matrix)
     return np.array([(adjusted_signals[:, basei] - basalvalue) / dynrange
                      for basei, (basalvalue, dynrange) in enumerate(norm_params)]).T
@@ -109,7 +114,6 @@ def collect_signal_stats(options, opener, outputname):
         for cycleno, (base, normsig) in enumerate(zip(spot.seq[read_slice],
                                                       normalized_signal)):
             signalpool[base, cycleno].append(normsig.tostring())
-
 
     cyclenorm_params = {}
     bad_cycles = []
@@ -151,12 +155,15 @@ def collect_signal_stats(options, opener, outputname):
 
     return outputname
 
+
 def run(options):
     infile = options.infile[0]
     #collect_signal_stats(options, open_tabix_parallel(infile)[0], options.output)
     #raise SystemExit
+    executorclass = (
+        futures.ThreadPoolExecutor if options.parallel == 1 else futures.ProcessPoolExecutor)
 
-    with futures.ProcessPoolExecutor(options.parallel) as executor, \
+    with executorclass(options.parallel) as executor, \
             TemporaryDirectory(asobj=True) as tmpdir:
         jobs = []
 

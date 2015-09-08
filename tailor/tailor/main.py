@@ -63,6 +63,12 @@ THREADS_MAXIMUM_CORE = CONF['maximum_threads']
 
 BIGALIGNMENTPARTS = 8 # XXX: to be moved somewhere.
 
+INTERMEDIATE_DIRS = [
+    'confilter', 'dupfilter', 'polya', 'scores', 'scratch',
+    'sequences', 'signalproc', 'learning',
+]
+
+
 # Variable validations
 if len(INDEX_READS) != 1:
     raise ValueError("Multi-indexing is not supported yet.")
@@ -80,6 +86,18 @@ localrules: all
 
 rule all:
     input: lambda wc: TARGETS
+
+rule clean:
+    run:
+        for dir in INTERMEDIATE_DIRS:
+            if os.path.islink(dir):
+                realpath = os.readlink(dir)
+                print('Cleaning a symbolic link:', dir)
+                shutil.rmtree(realpath, ignore_errors=True)
+                os.unlink(dir)
+            elif os.path.isdir(dir):
+                print('Cleaning an intermediate directory:', dir)
+                shutil.rmtree(dir, ignore_errors=True)
 
 rule basecall_ayb:
     """
@@ -188,7 +206,7 @@ rule merge_sqi:
 
 rule index_tabix:
     input: '{name}.gz'
-    output: '{name}.gz.tbi'
+    output: nonfinal('{name}.gz.tbi')
     shell: '{HTSLIB_BINDIR}/tabix -s1 -b2 -e2 -0 {input}'
 
 
@@ -239,7 +257,7 @@ if CONF['sequence_aligner'] == 'gsnap':
 
     rule merge_parted_alignments:
         input: expand('{{dir}}/{{sample}}-{{kind}}.bam-{part}', part=range(BIGALIGNMENTPARTS))
-        output: '{dir}/{sample}-{kind,[^-]+}.bam'
+        output: nonfinal('{dir}/{sample}-{kind,[^-]+}.bam')
         threads: THREADS_MAXIMUM_CORE
         run:
             viewcommands = ';'.join('{}/samtools view {}'.format(SAMTOOLS_BINDIR, inpbam)
@@ -257,7 +275,7 @@ elif CONF['sequence_aligner'] == 'star':
         input:
             sequence='confilter/{sample}-con.fastq.gz',
             index=determine_contaminants_index('star')
-        output: 'confilter/{sample}-con.bam' # STAR is too fast to split jobs on-the-fly
+        output: nonfinal('confilter/{sample}-con.bam') # STAR is too fast to split jobs on-the-fly
         threads: THREADS_MAXIMUM_CORE
         run:
             scratchdir = make_scratch_dir('staralign.' + wildcards.sample)
@@ -284,7 +302,7 @@ rule find_duplicated_reads:
            sqiindex='scratch/merged-sqi/{sample}.sqi.gz.tbi'
     output: duplist=temp('dupfilter/{sample}.duplist.gz'), \
             dupstats='stats/{sample}.duplicates.csv', \
-            dupcounts='dupfilter/{sample}.dupcounts.gz'
+            dupcounts=nonfinal('dupfilter/{sample}.dupcounts.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
         if wildcards.sample in CONF['dupcheck_regions']:
@@ -335,7 +353,7 @@ rule generate_lint_sqi:
         sqi_index='scratch/merged-sqi/{sample}.sqi.gz.tbi',
         whitelist='confilter/{sample}.lint_ids.gz',
         whitelist_index='confilter/{sample}.lint_ids.gz.tbi'
-    output: 'sequences/{sample}.sqi.gz'
+    output: nonfinal('sequences/{sample}.sqi.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
         sample = wildcards.sample
@@ -363,7 +381,7 @@ rule generate_lint_sqi:
 
 
 rule collect_color_matrices:
-    output: 'signalproc/colormatrix.pickle'
+    output: nonfinal('signalproc/colormatrix.pickle')
     run:
         import base64, pickle
 
@@ -386,7 +404,7 @@ rule calculate_phix_signal_scaling_factor:
         phix_index='scratch/merged-sqi/PhiX.sqi.gz.tbi',
         colormatrix='signalproc/colormatrix.pickle'
     output:
-        paramout='signalproc/signal-scaling.phix-ref.pickle',
+        paramout=nonfinal('signalproc/signal-scaling.phix-ref.pickle'),
         statsout='stats/signal-scaling-basis.csv'
     threads: THREADS_MAXIMUM_CORE
     resources: high_end_cpu=1
@@ -405,7 +423,7 @@ rule prepare_signal_stabilizer:
         signals='sequences/{sample}.sqi.gz',
         signals_index='sequences/{sample}.sqi.gz.tbi',
         cyclescaling='signalproc/signal-scaling.phix-ref.pickle'
-    output: 'signalproc/signal-scaling-{sample}.stabilizer.pickle'
+    output: nonfinal('signalproc/signal-scaling-{sample}.stabilizer.pickle')
     threads: THREADS_MAXIMUM_CORE
     run:
         preamble_size = CONF['preamble_size'][wildcards.sample]
@@ -444,7 +462,7 @@ def determine_inputs_calc_pasignals_v2(wildcards):
 
 rule calculate_pasignals_v2:
     input: determine_inputs_calc_pasignals_v2
-    output: 'scores/{sample}.pa2score.gz'
+    output: nonfinal('scores/{sample}.pa2score.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
         input = SuffixFilter(input)
@@ -456,9 +474,9 @@ rule calculate_pasignals_v2:
 rule pick_spikein_samples_for_training:
     input: 'scores/{sample}.pa2score.gz'
     output:
-        result='learning/{sample}.trainer.npy',
+        result=nonfinal('learning/{sample}.trainer.npy'),
         qcplot='qcplots/{sample}.trainer.pdf',
-        idlist='learning/{sample}.trainer.idlist'
+        idlist=nonfinal('learning/{sample}.trainer.idlist')
     run:
         trim_len = CONF['spikein_training_length'][wildcards.sample]
         samples_to_learn = CONF['spikein_learning_num_samples']
@@ -475,14 +493,13 @@ rule pick_spikein_samples_for_training:
 
 rule learn_pascores_from_spikeins:
     input: expand('learning/{sample}.trainer.npy', sample=CONF['spikeins_to_learn'])
-    output: 'learning/model.pickle'
+    output: nonfinal('learning/model.pickle')
     shell: '{SCRIPTSDIR}/learn-spikein-pa-score.py \
                 --preset v2 \
                 --clip-minimum {PASIGNAL_CLIP_MIN} --clip-maximum {PASIGNAL_CLIP_MAX} \
                 --output {output} {input}'
 
 
-TARGETS.extend(expand('polya/{sample}.polya-calls.gz', sample=ALL_SAMPLES))
 rule measure_polya:
     input:
         sqi='sequences/{sample}.sqi.gz',
@@ -490,7 +507,7 @@ rule measure_polya:
         score='scores/{sample}.pa2score.gz',
         scoreinex='scores/{sample}.pa2score.gz.tbi',
         model='learning/model.pickle'
-    output: 'polya/{sample}.polya-calls.gz'
+    output: nonfinal('polya/{sample}.polya-calls.gz')
     threads: THREADS_MAXIMUM_CORE
     shell: '{SCRIPTSDIR}/measure-polya-tails.py \
                 --input-sqi {input.sqi} --input-pa {input.score} \
@@ -505,7 +522,7 @@ rule generate_fastq:
         sqiindex='sequences/{sample}.sqi.gz.tbi',
         pacall='polya/{sample}.polya-calls.gz',
         pacallindex='polya/{sample}.polya-calls.gz.tbi'
-    output: expand('fastq/{{sample}}_{readno}.fastq.gz', readno=INSERT_READS)
+    output: map(nonfinal, expand('fastq/{{sample}}_{readno}.fastq.gz', readno=INSERT_READS))
     params: output='fastq/{sample}_XX.fastq.gz'
     threads: THREADS_MAXIMUM_CORE
     run:

@@ -89,6 +89,17 @@ SCRIPTSDIR = os.path.join(TAILOR_DIR, 'scripts')
 CONF.export_paths(globals())
 create_scratch_link()
 
+if not CONF['clean_intermediate_files']:
+    nonfinal = temp = lambda arg: arg
+elif CONF['clean_intermediate_files'] == 'some':
+    nonfinal = lambda arg: arg
+elif CONF['clean_intermediate_files'] == 'immediately':
+    nonfinal = temp
+else:
+    raise ValueError('Setting clean_intermediate_files should be one among immediately, some, '
+                     'or no.')
+
+
 # XXX: move these parameters somewhere out
 SIGNAL_STABILIZER_TARGET_RANGE = 1, 50 # in 1-based inclusive coordinate
 SIGNAL_STABILIZER_REFERENCE_RANGE = 51, 55 # 1-based
