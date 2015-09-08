@@ -88,7 +88,7 @@ class ReservoirSampler(object):
 def sample_iterable(iterable, num, randrange=random.randrange):
     # faster implementation of ReservoirSampler
 
-    result = [item for i, item in enumerate(iterable) if i < num]
+    result = [item for i, item in zip(range(num), iterable)]
     if len(result) < num:
         return result
 
