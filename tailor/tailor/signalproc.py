@@ -61,10 +61,11 @@ class TAILseqSignalProcessor:
 
     def adopt_scale_params(self, original_params):
         scale_params = {}
+        na_fill = (np.nan, np.nan)
 
         for tile, params in original_params.items():
-            structured_params = np.array([[params[cycle, base]
-                                           for baseno, base in enumerate('ACGT')]
+            structured_params = np.array([[params.get((cycle, base), na_fill)
+                                           for base in 'ACGT']
                                          for cycle in range(self.intv_start, self.intv_stop)])
             scale_params[tile] = structured_params.transpose()
             # shape = (2, 4, 251) in the standard setup
@@ -119,8 +120,9 @@ class TAILseqSignalProcessor:
                                     - percyclescaled_intensity[:3].sum(axis=0))
 
         # mask low signals (e.g. no reaction is proceeded further)
-        darkcycles = np.where(percyclescaled_intensity.clip(0).sum(axis=0)
+        darkcycles = np.where(np.nan_to_num(percyclescaled_intensity.clip(0)).sum(axis=0)
                                 < self.lowsignalmask)[0]
+
         if len(darkcycles) > 0:
             t_signal_stand_out[darkcycles] = np.nan
             return self.fill_and_trim_nan(t_signal_stand_out)
