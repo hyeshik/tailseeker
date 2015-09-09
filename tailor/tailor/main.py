@@ -544,4 +544,24 @@ rule generate_fastq:
                 --input-sqi {input.sqi} --input-pa-call {input.pacall} \
                 --parallel {threads} --output {params.output} {reads}')
 
+
+TARGETS.extend(['stats/control-length-accuracy.csv'] +
+               expand('qcplots/control-length-accuracy-{plottype}.pdf',
+                      plottype=['final', 'seqbased', 'hmmbased', 'naive']))
+rule generate_accuracy_stats:
+    input: expand('polya/{sample}.polya-calls.gz', sample=SPIKEIN_SAMPLES)
+    output:
+        statsout='stats/control-length-accuracy.csv',
+        plotsout=expand('qcplots/control-length-accuracy-{plottype}.pdf',
+                        plottype=['final', 'seqbased', 'hmmbased', 'naive'])
+    params: plotdir='qcplots'
+    run:
+        controlsamples = ' '.join(
+            '{}:polya/{}.polya-calls.gz'.format(CONF['spikein_lengths'][s], s)
+            for s in SPIKEIN_SAMPLES)
+
+        shell('{SCRIPTSDIR}/plot-polya-calls-accuracy.py \
+                    --control {controlsamples} --output-plots {params.plotdir} \
+                    --output-stats {output.statsout}')
+
 # ex: syntax=snakemake
