@@ -522,7 +522,7 @@ rule generate_fastq:
         sqiindex='sequences/{sample}.sqi.gz.tbi',
         pacall='polya/{sample}.polya-calls.gz',
         pacallindex='polya/{sample}.polya-calls.gz.tbi'
-    output: map(nonfinal, expand('fastq/{{sample}}_{readno}.fastq.gz', readno=INSERT_READS))
+    output: expand('fastq/{{sample}}_{readno}.fastq.gz', readno=INSERT_READS)
     params: output='fastq/{sample}_XX.fastq.gz'
     threads: THREADS_MAXIMUM_CORE
     run:
