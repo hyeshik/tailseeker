@@ -556,6 +556,7 @@ main(int argc, char *argv[])
                     char *tokens[ALTCALL_OPTION_TOKENS];
                     int j;
 
+                    saveptr = NULL;
                     for (j = 0, str = optarg; j < ALTCALL_OPTION_TOKENS; j++, str = NULL) {
                         tokens[j] = strtok_r(str, ",", &saveptr);
                         if (tokens[j] == NULL)
@@ -607,6 +608,7 @@ main(int argc, char *argv[])
                     char *tokens[SAMPLE_OPTION_TOKENS];
                     int j;
 
+                    saveptr = NULL;
                     for (j = 0, str = optarg; j < SAMPLE_OPTION_TOKENS; j++, str = NULL) {
                         tokens[j] = strtok_r(str, ",", &saveptr);
                         if (tokens[j] == NULL)
@@ -688,6 +690,7 @@ main(int argc, char *argv[])
                     char *tokens[FILTER_CONTROL_OPTION_TOKENS];
                     int j;
 
+                    saveptr = NULL;
                     for (j = 0, str = optarg; j < FILTER_CONTROL_OPTION_TOKENS;
                                               j++, str = NULL) {
                         tokens[j] = strtok_r(str, ",", &saveptr);
