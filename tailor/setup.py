@@ -24,12 +24,8 @@
 import sys
 from distutils.core import setup, Extension
 
-if sys.version_info[0] <= 2:
-    srcfile = 'src/pythonext/tailseqext-py2.c'
-    modname = 'tailseqext2' # to avoid name confilct with the previous version of tailseeker
-else:
-    srcfile = 'src/pythonext/tailseqext.c'
-    modname = 'tailseqext'
+srcfile = 'src/pythonext/tailseqext.c'
+modname = 'tailseqext'
 
 setup(name = modname,
       version = '0.2',
