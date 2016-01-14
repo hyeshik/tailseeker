@@ -100,6 +100,25 @@ def sample_iterable(iterable, num, randrange=random.randrange):
     return result
 
 
+def loess_fit(x, y, px=None, model=None, alpha=0.5):
+    from rpy2 import robjects as ro
+
+    if model is None:
+        model = ro.r('y ~ x')
+
+    if px is None:
+        px = np.linspace(min(x), max(y), 22)[1:-1]
+
+    fitframe = ro.DataFrame({'x': ro.FloatVector(x), 'y': ro.FloatVector(y)})
+    loessmodel = ro.r.loess(model, fitframe, span=alpha)
+
+    predframe = ro.DataFrame({'x': ro.FloatVector(px)})
+    predy = ro.r.predict(loessmodel, predframe)
+    preddata = [(x, predy[i]) for i, x in enumerate(px)]
+
+    return np.array(preddata).transpose()
+
+
 def group_consecutive(iterable, width=1):
     it = iter(iterable)
     first = next(it, None)

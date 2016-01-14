@@ -6,10 +6,9 @@ Dependencies:
  * samtools
  * htslib
  * GHMM
- * Python 2.7.x "and" Python 3.4 or higher
+ * Python 3.4 or higher
  * AYB2 (optional) -- install my patched version from https://github.com/hyeshik/AYB2
- * pip2 install -r requirements-py2.txt
- * pip3 install -r requirements-py3.txt
+ * pip3 install -r requirements.txt
 
 
 ## Tailseeker/Tailor package

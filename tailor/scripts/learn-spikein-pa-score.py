@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Copyright (c) 2013 Institute for Basic Science
 # 

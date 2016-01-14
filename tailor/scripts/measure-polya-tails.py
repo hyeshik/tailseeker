@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Copyright (c) 2013 Institute for Basic Science
 # 
@@ -23,12 +23,11 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from __future__ import division, print_function
 from tailor.parsers import parse_sqi, parse_pascore
 from tailor.parallel import open_tabix_parallel
 from tailor.fileutils import (
     ParallelMatchingReader, TemporaryDirectory, MultiJoinIterator, open_bgzip_writer)
-import futures
+from concurrent import futures
 import ghmm
 import csv
 import re
@@ -44,7 +43,7 @@ class HMMPolyARuler(object):
     POLYA_STATES = (0, 1)
 
     def __init__(self, modelfile):
-        modeldata = pickle.load(open(modelfile))
+        modeldata = pickle.load(open(modelfile, 'rb'))
         self.domain = ghmm.Float()
         self.model = ghmm.HMMFromMatrices(self.domain,
                                           ghmm.GaussianMixtureDistribution(self.domain),
@@ -53,7 +52,8 @@ class HMMPolyARuler(object):
 
     def rule(self, pascore):
         seq = ghmm.EmissionSequence(self.domain,
-                                    [self.SENTINEL] + map(float, pascore.clip(*self.vrange)))
+                                    [self.SENTINEL] +
+                                    list(map(float, pascore.clip(*self.vrange))))
         vitstates = self.model.viterbi(seq)[0]
         return self.determine_length(vitstates[1:])
 
@@ -133,8 +133,9 @@ def run_subjob(sqiopener, paopener, options, joboutput):
         else:
             final_length = seqbased_length
 
-        print(tile, cluster, seq_start_pa, final_length, seqbased_length, hmm_length,
-              naive_length, sep='\t', file=writer)
+        outline = '\t'.join(map(str, (tile, cluster, seq_start_pa, final_length,
+                                      seqbased_length, hmm_length, naive_length))) + '\n'
+        writer.write(outline.encode('ascii'))
 
     writer.close()
   except:
@@ -156,7 +157,7 @@ def run(options):
     sqi_openers = [sqi_openers[k] for k in tiles]
     pa_openers = [(pa_openers[k] if k in pa_openers else terminated_iterator) for k in tiles]
 
-    model = pickle.load(open(options.model))
+    model = pickle.load(open(options.model, 'rb'))
 
     with futures.ProcessPoolExecutor(options.parallel) as executor, \
             TemporaryDirectory(asobj=True) as workdir:
