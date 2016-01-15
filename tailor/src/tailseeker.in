@@ -21,10 +21,10 @@
 # THE SOFTWARE.
 #
 
+TAILOR_DIR = '%%TAILOR_DIR%%'
+
 import sys
-sys.path.insert(0,
-'/atp/hyeshik/p/tailseeker/tailor' #HERE
-)
+sys.path.insert(0, TAILOR_DIR)
 
 from tailor import tskcommand
-tskcommand.main()
+tskcommand.main(TAILOR_DIR)

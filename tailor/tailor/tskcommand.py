@@ -21,20 +21,36 @@
 # THE SOFTWARE.
 #
 
+import os
 import sys
 import tailor
 
 
 class CommandHandlers:
 
-    COMMANDS = ['index', 'init', 'run', 'clean']
+    COMMANDS = ['init', 'run', 'clean']
 
-    def __init__(self):
-        pass
+    def __init__(self, tailor_dir):
+        self.tailor_dir = tailor_dir
+        self.tailor_main_file = os.path.join(tailor_dir, 'tailor', 'main.py')
 
-    def index(self):
-        print(argparse)
-        print("Kick'in!")
+    def run(self):
+        from snakemake import main
+
+        sys.argv[0] = sys.argv[0] + ' run'
+        sys.argv.insert(1, '-s')
+        sys.argv.insert(2, self.tailor_main_file)
+        sys.exit(main())
+
+    def clean(self):
+        from snakemake import main
+
+        sys.argv[0] = sys.argv[0] + ' clean'
+        sys.argv.insert(1, '-s')
+        sys.argv.insert(2, self.tailor_main_file)
+        sys.argv.append('clean')
+
+        sys.exit(main())
 
 
 def usage():
@@ -50,17 +66,17 @@ Commands:
 """.format(version=tailor.__version__, command=sys.argv[0]))
 
 
-def main():
+def main(tailor_dir):
     if len(sys.argv) < 2 or sys.argv[1] not in CommandHandlers.COMMANDS:
         usage()
         return
 
+    os.environ['TAILOR_DIR'] = tailor_dir
+
     command = sys.argv.pop(1)
 
-    global argparse
-    import argparse
-
-    getattr(CommandHandlers(), command)()
+    handlers = CommandHandlers(tailor_dir)
+    getattr(handlers, command)()
 
 
 if __name__ == '__main__':

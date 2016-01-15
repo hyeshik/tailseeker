@@ -22,7 +22,6 @@
 #
 
 import os
-import re
 from distutils.core import setup, Extension
 
 if 'TAILOR_DIR' in os.environ:
@@ -32,8 +31,8 @@ else:
 
 
 def fix_tailor_path():
-    content = open('tailseeker').read()
-    content_fixed = re.sub("'[^']*' #HERE", "'{}' #HERE".format(TAILOR_DIR), content)
+    content = open('tailseeker.in').read()
+    content_fixed = content.replace('%%TAILOR_DIR%%', TAILOR_DIR)
     open('tailseeker', 'w').write(content_fixed)
 
 fix_tailor_path()
