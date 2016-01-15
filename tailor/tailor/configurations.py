@@ -23,6 +23,7 @@
 
 import yaml
 import os
+import glob
 
 
 class Configurations:
@@ -36,17 +37,21 @@ class Configurations:
 
     def __init__(self, tailor_dir, settings_file):
         self.tailor_dir = tailor_dir
-        self.confdata = self.load_config(tailor_dir, settings_file)
+        self.confdata = self.load_config(settings_file)
         self.expand_sample_settings()
 
-    def load_config(self, tailor_dir, settings_file):
+    def load_config(self, settings_file):
         usersettings = yaml.load(settings_file)
-        if 'using' in usersettings:
+        if 'include' in usersettings:
             confdict = {}
 
-            for predfile in usersettings['using']:
-                confpath = os.path.join(tailor_dir, 'conf', predfile)
-                predconf = yaml.load(open(confpath))
+            incfiles = usersettings['include']
+            if isinstance(incfiles, str):
+                incfiles = [incfiles]
+
+            for predfile in incfiles:
+                confpath = os.path.join(self.tailor_dir, 'conf', predfile)
+                predconf = self.load_config(open(confpath))
                 confdict.update(predconf)
 
             confdict.update(usersettings)
@@ -116,4 +121,16 @@ class Configurations:
             return self['spikein_samples'][name]
         else:
             raise KeyError("Sample {} not available in settings".format(repr(name)))
+
+
+def scan_selectable_confs(tailor_dir):
+    conffiles = glob.glob(os.path.join(tailor_dir, 'conf', '*.conf'))
+
+    for conffilename in conffiles:
+        confdata = yaml.load(open(conffilename))
+        if 'name' in confdata:
+            yield (confdata['name'], conffilename)
+
+if __name__ == '__main__':
+    print(list(scan_selectable_confs('..')))
 
