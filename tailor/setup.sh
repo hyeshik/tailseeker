@@ -80,8 +80,6 @@ check_requirements() {
      executable "$PATHSCONFTMP" "make" && \
      executable "$PATHSCONFTMP" "whiptail" && \
      executable "$PATHSCONFTMP" "snakemake" && \
-     executable "$PATHSCONFTMP" "bedtools" && \
-     executable "$PATHSCONFTMP" "samtools" && \
      executable "$PATHSCONFTMP" "bgzip" "htslib" && \
      executable "$PATHSCONFTMP" "tabix" "htslib" && \
      executable "$PATHSCONFTMP" "AYB" "AYB (All Your Bases)"; then

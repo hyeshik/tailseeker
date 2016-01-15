@@ -32,7 +32,10 @@ class Configurations:
         balance_check dupcheck_regions maximum_index_mismatches
         species""".split()
 
+    PATH_CONF_FILE = 'conf/paths.conf'
+
     def __init__(self, tailor_dir, settings_file):
+        self.tailor_dir = tailor_dir
         self.confdata = self.load_config(tailor_dir, settings_file)
         self.expand_sample_settings()
 
@@ -85,8 +88,13 @@ class Configurations:
             user_specified.update(finalized)
 
     def export_paths(self, namespace):
-        for progname, path in self.confdata['paths'].items():
-            namespace['{}_BINDIR'.format(progname.upper())] = path
+        pathconf = os.path.join(self.tailor_dir, self.PATH_CONF_FILE)
+        pathsettings = yaml.load(open(pathconf)) if os.path.exists(pathconf) else {}
+        if 'paths' in self.confdata:
+            pathsettings.update(self.confdata['paths'])
+
+        for progname, path in pathsettings.items():
+            namespace['{}_CMD'.format(progname.upper())] = path
 
     @property
     def all_samples(self):

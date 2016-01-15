@@ -44,19 +44,6 @@ def create_scratch_link():
             os.makedirs(origpath)
         os.symlink(origpath, linkpath)
 
-def init_default_dirs():
-    setdefault('WRKDIR', os.getcwd())
-
-    if 'TOPDIR' not in globals():
-        if 'TAILSEQDIR' in os.environ:
-            TOPDIR = os.environ['TAILSEQDIR']
-        else:
-            TOPDIR = find_topdir(WRKDIR)
-    RESOURCEDIR = os.path.join(TOPDIR, 'resources')
-    LOCALRESOURCEDIR = os.path.join(TOPDIR, 'local-resources')
-    TOOLSDIR = os.path.join(TOPDIR, 'tools')
-    setdefault('SCRATCHDIR', os.path.join(WRKDIR, 'scratch'))
-    create_scratch_link()
 
 class SuffixFilter:
     def __init__(self, values):
@@ -119,9 +106,10 @@ nan = float('nan')
 shell.executable(os.popen('which bash').read().strip()) # pipefail is supported by bash only.
 shell.prefix(('set -e; set -o pipefail; '
               'export PYTHONPATH="{PYTHONPATH}" '
-                     'BGZIP_CMD="{HTSLIB_BINDIR}/bgzip" '
-                     'TABIX_CMD="{HTSLIB_BINDIR}/tabix" '
+                     'BGZIP_CMD="{BGZIP_CMD}" '
+                     'TABIX_CMD="{TABIX_CMD}" '
                      'TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}" '
                      + CONF.get('envvars', '') + '; ').format(
-                PYTHONPATH=TAILOR_DIR, SCRATCHDIR=SCRATCHDIR, HTSLIB_BINDIR=HTSLIB_BINDIR))
+                PYTHONPATH=TAILOR_DIR, SCRATCHDIR=SCRATCHDIR, BGZIP_CMD=BGZIP_CMD,
+                TABIX_CMD=TABIX_CMD))
 

@@ -112,7 +112,7 @@ rule basecall_ayb:
         reads_format = (('' if first_cycle == 1 else 'I{}'.format(first_cycle - 1)) +
                         'R{}'.format(read_length))
 
-        shell('{AYB_BINDIR}/AYB -p {threads} -o {tempdir} -i {tileinfo[datadir]} \
+        shell('{AYB_CMD} -p {threads} -o {tempdir} -i {tileinfo[datadir]} \
                 -b {reads_format} -f fastq.gz -r L{tileinfo[lane]}T{tileinfo[tile]}')
         shell('mv {tempdir}/s_{tileinfo[lane]}_{tileinfo[tile]}.fastq.gz {output}')
         shutil.rmtree(tempdir)
@@ -158,7 +158,7 @@ rule demultiplex_signals:
             '--tile', tileinfo['tile'], '--ncycles', NUM_CYCLES,
             '--signal-scale', sequencers.get_signalscale(tileinfo['type']),
             '--barcode-start', index_read_start, '--barcode-length', index_read_length,
-            '--writer-command', '{HTSLIB_BINDIR}/bgzip -c > ' + output_filename,
+            '--writer-command', '{BGZIP_CMD} -c > ' + output_filename,
             '--filter-control', 'PhiX,{},{}'.format(phix_cycle_start, phix_cycle_length),
         ]
 
@@ -199,7 +199,7 @@ rule merge_sqi:
 rule index_tabix:
     input: '{name}.gz'
     output: nonfinal('{name}.gz.tbi')
-    shell: '{HTSLIB_BINDIR}/tabix -s1 -b2 -e2 -0 {input}'
+    shell: '{TABIX_CMD} -s1 -b2 -e2 -0 {input}'
 
 
 rule find_duplicated_reads:
@@ -245,9 +245,9 @@ rule make_nondup_id_list:
             shell('zcat {input[sqi.gz]} | cut -f1,2 | \
                    {SCRIPTSDIR}/make-nondup-list.py --from /dev/stdin \
                         --exclude {input[duplist.gz]} | \
-                   {HTSLIB_BINDIR}/bgzip -c /dev/stdin > {output}')
+                   {BGZIP_CMD} -c /dev/stdin > {output}')
         elif len(input) == 1: # spikein samples
-            shell('zcat {input} | cut -f1,2 | {HTSLIB_BINDIR}/bgzip -c /dev/stdin > {output}')
+            shell('zcat {input} | cut -f1,2 | {BGZIP_CMD} -c /dev/stdin > {output}')
         else:
             raise ValueError("make_nondup_id_list: programming error")
 
