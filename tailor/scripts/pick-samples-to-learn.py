@@ -62,7 +62,7 @@ def run_outlier_removal(options):
     pass1names = [name for name, row in sampled_lines]
     pass1spots = np.array([row[:trimlength] for name, row in sampled_lines])
 
-    # trim out preamble and uneven right end for granule size
+    # trim out UMI and uneven right end for granule size
     if pass1spots.shape[1] % options.granule > 0:
         p1trimmed = pass1spots[:, :pass1spots.shape[1] // options.granule * options.granule]
     else:

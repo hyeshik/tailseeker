@@ -76,8 +76,8 @@ def print_debug_spot(sqispot, paspot, seq_start_pa, seq_end_pa, hmm_length):
     out.writerow(['qual'] + list(qual[seq_start_pa:]))
     out.writerow(['pa'] + list(pa[seq_start_pa:]))
 
-    read2preamblepart = slice(57, 72)
-    normbasis = sqispot.intensity[read2preamblepart].mean(axis=0).clip(1)
+    read2umipart = slice(57, 72)
+    normbasis = sqispot.intensity[read2umipart].mean(axis=0).clip(1)
     normintensity = sqispot.intensity[sqispot.istart + seq_start_pa:].clip(1) / normbasis
 
     for chan, intensity in zip('ACGT', sqispot.intensity[sqispot.istart + seq_start_pa:].transpose()):
@@ -86,13 +86,13 @@ def print_debug_spot(sqispot, paspot, seq_start_pa, seq_end_pa, hmm_length):
     for chan, intensity in zip('ACGT', normintensity.transpose()):
         out.writerow(['norm ' + chan] + list(intensity))
 
-    for chan, intensity in zip('ACGT', sqispot.intensity[read2preamblepart].transpose()):
-        out.writerow(['preamble ' + chan] + list(intensity))
+    for chan, intensity in zip('ACGT', sqispot.intensity[read2umipart].transpose()):
+        out.writerow(['umi ' + chan] + list(intensity))
 
     # rescaling method
-    print(sqispot.intensity[read2preamblepart])
+    print(sqispot.intensity[read2umipart])
     scorebins = dict((nt, [[], []]) for nt in 'ACGTN')
-    for base, intensity in zip(sqispot.seq[read2preamblepart], sqispot.intensity[read2preamblepart]):
+    for base, intensity in zip(sqispot.seq[read2umipart], sqispot.intensity[read2umipart]):
         for ib, ivalue in zip('ACGT', intensity):
             scorebins[ib][base == ib].append(ivalue)
 

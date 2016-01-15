@@ -28,7 +28,7 @@ import os
 class Configurations:
 
     EXPANDABLE_CONF_KEYS = """
-        spikein_training_length preamble_size preamble_sequence delimiter
+        spikein_training_length umi_length umi_fixed_sequence delimiter
         balance_check dupcheck_regions maximum_index_mismatches
         species""".split()
 

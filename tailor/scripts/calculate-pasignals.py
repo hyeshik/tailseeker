@@ -49,7 +49,7 @@ def run_single_job(input, output):
                     signalconfig['read_range'].start, signalconfig['read_range'].stop,
                     signalconfig['spot_norm_length'], signalconfig['low_signal_mask'])
 
-    preamble_size = signalconfig['spot_norm_length']
+    umi_size = signalconfig['spot_norm_length']
     tailscan = options.tailscan
 
     weights = {'T': options.score_t, 'N': options.score_n, 'A': options.score_acg,
@@ -67,7 +67,7 @@ def run_single_job(input, output):
             continue
 
         if tailscan: # scan 3' end modifications following poly(A)
-            insert_seq = row.seq[readcycle_start + preamble_size:]
+            insert_seq = row.seq[readcycle_start + umi_size:]
 
             seq_start_pa, seq_end_pa = locate_polya(insert_seq, max_term_mod)
             polya_len_seqbased = seq_end_pa - seq_start_pa
@@ -75,9 +75,9 @@ def run_single_job(input, output):
                 # skip calculating PA score for short extremely short poly(A) tails.
                 continue
 
-            adjsignal = t_stand_out[preamble_size + seq_start_pa:]
+            adjsignal = t_stand_out[umi_size + seq_start_pa:]
         else: # spike-ins (without terminal modification scanning)
-            adjsignal = t_stand_out[preamble_size:]
+            adjsignal = t_stand_out[umi_size:]
 
             seq_start_pa, seq_end_pa = locate_polya(insert_seq, max_term_mod)
             seq_start_pa = 0 # fix the starting position of poly(A) for spike-ins

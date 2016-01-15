@@ -116,6 +116,7 @@ inf = float('inf')
 nan = float('nan')
 
 # Commands needs to be run with bash with these options to terminate on errors correctly.
+shell.executable(os.popen('which bash').read().strip()) # pipefail is supported by bash only.
 shell.prefix(('set -e; set -o pipefail; '
               'export PYTHONPATH="{PYTHONPATH}" '
                      'BGZIP_CMD="{HTSLIB_BINDIR}/bgzip" '
@@ -123,5 +124,4 @@ shell.prefix(('set -e; set -o pipefail; '
                      'TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}" '
                      + CONF.get('envvars', '') + '; ').format(
                 PYTHONPATH=TAILOR_DIR, SCRATCHDIR=SCRATCHDIR, HTSLIB_BINDIR=HTSLIB_BINDIR))
-shell.executable(os.popen('which bash').read().strip()) # pipefail is supported by bash only.
 

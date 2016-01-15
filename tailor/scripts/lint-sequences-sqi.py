@@ -58,14 +58,14 @@ def make_it_lint(options, input, outputname):
     whitelist_in = parse_idlist(TabixOpener(options.idlist, input.interval))
     whitelist_key = lambda x: x
 
-    # bind preamble filtering-related options into pre-calculated local variables
-    if options.preamblepos is not None:
-        preamblepos, preambleseq = options.preamblepos - 1, options.preambleseq
-        preambleslice = slice(preamblepos, preamblepos + len(preambleseq))
+    # bind umi filtering-related options into pre-calculated local variables
+    if options.umipos is not None:
+        umipos, umiseq = options.umipos - 1, options.umiseq
+        umislice = slice(umipos, umipos + len(umiseq))
     else:
-        preamblepos = preambleseq = None
-    preamblemismatch = options.preamblemismatch
-    preambleend= options.preambleend # use only if all the other related variables are not defined
+        umipos = umiseq = None
+    umimismatch = options.umimismatch
+    umiend= options.umiend # use only if all the other related variables are not defined
 
     # bind balance region check options into pre-calculated local variables
     if options.balanceregion is not None:
@@ -87,9 +87,9 @@ def make_it_lint(options, input, outputname):
 
         spot = next(parse_sqi_lite([line]))
 
-        # check for preamble sequences
-        if preamblepos is not None:
-            if string_dist(spot.seq[preambleslice], preambleseq) > preamblemismatch:
+        # check for umi sequences
+        if umipos is not None:
+            if string_dist(spot.seq[umislice], umiseq) > umimismatch:
                 continue
 
         # check signal balance control region
@@ -135,19 +135,19 @@ def parse_arguments():
                         help='Path to a sqi file')
     parser.add_argument('--id-list', dest='idlist', metavar='FILE', type=str,
                         required=True, help='Cluster names to keep')
-    parser.add_argument('--preamble-position', dest='preamblepos', metavar='N', type=int,
-                        default=None, help='1-based position of preamble sequence')
-    parser.add_argument('--preamble-sequence', dest='preambleseq', metavar='SEQ', type=str,
-                        default=None, help='Sequence string to check for preamble')
-    parser.add_argument('--preamble-mismatch', dest='preamblemismatch', metavar='N', type=int,
-                        default=1, help='Maximum mismatches to filter by preamble sequence')
+    parser.add_argument('--umi-position', dest='umipos', metavar='N', type=int,
+                        default=None, help='1-based position of UMI sequence')
+    parser.add_argument('--umi-sequence', dest='umiseq', metavar='SEQ', type=str,
+                        default=None, help='Sequence string to check for UMI')
+    parser.add_argument('--umi-mismatch', dest='umimismatch', metavar='N', type=int,
+                        default=1, help='Maximum mismatches to filter by UMI sequence')
     parser.add_argument('--balance-region', dest='balanceregion', metavar='start:end',
                         type=str, default=None,
                         help='1-based coordinate for interval for balance check')
     parser.add_argument('--balance-minimum', dest='balancemin', metavar='N', type=int,
                         default=None, help='Minimum count to filter in balance region')
-    parser.add_argument('--preamble-end', dest='preambleend', metavar='N', type=int,
-                        default=None, help='End position (1-based) of preamble')
+    parser.add_argument('--umi-end', dest='umiend', metavar='N', type=int,
+                        default=None, help='End position (1-based) of UMI')
     parser.add_argument('--parallel', dest='parallel', metavar='N', type=int,
                         help='Number of parallel processors', default=4)
     parser.add_argument('--output', dest='output', metavar='FILE', type=str,

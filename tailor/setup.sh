@@ -75,6 +75,7 @@ check_requirements() {
   echo "tailor: $(pwd)" > "$PATHSCONFTMP"
 
   if executable "$PATHSCONFTMP" "python3" "Python 3" && \
+     executable "$PATHSCONFTMP" "bash" && \
      executable "$PATHSCONFTMP" "wget" && \
      executable "$PATHSCONFTMP" "make" && \
      executable "$PATHSCONFTMP" "whiptail" && \

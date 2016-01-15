@@ -35,17 +35,16 @@ def unpack_readid(s):
 def open_blacklist(filename):
     return (unpack_readid(line) for line in open_gzip_buffered(filename, 'rt'))
 
-def open_fastq_idonly(filename):
-    cmd = """zcat {input} | awk -F: '{{ if (NR % 4 == 1) print substr($1, 2), 0+$2; }}'"""
-    proc = sp.Popen(cmd.format(input=filename), shell=True, stdout=sp.PIPE)
-    for line in TextIOWrapper(proc.stdout):
-        yield unpack_readid(line)
+def open_seqids(filename):
+    for line in open(filename):
+        tile, cluster = line.split()
+        yield (tile, int(cluster))
 
 def run(options):
-    fastqids_in = open_fastq_idonly(options.fastq)
+    seqids_in = open_seqids(options.from_)
     excludes_in = [open_blacklist(excfile) for excfile in options.exclude]
 
-    for grps in MultiJoinIterator([fastqids_in] + excludes_in,
+    for grps in MultiJoinIterator([seqids_in] + excludes_in,
                                   [lambda x: x] * (len(excludes_in) + 1)):
         fqkey = next(grps[1], None)
         if fqkey is None or any(next(g, None) is not None for g in grps[2:]):
@@ -58,8 +57,8 @@ def parse_arguments():
     import argparse
 
     parser = argparse.ArgumentParser(description='Make non-duplicated list of reads')
-    parser.add_argument('--fastq', dest='fastq', metavar='FILE', type=str,
-                        required=True, help='Path to a fastq file with all read 1 sequences')
+    parser.add_argument('--from', dest='from_', metavar='FILE', type=str,
+                        required=True, help='Path to a file with all seq IDs')
     parser.add_argument('--exclude', dest='exclude', metavar='FILE', action='append',
                         default=[], help='Path to blacklist of seq IDs')
     options = parser.parse_args()

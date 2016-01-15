@@ -57,14 +57,11 @@ LAST_CYCLE = max(l for f, l, _ in CONF['read_cycles'].values())
 NUM_CYCLES = LAST_CYCLE - FIRST_CYCLE + 1
 
 PHIX_ID_REF = ['R5', 6, 40] # identify PhiX reads using 40 bases from the 6th cycle.
-CONTAMINANT_ID_REF = ['R5', 1, inf] # use the full length of R5 to identify contamintants
 
 THREADS_MAXIMUM_CORE = CONF['maximum_threads']
 
-BIGALIGNMENTPARTS = 8 # XXX: to be moved somewhere.
-
 INTERMEDIATE_DIRS = [
-    'confilter', 'dupfilter', 'polya', 'scores', 'scratch',
+    'dupfilter', 'polya', 'scores', 'scratch',
     'sequences', 'signalproc', 'learning',
 ]
 
@@ -75,11 +72,6 @@ if len(INDEX_READS) != 1:
 
 if FIRST_CYCLE != 1:
     raise ValueError("The pipeline assumes that one of the reads starts from the first cycle.")
-
-
-subworkflow contaminants_index:
-    workdir: os.path.join(TAILOR_DIR, 'seqdb')
-    snakefile: os.path.join(TAILOR_DIR, 'tailor', 'contaminantsindex.py')
 
 
 localrules: all
@@ -210,93 +202,6 @@ rule index_tabix:
     shell: '{HTSLIB_BINDIR}/tabix -s1 -b2 -e2 -0 {input}'
 
 
-rule generate_fastq_for_contaminant_filter:
-    input: 'scratch/merged-sqi/{sample}.sqi.gz'
-    output: temp('confilter/{sample}-con.fastq.gz')
-    threads: 2
-    run:
-        refreadcycles = CONF['read_cycles'][CONTAMINANT_ID_REF[0]]
-        refreadlength = refreadcycles[1] - refreadcycles[0] + 1
-        idseqend = min(refreadlength, CONTAMINANT_ID_REF[2])
-        idseqstart = refreadcycles[0] + CONTAMINANT_ID_REF[1] - 1
-        shell('gzip -cd {input} | {BINDIR}/sqi2fq {idseqstart} {idseqend} | \
-                gzip -c - > {output}')
-
-
-def determine_contaminants_index(aligner):
-    def _determine_contaminants_index_internal(wildcards):
-      try:
-        species = CONF['species'][wildcards.sample].replace(' ', '_')
-        if aligner == 'gsnap':
-            return contaminants_index(
-                'contaminants/{species}.gmap/{species}.gmap.genomecomp'.format(species=species))
-        elif aligner == 'star':
-            return contaminants_index('contaminants/{species}.star/Genome'.format(species=species))
-        else:
-            raise ValueError('Unknown aligner {}'.format(aligner))
-      except:
-        import traceback
-        traceback.print_exc()
-        raise
-    return _determine_contaminants_index_internal
-
-if CONF['sequence_aligner'] == 'gsnap':
-    rule align_confilter_gsnap:
-        input:
-            sequence='confilter/{sample}-con.fastq.gz',
-            index=determine_contaminants_index('gsnap')
-        output: temp('confilter/{sample}-con.bam-{part}')
-        threads: THREADS_MAXIMUM_CORE
-        run:
-            indexdir = os.path.dirname(input.index)
-            indexdir, indexname = os.path.split(indexdir)
-            shell('{GSNAP_BINDIR}/gsnap -D {indexdir} --gunzip -d {indexname} \
-                        -B 4 -O -A sam -m 0.06 -q {wildcards.part}/{BIGALIGNMENTPARTS} \
-                        -t {threads} {input.sequence} | \
-                   {SAMTOOLS_BINDIR}/samtools view -F 4 -bS - > {output}')
-
-    rule merge_parted_alignments:
-        input: expand('{{dir}}/{{sample}}-{{kind}}.bam-{part}', part=range(BIGALIGNMENTPARTS))
-        output: nonfinal('{dir}/{sample}-{kind,[^-]+}.bam')
-        threads: THREADS_MAXIMUM_CORE
-        run:
-            viewcommands = ';'.join('{}/samtools view {}'.format(SAMTOOLS_BINDIR, inpbam)
-                                    for inpbam in input)
-            scratch_dir = make_scratch_dir('merge_parted_alignments.{}.{}'.format(
-                                           wildcards.sample, wildcards.kind))
-
-            shell('({SAMTOOLS_BINDIR}/samtools view -H {input[0]}; ({viewcommands}) | \
-                    sort -k1,1 -k2,2n --parallel={threads} -T "{scratch_dir}") | \
-                   {SAMTOOLS_BINDIR}/samtools view -@ {threads} -bS - > {output}')
-            shutil.rmtree(scratch_dir)
-
-elif CONF['sequence_aligner'] == 'star':
-    rule align_confilter_star:
-        input:
-            sequence='confilter/{sample}-con.fastq.gz',
-            index=determine_contaminants_index('star')
-        output: nonfinal('confilter/{sample}-con.bam') # STAR is too fast to split jobs on-the-fly
-        threads: THREADS_MAXIMUM_CORE
-        run:
-            scratchdir = make_scratch_dir('staralign.' + wildcards.sample)
-            indexdir = os.path.dirname(input.index)
-
-            shell("{STAR_BINDIR}/STAR --genomeDir {indexdir} \
-                    --readFilesIn {input.sequence} --runThreadN {threads} \
-                    --outFilterMultimapNmax 4 --readFilesCommand zcat \
-                    --outStd SAM --outFileNamePrefix {scratchdir}/ | \
-                   {SAMTOOLS_BINDIR}/samtools view -@ 4 -F 4 -bS -o {output} -")
-else:
-    raise ValueError('Unknown aligner: {}'.format(ALIGNER))
-
-
-rule generate_contaminant_list:
-    input: 'confilter/{sample}-con.bam'
-    output: temp('confilter/{sample}.conlist.gz')
-    shell: '{SAMTOOLS_BINDIR}/samtools view {input} | \
-            cut -f1 | uniq | sed -e "s,:0*,\t," -e "s/\t$/\t0/" | gzip -c - > {output}'
-
-
 rule find_duplicated_reads:
     input: sqi='scratch/merged-sqi/{sample}.sqi.gz', \
            sqiindex='scratch/merged-sqi/{sample}.sqi.gz.tbi'
@@ -324,9 +229,8 @@ rule find_duplicated_reads:
 def determine_inputs_for_nondup_id_list(wildcards):
     sample = wildcards.sample
     if sample in EXP_SAMPLES:
-        return ['confilter/{}-con.fastq.gz'.format(sample),
-                'dupfilter/{}.duplist.gz'.format(sample),
-                'confilter/{}.conlist.gz'.format(sample)]
+        return ['scratch/merged-sqi/{}.sqi.gz'.format(sample),
+                'dupfilter/{}.duplist.gz'.format(sample)]
     elif sample in SPIKEIN_SAMPLES:
         return ['scratch/merged-sqi/{}.sqi.gz'.format(sample)]
     else:
@@ -334,13 +238,14 @@ def determine_inputs_for_nondup_id_list(wildcards):
 
 rule make_nondup_id_list:
     input: determine_inputs_for_nondup_id_list
-    output: temp('confilter/{sample}.lint_ids.gz')
+    output: temp('dupfilter/{sample}.nondup_ids.gz')
     run:
-        if len(input) == 3: # experimental samples
+        if len(input) == 2: # experimental samples
             input = SuffixFilter(input)
-            shell('{SCRIPTSDIR}/make-nondup-list.py --fastq {input[fastq.gz]} \
-                        --exclude {input[duplist.gz]} --exclude {input[conlist.gz]} | \
-                        {HTSLIB_BINDIR}/bgzip -c /dev/stdin > {output}')
+            shell('zcat {input[sqi.gz]} | cut -f1,2 | \
+                   {SCRIPTSDIR}/make-nondup-list.py --from /dev/stdin \
+                        --exclude {input[duplist.gz]} | \
+                   {HTSLIB_BINDIR}/bgzip -c /dev/stdin > {output}')
         elif len(input) == 1: # spikein samples
             shell('zcat {input} | cut -f1,2 | {HTSLIB_BINDIR}/bgzip -c /dev/stdin > {output}')
         else:
@@ -351,21 +256,21 @@ rule generate_lint_sqi:
     input:
         sqi='scratch/merged-sqi/{sample}.sqi.gz',
         sqi_index='scratch/merged-sqi/{sample}.sqi.gz.tbi',
-        whitelist='confilter/{sample}.lint_ids.gz',
-        whitelist_index='confilter/{sample}.lint_ids.gz.tbi'
+        whitelist='dupfilter/{sample}.nondup_ids.gz',
+        whitelist_index='dupfilter/{sample}.nondup_ids.gz.tbi'
     output: nonfinal('sequences/{sample}.sqi.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
         sample = wildcards.sample
-        preambleopt = balanceopt = ''
+        umiopt = balanceopt = ''
 
-        if sample in CONF['preamble_sequence']:
-            preambleopt = ('--preamble-sequence {} --preamble-position {} '
-                           '--preamble-mismatch 1').format(CONF['preamble_sequence'][sample],
-                                                           CONF['read_cycles']['R3'][0])
-        elif sample in CONF['preamble_size']:
-            preambleend = CONF['read_cycles']['R3'][0] - 1 + CONF['preamble_size'][sample]
-            preambleopt = '--preamble-end {}'.format(preambleend)
+        if sample in CONF['umi_fixed_sequence']:
+            umiopt = ('--umi-sequence {} --umi-position {} '
+                      '--umi-mismatch 1').format(CONF['umi_fixed_sequence'][sample],
+                                                 CONF['read_cycles']['R3'][0])
+        elif sample in CONF['umi_length']:
+            umiend = CONF['read_cycles']['R3'][0] - 1 + CONF['umi_length'][sample]
+            umiopt = '--umi-end {}'.format(umiend)
 
         if sample in CONF['balance_check']:
             balanceopt = ('--balance-region {}:{} --balance-minimum {}').format(*
@@ -377,7 +282,7 @@ rule generate_lint_sqi:
         paralleljobs = max(1, threads // 2)
         shell('{SCRIPTSDIR}/lint-sequences-sqi.py --id-list {input.whitelist} \
                 --output {output} \
-                --parallel {paralleljobs} {preambleopt} {balanceopt} {input.sqi}')
+                --parallel {paralleljobs} {umiopt} {balanceopt} {input.sqi}')
 
 
 rule collect_color_matrices:
@@ -426,16 +331,16 @@ rule prepare_signal_stabilizer:
     output: nonfinal('signalproc/signal-scaling-{sample}.stabilizer.pickle')
     threads: THREADS_MAXIMUM_CORE
     run:
-        preamble_size = CONF['preamble_size'][wildcards.sample]
+        umi_length = CONF['umi_length'][wildcards.sample]
         high_probe_range = '{}:{}'.format(
-                preamble_size + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[0],
-                preamble_size + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[1])
+                umi_length + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[0],
+                umi_length + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[1])
         high_probe_scale_inspection = '{}:{}'.format(
-                preamble_size + SIGNAL_STABILIZER_TARGET_RANGE[0],
-                preamble_size + SIGNAL_STABILIZER_TARGET_RANGE[1])
+                umi_length + SIGNAL_STABILIZER_TARGET_RANGE[0],
+                umi_length + SIGNAL_STABILIZER_TARGET_RANGE[1])
         high_probe_scale_basis = '{}:{}'.format(
-                preamble_size + SIGNAL_STABILIZER_REFERENCE_RANGE[0],
-                preamble_size + SIGNAL_STABILIZER_REFERENCE_RANGE[1])
+                umi_length + SIGNAL_STABILIZER_REFERENCE_RANGE[0],
+                umi_length + SIGNAL_STABILIZER_REFERENCE_RANGE[1])
 
         cyclestart, cycleend, readno = CONF['read_cycles']['R3']
         shell('{SCRIPTSDIR}/prepare-signal-stabilizer.py \
@@ -445,7 +350,7 @@ rule prepare_signal_stabilizer:
                 --high-probe-range {high_probe_range} \
                 --high-probe-scale-inspection {high_probe_scale_inspection} \
                 --high-probe-scale-basis {high_probe_scale_basis} \
-                --read-range {cyclestart}:{cycleend} --spot-norm-length {preamble_size} \
+                --read-range {cyclestart}:{cycleend} --spot-norm-length {umi_length} \
                 {input.signals}')
 
 
