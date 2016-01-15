@@ -548,7 +548,7 @@ ranlib ghmmwrapper/libghmm.a
 
 cd ghmmwrapper
 
-"$PYTHON" setup.py install || (echo "<*> Failed to build and install the extension."; exit 1)
+"$PYTHON" setup.py install $DISTUTILS_ARGS || (echo "<*> Failed to build and install the extension."; exit 1)
 
 echo ""
 echo "<*> Finished installing the GHMM package to your $PYTHON."

@@ -22,17 +22,46 @@
 #
 
 import sys
-from distutils.core import setup, Extension
+import tailor
 
-srcfile = 'src/pythonext/tailseqext.c'
-modname = 'tailseqext'
 
-setup(name = modname,
-      version = '0.2',
-      description = 'extension modules for TAIL-seq',
-      author = 'Hyeshik Chang',
-      author_email = 'hyeshik@snu.ac.kr',
-      url = 'http://highthroughput.org',
-      license = 'MIT',
-      ext_modules = [Extension(modname, [srcfile])]
-)
+class CommandHandlers:
+
+    COMMANDS = ['index', 'init', 'run', 'clean']
+
+    def __init__(self):
+        pass
+
+    def index(self):
+        print(argparse)
+        print("Kick'in!")
+
+
+def usage():
+    print("""\
+Tailseeker {version} - High-throughput measurement of poly(A) tails
+
+Usage:  {command} <command> [options]
+
+Commands:
+  init      initiate and configure a project
+  run       run an analysis workflow
+  clean     clear intermediate files
+""".format(version=tailor.__version__, command=sys.argv[0]))
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in CommandHandlers.COMMANDS:
+        usage()
+        return
+
+    command = sys.argv.pop(1)
+
+    global argparse
+    import argparse
+
+    getattr(CommandHandlers(), command)()
+
+
+if __name__ == '__main__':
+    main()
