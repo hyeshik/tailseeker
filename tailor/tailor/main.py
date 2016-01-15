@@ -193,7 +193,7 @@ rule merge_sqi:
     output: temp('scratch/merged-sqi/{sample}.sqi.gz')
     run:
         input = sorted(input) # to make tabix happy.
-        shell('{SCRIPTSDIR}/bgzf-merge.py --output {output} {input}')
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/bgzf-merge.py --output {output} {input}')
 
 
 rule index_tabix:
@@ -214,7 +214,7 @@ rule find_duplicated_reads:
             checkregions = CONF['dupcheck_regions'][wildcards.sample]
             regionsspec = ' '.join('--region {}:{}'.format(begin, end)
                                    for begin, end in checkregions)
-            shell('{SCRIPTSDIR}/find-duplicates.py \
+            shell('{PYTHON3_CMD} {SCRIPTSDIR}/find-duplicates.py \
                     --parallel {threads} --output-dupcounts {output.dupcounts} \
                     --output-stats {output.dupstats} {regionsspec} {input.sqi} | \
                     sort -k1,1 -k2,2n | gzip -c - > {output.duplist}')
@@ -243,7 +243,7 @@ rule make_nondup_id_list:
         if len(input) == 2: # experimental samples
             input = SuffixFilter(input)
             shell('zcat {input[sqi.gz]} | cut -f1,2 | \
-                   {SCRIPTSDIR}/make-nondup-list.py --from /dev/stdin \
+                   {PYTHON3_CMD} {SCRIPTSDIR}/make-nondup-list.py --from /dev/stdin \
                         --exclude {input[duplist.gz]} | \
                    {BGZIP_CMD} -c /dev/stdin > {output}')
         elif len(input) == 1: # spikein samples
@@ -280,7 +280,7 @@ rule generate_lint_sqi:
         # the allowed threads which is optimal as there are some bottlenecks in the first two
         # processes in each pipe.
         paralleljobs = max(1, threads // 2)
-        shell('{SCRIPTSDIR}/lint-sequences-sqi.py --id-list {input.whitelist} \
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/lint-sequences-sqi.py --id-list {input.whitelist} \
                 --output {output} \
                 --parallel {paralleljobs} {umiopt} {balanceopt} {input.sqi}')
 
@@ -299,7 +299,7 @@ rule collect_color_matrices:
             matrix_files[vtile] = matrix_fn_pattern
 
         tilemapping = base64.encodebytes(pickle.dumps(matrix_files, 0)).decode('ascii')
-        shell('{SCRIPTSDIR}/collect-color-matrices.py \
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/collect-color-matrices.py \
                     --tile-mapping \'{tilemapping}\' --output {output}')
 
 
@@ -315,7 +315,7 @@ rule calculate_phix_signal_scaling_factor:
     resources: high_end_cpu=1
     run:
         readstart, readend, readno = CONF['read_cycles']['R3']
-        shell('{SCRIPTSDIR}/prepare-phix-signal-scaler.py --parallel {threads} \
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-phix-signal-scaler.py --parallel {threads} \
                 --output {output.paramout} --read {readno} \
                 --read-range {readstart}:{readend} \
                 --color-matrix {input.colormatrix} \
@@ -343,7 +343,7 @@ rule prepare_signal_stabilizer:
                 umi_length + SIGNAL_STABILIZER_REFERENCE_RANGE[1])
 
         cyclestart, cycleend, readno = CONF['read_cycles']['R3']
-        shell('{SCRIPTSDIR}/prepare-signal-stabilizer.py \
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-signal-stabilizer.py \
                 --parallel {threads} --output {output} \
                 --read {readno} --color-matrix {input.colormatrix} \
                 --cycle-scaling {input.cyclescaling} \
@@ -371,7 +371,7 @@ rule calculate_pasignals_v2:
     threads: THREADS_MAXIMUM_CORE
     run:
         input = SuffixFilter(input)
-        shell('{SCRIPTSDIR}/calculate-pasignals.py --parallel {threads} \
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/calculate-pasignals.py --parallel {threads} \
                 --scaling-params {input[stabilizer.pickle]} {input[sqi.gz]} \
                 > {output}')
 
@@ -386,7 +386,7 @@ rule pick_spikein_samples_for_training:
         trim_len = CONF['spikein_training_length'][wildcards.sample]
         samples_to_learn = CONF['spikein_learning_num_samples']
 
-        shell('{SCRIPTSDIR}/pick-samples-to-learn.py --input-pascore {input} \
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/pick-samples-to-learn.py --input-pascore {input} \
                 --output {output.result} --output-qc-plot {output.qcplot} \
                 --qc-plot-range 0:2 \
                 --pass1 {samples_to_learn[pass1]} \
@@ -399,7 +399,7 @@ rule pick_spikein_samples_for_training:
 rule learn_pascores_from_spikeins:
     input: expand('learning/{sample}.trainer.npy', sample=CONF['spikeins_to_learn'])
     output: nonfinal('learning/model.pickle')
-    shell: '{SCRIPTSDIR}/learn-spikein-pa-score.py \
+    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/learn-spikein-pa-score.py \
                 --preset v2 \
                 --clip-minimum {PASIGNAL_CLIP_MIN} --clip-maximum {PASIGNAL_CLIP_MAX} \
                 --output {output} {input}'
@@ -414,7 +414,7 @@ rule measure_polya:
         model='learning/model.pickle'
     output: nonfinal('polya/{sample}.polya-calls.gz')
     threads: THREADS_MAXIMUM_CORE
-    shell: '{SCRIPTSDIR}/measure-polya-tails.py \
+    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/measure-polya-tails.py \
                 --input-sqi {input.sqi} --input-pa {input.score} \
                 --model {input.model} --parallel {threads} --output {output}'
 
@@ -445,7 +445,7 @@ rule generate_fastq:
 
             reads += ' {},{},{},{}'.format(readname, start, end, trim)
 
-        shell('{SCRIPTSDIR}/generate-fastq.py \
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/generate-fastq.py \
                 --input-sqi {input.sqi} --input-pa-call {input.pacall} \
                 --parallel {threads} --output {params.output} {reads}')
 
@@ -465,7 +465,7 @@ rule generate_accuracy_stats:
             '{}:polya/{}.polya-calls.gz'.format(CONF['spikein_lengths'][s], s)
             for s in SPIKEIN_SAMPLES)
 
-        shell('{SCRIPTSDIR}/plot-polya-calls-accuracy.py \
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/plot-polya-calls-accuracy.py \
                     --control {controlsamples} --output-plots {params.plotdir} \
                     --output-stats {output.statsout}')
 
