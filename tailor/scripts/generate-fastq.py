@@ -40,8 +40,9 @@ def run_subjob(sqiopener, paopener, reads, joboutput):
     preader = MultiJoinIterator([sqi_in, pa_in], [common_key, common_key])
     reads = [
         [readspec['name'], slice(readspec['start'], readspec['end']),
-         readspec['trim'],
-         open_bgzip_writer(joboutput.format(readname=readspec['name']), 'b')]
+         readspec['trim']] +
+        list(
+         open_bgzip_writer(joboutput.format(readname=readspec['name']), 'b'))]
         for readspec in reads
     ]
 
@@ -50,7 +51,7 @@ def run_subjob(sqiopener, paopener, reads, joboutput):
         coded_name = '{}:{:08d}:{:03d}:{:03d}\n'.format(tile, cluster, paspot.polya_len,
                                                         paspot.start_pos).encode('ascii')
 
-        for name, span, trim, writer in reads:
+        for name, span, trim, writer, _ in reads:
             if trim is not None:
                 delimiterend = sqispot.istart
                 span = slice(delimiterend, min(span.stop, delimiterend + trim))
@@ -63,8 +64,9 @@ def run_subjob(sqiopener, paopener, reads, joboutput):
             writer.write(qual)
             writer.write(b'\n')
 
-    for _, _, _, writer in reads:
+    for _, _, _, writer, proc in reads:
         writer.close()
+        proc.wait()
 
   except:
     import traceback

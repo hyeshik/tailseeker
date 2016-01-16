@@ -34,11 +34,11 @@ from base64 import b64encode
 import pickle
 import subprocess as sp
 import numpy as np
-import csv
+import pandas as pd
 import sys
 
 
-def run_single_job(input, output):
+def run_single_job(input, output, tile):
   try:
     signalconfig, tstretchadj = pickle.load(open(options.paramsfile, 'rb'))
     tstretch_width = (signalconfig['high_probe_scale_range'].stop -
@@ -59,11 +59,13 @@ def run_single_job(input, output):
     min_polya_len = options.min_polya_len
     readcycle_start = signalconfig['read_range'].start
 
-    writer = open_bgzip_writer(output, mode='t')
+    writer, proc = open_bgzip_writer(output, mode='t')
+    processed = skipped_short = skipped_signal_anomaly = 0
 
     for row in parse_sqi(input()):
         t_stand_out = sigproc.calc_t_stand_out(row.tile, row.seq, row.intensity)
         if t_stand_out is None:
+            skipped_signal_anomaly += 1
             continue
 
         if tailscan: # scan 3' end modifications following poly(A)
@@ -73,6 +75,7 @@ def run_single_job(input, output):
             polya_len_seqbased = seq_end_pa - seq_start_pa
             if polya_len_seqbased < min_polya_len:
                 # skip calculating PA score for short extremely short poly(A) tails.
+                skipped_short += 1
                 continue
 
             adjsignal = t_stand_out[umi_size + seq_start_pa:]
@@ -89,6 +92,7 @@ def run_single_job(input, output):
             adjsignal *= tstretchadj[row.tile][:len(adjsignal)]
 
         if adjsignal is None or len(adjsignal) < 1:
+            skipped_signal_anomaly += 1
             continue
 
         paencoded = b64encode(adjsignal.astype(np.float32).tostring()).decode('ascii')
@@ -96,7 +100,12 @@ def run_single_job(input, output):
         print(row.tile, row.cluster, seq_start_pa, polya_len_seqbased, paencoded,
               sep='\t', file=writer)
 
+        processed += 1
+
     writer.close()
+    proc.wait()
+
+    return (tile, processed, skipped_short, skipped_signal_anomaly)
 
   except:
     import traceback
@@ -108,15 +117,24 @@ def run_jobs(options, output='/dev/stdout'):
             TemporaryDirectory(asobj=True) as workdir:
         jobs = []
 
-        for inputno, inp in enumerate(open_tabix_parallel(options.infile[0])):
-            joboutput = '{}/{:08x}'.format(workdir.path, inputno)
-            job = executor.submit(run_single_job, inp, joboutput)
+        tabix_openers = open_tabix_parallel(options.infile[0], named=True)
+        for tile, inp in tabix_openers.items():
+            joboutput = '{}/{}'.format(workdir.path, tile)
+            job = executor.submit(run_single_job, inp, joboutput, tile)
             jobs.append(job)
 
+        countstats = []
         for j in jobs:
-            j.result()
+            res = j.result()
+            countstats.append(res)
 
         workdir.merge_bgzf(output)
+
+        if options.output_stats is not None:
+            statstbl = pd.DataFrame(countstats,
+                            columns=['tile', 'processed', 'skipped_short',
+                                     'skipped_signal_anomaly']).sort_values(by='tile')
+            statstbl.to_csv(options.output_stats, index=False)
 
 
 def parse_arguments():
@@ -146,6 +164,9 @@ def parse_arguments():
     parser.add_argument('--min-polyA-length', dest='min_polya_len', metavar='N',
                         default=8, type=int,
                         help='Minimum poly(A) length to produce a PA score tuple')
+    parser.add_argument('--output-stats', dest='output_stats', metavar='PATH',
+                        default=None,
+                        help='Write read counting statistics per data flow')
 
     options = parser.parse_args()
 

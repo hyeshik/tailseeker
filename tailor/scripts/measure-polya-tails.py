@@ -114,7 +114,7 @@ def run_subjob(sqiopener, paopener, options, joboutput):
     common_key = lambda s: (s.tile, s.cluster)
 
     preader = MultiJoinIterator([sqi_in, pa_in], [common_key, common_key])
-    writer = open_bgzip_writer(joboutput)
+    writer, writer_proc = open_bgzip_writer(joboutput)
     hmmruler = HMMPolyARuler(options.model)
 
     for (tile, cluster), sqispot, paspot in preader:
@@ -138,6 +138,7 @@ def run_subjob(sqiopener, paopener, options, joboutput):
         writer.write(outline.encode('ascii'))
 
     writer.close()
+    writer_proc.wait()
   except:
     import traceback
     traceback.print_exc()

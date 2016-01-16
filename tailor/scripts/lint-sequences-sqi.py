@@ -50,7 +50,7 @@ def parse_idlist(opener):
 
 def make_it_lint(options, input, outputname):
   try:
-    output = open_bgzip_writer(outputname, 'b')
+    output, outproc = open_bgzip_writer(outputname, 'b')
 
     sqi_in = parse_sqi_fast(input)
     sqi_key = itemgetter(0)
@@ -101,6 +101,7 @@ def make_it_lint(options, input, outputname):
         output.write(line)
 
     output.close()
+    outproc.wait()
 
     return outputname
   except:

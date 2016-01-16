@@ -393,15 +393,20 @@ def determine_inputs_calc_pasignals_v2(wildcards):
             'signalproc/signal-scaling-{sample}.stabilizer.pickle'.format(
                 sample=stabilizer_ref)]
 
+
+TARGETS.extend(expand('stats/{sample}.pascore-calculation.csv', sample=ALL_SAMPLES))
 rule calculate_pasignals_v2:
     input: determine_inputs_calc_pasignals_v2
-    output: nonfinal('scores/{sample}.pa2score.gz')
+    output:
+        pascore=nonfinal('scores/{sample}.pa2score.gz'),
+        stats='stats/{sample}.pascore-calculation.csv'
     threads: THREADS_MAXIMUM_CORE
     run:
         input = SuffixFilter(input)
         shell('{PYTHON3_CMD} {SCRIPTSDIR}/calculate-pasignals.py --parallel {threads} \
+                --output-stats {output.stats} \
                 --scaling-params {input[stabilizer.pickle]} {input[sqi.gz]} \
-                > {output}')
+                > {output.pascore}')
 
 
 TARGETS.extend(expand('qcplots/{sample}.trainer.pdf', sample=CONF['spikeins_to_learn']))

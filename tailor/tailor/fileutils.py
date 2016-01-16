@@ -374,7 +374,10 @@ def open_gzip_buffered(filename, mode='rb'):
 def open_bgzip_writer(filename, mode='b'):
     subproc = sp.Popen('"{bgzip}" -c /dev/stdin > "{output}"'.format(
                             bgzip=BGZIP_CMD, output=filename), shell=True, stdin=sp.PIPE)
-    return io.TextIOWrapper(subproc.stdin) if 't' in mode else subproc.stdin
+    return (
+        io.TextIOWrapper(subproc.stdin) if 't' in mode else subproc.stdin,
+        subproc,
+    )
 
 
 if __name__ == '__main__':
