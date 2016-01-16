@@ -28,29 +28,31 @@ import tailor
 
 class CommandHandlers:
 
-    COMMANDS = ['init', 'run', 'clean']
+    COMMANDS = ['init', 'run', 'clean', 'clear']
 
     def __init__(self, tailor_dir):
         self.tailor_dir = tailor_dir
         self.tailor_main_file = os.path.join(tailor_dir, 'tailor', 'main.py')
 
-    def run(self):
+    def proxy_to_snakemake(self, command, target):
         from snakemake import main
 
-        sys.argv[0] = sys.argv[0] + ' run'
+        sys.argv[0] = '{} {}'.format(sys.argv[0], command)
         sys.argv.insert(1, '-s')
         sys.argv.insert(2, self.tailor_main_file)
+        if target:
+            sys.argv.append(target)
+
         sys.exit(main())
+
+    def run(self):
+        return self.proxy_to_snakemake('run', None)
 
     def clean(self):
-        from snakemake import main
+        return self.proxy_to_snakemake('clean', 'clean')
 
-        sys.argv[0] = sys.argv[0] + ' clean'
-        sys.argv.insert(1, '-s')
-        sys.argv.insert(2, self.tailor_main_file)
-        sys.argv.append('clean')
-
-        sys.exit(main())
+    def clear(self):
+        return self.proxy_to_snakemake('clear', 'clear')
 
 
 def usage():
@@ -63,6 +65,7 @@ Commands:
   init      initiate and configure a project
   run       run an analysis workflow
   clean     clear intermediate files
+  clear     clear all generated files
 """.format(version=tailor.__version__, command=sys.argv[0]))
 
 

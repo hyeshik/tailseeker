@@ -24,6 +24,7 @@
 #
 
 import os
+import shutil
 
 def get_topdir():
     if os.path.islink('Snakefile'):
@@ -79,17 +80,42 @@ localrules: all
 rule all:
     input: lambda wc: TARGETS
 
+
+def clear_generated_files(include_targets=False):
+    for dir in INTERMEDIATE_DIRS:
+        if os.path.islink(dir):
+            realpath = os.readlink(dir)
+            print('Cleaning a symbolic link:', dir)
+            shutil.rmtree(realpath, ignore_errors=True)
+            os.unlink(dir)
+        elif os.path.isdir(dir):
+            print('Cleaning an intermediate directory:', dir)
+            shutil.rmtree(dir, ignore_errors=True)
+
+    if not include_targets:
+        return
+
+    from itertools import groupby
+
+    files_safe_to_delete = {'.AppleDouble', '.DS_Store'}
+
+    for dirname, files in groupby(sorted(TARGETS), lambda x: x.split(os.sep)[0]):
+        for f in files:
+            if os.path.exists(f):
+                os.unlink(f)
+
+        if os.path.isdir(dirname) and not (
+                set(os.listdir(dirname)) - files_safe_to_delete):
+            shutil.rmtree(dirname)
+
 rule clean:
     run:
-        for dir in INTERMEDIATE_DIRS:
-            if os.path.islink(dir):
-                realpath = os.readlink(dir)
-                print('Cleaning a symbolic link:', dir)
-                shutil.rmtree(realpath, ignore_errors=True)
-                os.unlink(dir)
-            elif os.path.isdir(dir):
-                print('Cleaning an intermediate directory:', dir)
-                shutil.rmtree(dir, ignore_errors=True)
+        clear_generated_files(include_targets=False)
+
+rule clear:
+    run:
+        clear_generated_files(include_targets=True)
+
 
 rule basecall_ayb:
     """
@@ -202,6 +228,7 @@ rule index_tabix:
     shell: '{TABIX_CMD} -s1 -b2 -e2 -0 {input}'
 
 
+TARGETS.extend(expand('stats/{sample}.duplicates.csv', sample=EXP_SAMPLES))
 rule find_duplicated_reads:
     input: sqi='scratch/merged-sqi/{sample}.sqi.gz', \
            sqiindex='scratch/merged-sqi/{sample}.sqi.gz.tbi'
@@ -303,6 +330,7 @@ rule collect_color_matrices:
                     --tile-mapping \'{tilemapping}\' --output {output}')
 
 
+TARGETS.extend(['stats/signal-scaling-basis.csv'])
 rule calculate_phix_signal_scaling_factor:
     input:
         phix='scratch/merged-sqi/PhiX.sqi.gz',
@@ -376,6 +404,7 @@ rule calculate_pasignals_v2:
                 > {output}')
 
 
+TARGETS.extend(expand('qcplots/{sample}.trainer.pdf', sample=CONF['spikeins_to_learn']))
 rule pick_spikein_samples_for_training:
     input: 'scores/{sample}.pa2score.gz'
     output:
