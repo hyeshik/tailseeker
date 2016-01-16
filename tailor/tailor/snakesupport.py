@@ -45,20 +45,10 @@ def create_scratch_link():
         os.symlink(origpath, linkpath)
 
 
-class SuffixFilter:
-    def __init__(self, values):
-        self.values = values
-
-    def __getitem__(self, key):
-        matches = [el for el in self.values if el.endswith(key)]
-        if len(matches) != 1:
-            raise ValueError("No single match found for {} in {}".format(key, self.values))
-        return matches[0]
-
-
 
 #========== Initializations ============
 sys.path.append(TAILOR_DIR)
+from tailor.powersnake import *
 
 # Load and parse configuration settings.
 SETTINGS_FILE = os.path.abspath('tailorconf.yaml')

@@ -75,6 +75,16 @@ if FIRST_CYCLE != 1:
     raise ValueError("The pipeline assumes that one of the reads starts from the first cycle.")
 
 
+def sorted_spikein_first(samples):
+    spikein_lengths = CONF['spikein_lengths']
+
+    names_with_design_length = [
+        (spikein_lengths.get(sample, inf), sample)
+        for sample in samples]
+
+    return [name for _, name in sorted(names_with_design_length)]
+
+
 localrules: all
 
 rule all:
@@ -268,7 +278,7 @@ rule make_nondup_id_list:
     output: temp('dupfilter/{sample}.nondup_ids.gz')
     run:
         if len(input) == 2: # experimental samples
-            input = SuffixFilter(input)
+            input = suffix_filter(input)
             shell('zcat {input[sqi.gz]} | cut -f1,2 | \
                    {PYTHON3_CMD} {SCRIPTSDIR}/make-nondup-list.py --from /dev/stdin \
                         --exclude {input[duplist.gz]} | \
@@ -402,7 +412,7 @@ rule calculate_pasignals_v2:
         stats='stats/{sample}.pascore-calculation.csv'
     threads: THREADS_MAXIMUM_CORE
     run:
-        input = SuffixFilter(input)
+        input = suffix_filter(input)
         shell('{PYTHON3_CMD} {SCRIPTSDIR}/calculate-pasignals.py --parallel {threads} \
                 --output-stats {output.stats} \
                 --scaling-params {input[stabilizer.pickle]} {input[sqi.gz]} \
@@ -502,5 +512,16 @@ rule generate_accuracy_stats:
         shell('{PYTHON3_CMD} {SCRIPTSDIR}/plot-polya-calls-accuracy.py \
                     --control {controlsamples} --output-plots {params.plotdir} \
                     --output-stats {output.statsout}')
+
+
+TARGETS.append('stats/polya-length-distributions.csv')
+rule generate_polya_length_distribution_stats:
+    input: expand('polya/{sample}.polya-calls.gz', sample=sorted_spikein_first(ALL_SAMPLES))
+    output: 'stats/polya-length-distributions.csv'
+    params:
+        samplenames=sorted_spikein_first(ALL_SAMPLES),
+        maxpalength=CONF['read_cycles']['R3'][1]
+    run:
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/stats-polya-len-dists.py')
 
 # ex: syntax=snakemake
