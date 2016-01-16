@@ -129,6 +129,9 @@ def run(options, regions):
         if options.dupstats is not None:
             write_dupstats(open(options.dupstats, 'w'), dupstats)
 
+    if dupcount_out is not None:
+        dupcount_out.close()
+
 
 def parse_arguments():
     import argparse

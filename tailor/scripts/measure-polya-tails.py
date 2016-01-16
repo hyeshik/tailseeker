@@ -26,7 +26,8 @@
 from tailor.parsers import parse_sqi, parse_pascore
 from tailor.parallel import open_tabix_parallel
 from tailor.fileutils import (
-    ParallelMatchingReader, TemporaryDirectory, MultiJoinIterator, open_bgzip_writer)
+    ParallelMatchingReader, TemporaryDirectory, MultiJoinIterator)
+from tailseqext import SimpleBGZFWriter
 from concurrent import futures
 import ghmm
 import csv
@@ -114,7 +115,7 @@ def run_subjob(sqiopener, paopener, options, joboutput):
     common_key = lambda s: (s.tile, s.cluster)
 
     preader = MultiJoinIterator([sqi_in, pa_in], [common_key, common_key])
-    writer, writer_proc = open_bgzip_writer(joboutput)
+    writer = SimpleBGZFWriter(joboutput)
     hmmruler = HMMPolyARuler(options.model)
 
     for (tile, cluster), sqispot, paspot in preader:
@@ -135,10 +136,10 @@ def run_subjob(sqiopener, paopener, options, joboutput):
 
         outline = '\t'.join(map(str, (tile, cluster, seq_start_pa, final_length,
                                       seqbased_length, hmm_length, naive_length))) + '\n'
-        writer.write(outline.encode('ascii'))
+        writer(outline)
 
     writer.close()
-    writer_proc.wait()
+
   except:
     import traceback
     traceback.print_exc()

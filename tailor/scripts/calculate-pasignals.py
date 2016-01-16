@@ -26,9 +26,9 @@
 from tailor.parallel import open_tabix_parallel
 from tailor.parsers import parse_sqi
 from tailor.sequtils import reverse_complement
-from tailor.fileutils import TemporaryDirectory, open_bgzip_writer
+from tailor.fileutils import TemporaryDirectory
 from tailor.signalproc import TAILseqSignalProcessor
-from tailseqext import PolyALocator
+from tailseqext import PolyALocator, SimpleBGZFWriter
 from concurrent import futures
 from base64 import b64encode
 import pickle
@@ -59,7 +59,7 @@ def run_single_job(input, output, tile):
     min_polya_len = options.min_polya_len
     readcycle_start = signalconfig['read_range'].start
 
-    writer, proc = open_bgzip_writer(output, mode='t')
+    writer = SimpleBGZFWriter(output)
     processed = skipped_short = skipped_signal_anomaly = 0
 
     for row in parse_sqi(input()):
@@ -95,15 +95,14 @@ def run_single_job(input, output, tile):
             skipped_signal_anomaly += 1
             continue
 
-        paencoded = b64encode(adjsignal.astype(np.float32).tostring()).decode('ascii')
+        paencoded = b64encode(adjsignal.astype(np.float32).tostring())
 
-        print(row.tile, row.cluster, seq_start_pa, polya_len_seqbased, paencoded,
-              sep='\t', file=writer)
+        writer('{}\t{}\t{}\t{}\t'.format(row.tile, row.cluster, seq_start_pa,
+                                         polya_len_seqbased).encode('ascii'))
+        writer(paencoded)
+        writer(b'\n')
 
         processed += 1
-
-    writer.close()
-    proc.wait()
 
     return (tile, processed, skipped_short, skipped_signal_anomaly)
 

@@ -25,7 +25,8 @@
 
 from tailor.parsers import parse_sqi_lite, parse_polya_calls
 from tailor.parallel import open_tabix_parallel
-from tailor.fileutils import (TemporaryDirectory, MultiJoinIterator, open_bgzip_writer)
+from tailor.fileutils import TemporaryDirectory, MultiJoinIterator
+from tailseqext import SimpleBGZFWriter
 from concurrent import futures
 from collections import Counter
 import sys
@@ -40,9 +41,8 @@ def run_subjob(sqiopener, paopener, reads, joboutput):
     preader = MultiJoinIterator([sqi_in, pa_in], [common_key, common_key])
     reads = [
         [readspec['name'], slice(readspec['start'], readspec['end']),
-         readspec['trim']] +
-        list(
-         open_bgzip_writer(joboutput.format(readname=readspec['name']), 'b'))]
+         readspec['trim'],
+         SimpleBGZFWriter(joboutput.format(readname=readspec['name']))]
         for readspec in reads
     ]
 
@@ -51,22 +51,21 @@ def run_subjob(sqiopener, paopener, reads, joboutput):
         coded_name = '{}:{:08d}:{:03d}:{:03d}\n'.format(tile, cluster, paspot.polya_len,
                                                         paspot.start_pos).encode('ascii')
 
-        for name, span, trim, writer, _ in reads:
+        for name, span, trim, writer in reads:
             if trim is not None:
                 delimiterend = sqispot.istart
                 span = slice(delimiterend, min(span.stop, delimiterend + trim))
 
             seq = sqispot.seq[span].encode('ascii')
             qual = sqispot.qual[span]
-            writer.write(b'@' + coded_name)
-            writer.write(seq)
-            writer.write(b'\n+' + coded_name)
-            writer.write(qual)
-            writer.write(b'\n')
+            writer(b'@' + coded_name)
+            writer(seq)
+            writer(b'\n+' + coded_name)
+            writer(qual)
+            writer(b'\n')
 
-    for _, _, _, writer, proc in reads:
+    for _, _, _, writer in reads:
         writer.close()
-        proc.wait()
 
   except:
     import traceback

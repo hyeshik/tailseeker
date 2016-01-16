@@ -24,9 +24,10 @@
 #
 
 from tailor.fileutils import (
-    TemporaryDirectory, open_gzip_buffered, MultiJoinIterator, open_bgzip_writer)
+    TemporaryDirectory, open_gzip_buffered, MultiJoinIterator)
 from tailor.parallel import open_tabix_parallel, TabixOpener
 from tailor.parsers import parse_sqi_lite
+from tailseqext import SimpleBGZFWriter
 from collections import Counter
 from concurrent import futures
 from operator import itemgetter
@@ -50,7 +51,7 @@ def parse_idlist(opener):
 
 def make_it_lint(options, input, outputname):
   try:
-    output, outproc = open_bgzip_writer(outputname, 'b')
+    output = SimpleBGZFWriter(outputname)
 
     sqi_in = parse_sqi_fast(input)
     sqi_key = itemgetter(0)
@@ -98,10 +99,9 @@ def make_it_lint(options, input, outputname):
             if min(bseq.count(c) for c in 'ACGT') < balancemin:
                 continue
 
-        output.write(line)
+        output(line)
 
     output.close()
-    outproc.wait()
 
     return outputname
   except:

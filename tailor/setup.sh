@@ -47,8 +47,26 @@ executable() {
     return 2
   fi
 
+  safename=$(echo $2 | sed -e 's,-,_,g')
+
   echo "* $2 => ${found}"
-  echo "$2: ${found}" >> "$1"
+  echo "$safename: ${found}" >> "$1"
+}
+
+pkgconfig() {
+  if [ -z "$2" ]; then
+    MODNAME="$1"
+  else
+    MODNAME="$2"
+  fi
+
+  modversion=$(pkg-config --modversion $1)
+  if [ $? -ne 0 ]; then 
+    echo "> $MODNAME could not be found by pkg-config. $3"
+    return 2;
+  fi
+
+  echo "* $1 => ${modversion} installed."
 }
 
 python3mod() {
@@ -75,6 +93,7 @@ check_requirements() {
   echo "tailor: $(pwd)" > "$PATHSCONFTMP"
 
   if executable "$PATHSCONFTMP" "python3" "Python 3" && \
+     executable "$PATHSCONFTMP" "pkg-config" && \
      executable "$PATHSCONFTMP" "bash" && \
      executable "$PATHSCONFTMP" "wget" && \
      executable "$PATHSCONFTMP" "make" && \
@@ -84,6 +103,14 @@ check_requirements() {
      executable "$PATHSCONFTMP" "tabix" "htslib" && \
      executable "$PATHSCONFTMP" "AYB" "AYB (All Your Bases)"; then
     EXTERNAL_PROGRAMS_READY=yes
+  else
+    return 2
+  fi
+
+  echo "\n==> Checking required external libraries ...\n"
+
+  if pkgconfig "htslib"; then
+    EXTERNAL_LIBRARIES_READY=yes
   else
     return 2
   fi

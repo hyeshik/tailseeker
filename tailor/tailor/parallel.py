@@ -47,8 +47,8 @@ class TabixOpener(object): # must be pickleable so that can be passed through fu
         return proc.stdout
 
     def __len__(self):
-        return int(sp.check_output('"{}" "{}" "{}" | wc -l').format(
-                    TABIX_CMD, self.bgzfile, self.interval))
+        return int(sp.check_output('"{}" "{}" "{}" | wc -l'.format(
+                    TABIX_CMD, self.bgzfile, self.interval), shell=True).strip())
 
     def random_sample(self, num):
         # XXX: this can be improved using reservoir sampling (Vitter, 1995)

@@ -29,6 +29,7 @@
 
 #include "Python.h"
 #include <numpy/arrayobject.h>
+#include <htslib/bgzf.h>
 
 #define NCHANNELS                   4
 #define INTENSITY_CODING_BASE       33
@@ -254,6 +255,143 @@ PolyALocator_new(PyObject *self, PyObject *args)
 }
 
 
+/* ======================================================== */
+/* Simple BGZF writer */
+
+typedef struct {
+    PyObject_HEAD
+    BGZF *stream;
+} SimpleBGZFWriterObject;
+
+static PyTypeObject SimpleBGZFWriter_Type;
+
+#define SimpleBGZFWriter_Type(v)    (Py_TYPE(v) == &SimpleBGZFWriter_Type)
+
+static SimpleBGZFWriterObject *
+SimpleBGZFWriter_create(PyObject *args)
+{
+    SimpleBGZFWriterObject *self;
+    char *filename;
+    BGZF *fp;
+
+    if (!PyArg_ParseTuple(args, "s:SimpleBGZFWriter", &filename))
+        return NULL;
+
+    fp = bgzf_open(filename, "w");
+    if (fp == NULL) {
+        PyErr_Format(PyExc_OSError, "Cannot open \"%s\" for writing.", filename);
+        return NULL;
+    }
+
+    self = PyObject_New(SimpleBGZFWriterObject, &SimpleBGZFWriter_Type);
+    if (self == NULL) {
+        bgzf_close(fp);
+        return NULL;
+    }
+
+    self->stream = fp;
+
+    return self;
+}
+
+static void
+SimpleBGZFWriter_dealloc(SimpleBGZFWriterObject *self)
+{
+    if (self->stream != NULL)
+        bgzf_close(self->stream);
+
+    PyObject_Del(self);
+}
+
+static PyObject *
+SimpleBGZFWriter_write(SimpleBGZFWriterObject *self, PyObject *args, PyObject *kw)
+{
+    char *buf;
+    Py_ssize_t buflen, written;
+
+    if (!PyArg_ParseTuple(args, "s#:write", &buf, &buflen))
+        return NULL;
+
+    written = (Py_ssize_t)bgzf_write(self->stream, buf, buflen);
+    if (written < 0) {
+        PyErr_SetString(PyExc_OSError, "I/O error while bgzf writing.");
+        return NULL;
+    }
+
+    return PyLong_FromSsize_t(written);
+}
+
+static PyObject *
+SimpleBGZFWriter_close(SimpleBGZFWriterObject *self)
+{
+    if (self->stream != NULL) {
+        bgzf_close(self->stream);
+        self->stream = NULL;
+    }
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+static PyMethodDef SimpleBGZFWriter_methods[] = { 
+    {"write", (PyCFunction)SimpleBGZFWriter_write, METH_VARARGS,
+        PyDoc_STR("write(bytes) -> num bytes")},
+    {"close", (PyCFunction)SimpleBGZFWriter_close, METH_NOARGS,
+        PyDoc_STR("close()")},
+    {NULL,      NULL},
+};
+
+static PyTypeObject SimpleBGZFWriter_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "tailseqext.SimpleBGZFWriter",           /*tp_name*/
+    sizeof(SimpleBGZFWriterObject),          /*tp_basicsize*/
+    0,                      /*tp_itemsize*/
+    /* methods */
+    (destructor)SimpleBGZFWriter_dealloc, /*tp_dealloc*/
+    0,                      /*tp_print*/
+    0,                      /*tp_getattr*/
+    0,                      /*tp_setattr*/
+    0,                      /*tp_compare*/
+    0,                      /*tp_repr*/
+    0,                      /*tp_as_number*/
+    0,                      /*tp_as_sequence*/
+    0,                      /*tp_as_mapping*/
+    0,                      /*tp_hash*/
+    (ternaryfunc)SimpleBGZFWriter_write, /*tp_call*/
+    0,                      /*tp_str*/
+    PyObject_GenericGetAttr, /*tp_getattro*/
+    0,                      /*tp_setattro*/
+    0,                      /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT,     /*tp_flags*/
+    0,                      /*tp_doc*/
+    0,                      /*tp_traverse*/
+    0,                      /*tp_clear*/
+    0,                      /*tp_richcompare*/
+    0,                      /*tp_weaklistoffset*/
+    0,                      /*tp_iter*/
+    0,                      /*tp_iternext*/
+    SimpleBGZFWriter_methods, /*tp_methods*/
+    0,                      /*tp_members*/
+    0,                      /*tp_getset*/
+    0,                      /*tp_base*/
+    0,                      /*tp_dict*/
+    0,                      /*tp_descr_get*/
+    0,                      /*tp_descr_set*/
+    0,                      /*tp_dictoffset*/
+    0,                      /*tp_init*/
+    0,                      /*tp_alloc*/
+    0,                      /*tp_new*/
+    0,                      /*tp_free*/
+    0,                      /*tp_is_gc*/
+};
+
+static PyObject *
+SimpleBGZFWriter_new(PyObject *self, PyObject *args)
+{
+    return (PyObject *)SimpleBGZFWriter_create(args);
+}
+
+
 /* List of functions defined in the module */
 
 static PyMethodDef tailseqext_methods[] = {
@@ -261,6 +399,8 @@ static PyMethodDef tailseqext_methods[] = {
         PyDoc_STR("decode_intensity(str) -> array")},
     {"PolyALocator", PolyALocator_new, METH_VARARGS,
         PyDoc_STR("PolyALocator(weights) -> object")},
+    {"SimpleBGZFWriter", SimpleBGZFWriter_new, METH_VARARGS,
+        PyDoc_STR("SimpleBGZFWriter(filename) -> object")},
     {NULL, NULL}           /* sentinel */
 };
 
