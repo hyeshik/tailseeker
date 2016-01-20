@@ -524,4 +524,17 @@ rule generate_polya_length_distribution_stats:
     run:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/stats-polya-len-dists.py')
 
+TARGETS.append('qcplots/global-polya-length.pdf')
+rule plot_global_polya_length_distributions:
+    input: 'stats/polya-length-distributions.csv'
+    output: 'qcplots/global-polya-length.pdf'
+    params:
+        controls=','.join(name for length, name
+                          in sorted((CONF['spikein_lengths'][s], s) for s in SPIKEIN_SAMPLES)
+                          if length > 0),
+        samples=','.join(EXP_SAMPLES)
+    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/plot-virtual-gel.py \
+                    --tagcounts {input} --controls {params.controls} \
+                    --samples {params.samples} --output-plot {output}'
+
 # ex: syntax=snakemake
