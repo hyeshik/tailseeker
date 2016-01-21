@@ -23,8 +23,8 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.parsers import parse_polya_calls
-from tailor.powersnake import *
+from tailseeker.parsers import parse_polya_calls
+from tailseeker.powersnake import *
 from io import BytesIO
 import subprocess as sp
 import pandas as pd

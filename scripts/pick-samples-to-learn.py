@@ -23,9 +23,9 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.parsers import parse_pascore, parse_sqi
-from tailor.stats import sample_iterable, similarity_sort
-from tailor.fileutils import ParallelMatchingReader, open_gzip_buffered
+from tailseeker.parsers import parse_pascore, parse_sqi
+from tailseeker.stats import sample_iterable, similarity_sort
+from tailseeker.fileutils import ParallelMatchingReader, open_gzip_buffered
 import numpy as np
 import random
 import sys

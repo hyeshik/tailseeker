@@ -26,7 +26,7 @@
 import pickle
 import time
 import numpy as np
-from tailor.signalproc import TAILseqSignalProcessor
+from tailseeker.signalproc import TAILseqSignalProcessor
 
 def parse_interval(s):
     begin, end = map(int, s.split(':'))
@@ -34,7 +34,7 @@ def parse_interval(s):
 
 
 def inspect_signals(options, openinput):
-    from tailor.parsers import parse_sqi
+    from tailseeker.parsers import parse_sqi
 
     highinterval = parse_interval(options.proberange)
     highrange_width = highinterval.stop - highinterval.start
@@ -84,7 +84,7 @@ def inspect_signals(options, openinput):
     }
 
 def run(options):
-    from tailor.parallel import open_tabix_parallel, TabixOpener
+    from tailseeker.parallel import open_tabix_parallel, TabixOpener
     from concurrent import futures
 
     infile = options.infile[0]

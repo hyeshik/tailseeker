@@ -23,9 +23,9 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.fileutils import TemporaryDirectory
-from tailor.parsers import parse_sqi_lite
-from tailor.parallel import open_tabix_parallel
+from tailseeker.fileutils import TemporaryDirectory
+from tailseeker.parsers import parse_sqi_lite
+from tailseeker.parallel import open_tabix_parallel
 import os
 import sys
 import csv

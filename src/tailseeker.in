@@ -21,10 +21,10 @@
 # THE SOFTWARE.
 #
 
-TAILOR_DIR = '%%TAILOR_DIR%%'
+TAILSEEKER_DIR = '%%TAILSEEKER_DIR%%'
 
 import sys
-sys.path.insert(0, TAILOR_DIR)
+sys.path.insert(0, TAILSEEKER_DIR)
 
-from tailor import tskcommand
-tskcommand.main(TAILOR_DIR)
+from tailseeker import tskcommand
+tskcommand.main(TAILSEEKER_DIR)

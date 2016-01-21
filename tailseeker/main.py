@@ -28,19 +28,19 @@ import shutil
 
 def get_topdir():
     if os.path.islink('Snakefile'):
-        tailorpkgdir = os.path.dirname(os.readlink('Snakefile'))
-        return os.path.abspath(os.path.dirname(tailorpkgdir))
-    elif 'TAILOR_DIR' in os.environ:
-        return os.environ['TAILOR_DIR']
+        tailseekerpkgdir = os.path.dirname(os.readlink('Snakefile'))
+        return os.path.abspath(os.path.dirname(tailseekerpkgdir))
+    elif 'TAILSEEKER_DIR' in os.environ:
+        return os.environ['TAILSEEKER_DIR']
     else:
-        raise ValueError("You need to set an environment variable, TAILOR_DIR.")
+        raise ValueError("You need to set an environment variable, TAILSEEKER_DIR.")
 
-TAILOR_DIR = get_topdir()
+TAILSEEKER_DIR = get_topdir()
 TARGETS = []
 
-include: os.path.join(TAILOR_DIR, 'tailor', 'snakesupport.py')
+include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'snakesupport.py')
 
-from tailor import sequencers
+from tailseeker import sequencers
 
 # Variable settings
 TILES = sequencers.get_tiles(CONF)

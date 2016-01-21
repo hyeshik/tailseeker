@@ -2,3 +2,7 @@
 *.o
 *.swp
 .undo
+bin/*
+conf/paths.conf
+src/build
+src/tailseeker

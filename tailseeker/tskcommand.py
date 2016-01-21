@@ -23,23 +23,23 @@
 
 import os
 import sys
-import tailor
+import tailseeker
 
 
 class CommandHandlers:
 
     COMMANDS = ['init', 'run', 'clean', 'clear']
 
-    def __init__(self, tailor_dir):
-        self.tailor_dir = tailor_dir
-        self.tailor_main_file = os.path.join(tailor_dir, 'tailor', 'main.py')
+    def __init__(self, tailseeker_dir):
+        self.tailseeker_dir = tailseeker_dir
+        self.tailseeker_main_file = os.path.join(tailseeker_dir, 'tailseeker', 'main.py')
 
     def proxy_to_snakemake(self, command, target):
         from snakemake import main
 
         sys.argv[0] = '{} {}'.format(sys.argv[0], command)
         sys.argv.insert(1, '-s')
-        sys.argv.insert(2, self.tailor_main_file)
+        sys.argv.insert(2, self.tailseeker_main_file)
         if target:
             sys.argv.append(target)
 
@@ -66,19 +66,19 @@ Commands:
   run       run an analysis workflow
   clean     clear intermediate files
   clear     clear all generated files
-""".format(version=tailor.__version__, command=sys.argv[0]))
+""".format(version=tailseeker.__version__, command=sys.argv[0]))
 
 
-def main(tailor_dir):
+def main(tailseeker_dir):
     if len(sys.argv) < 2 or sys.argv[1] not in CommandHandlers.COMMANDS:
         usage()
         return
 
-    os.environ['TAILOR_DIR'] = tailor_dir
+    os.environ['TAILSEEKER_DIR'] = tailseeker_dir
 
     command = sys.argv.pop(1)
 
-    handlers = CommandHandlers(tailor_dir)
+    handlers = CommandHandlers(tailseeker_dir)
     getattr(handlers, command)()
 
 

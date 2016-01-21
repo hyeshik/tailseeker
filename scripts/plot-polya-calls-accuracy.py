@@ -23,8 +23,8 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.parsers import parse_polya_calls
-from tailor.plotutils import prepare_cumulative, colormap_lch
+from tailseeker.parsers import parse_polya_calls
+from tailseeker.plotutils import prepare_cumulative, colormap_lch
 from functools import partial
 import pandas as pd
 import numpy as np

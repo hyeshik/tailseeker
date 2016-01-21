@@ -25,10 +25,10 @@ import os
 import subprocess as sp
 from distutils.core import setup, Extension
 
-if 'TAILOR_DIR' in os.environ:
-    TAILOR_DIR = os.environ['TAILOR_DIR']
+if 'TAILSEEKER_DIR' in os.environ:
+    TAILSEEKER_DIR = os.environ['TAILSEEKER_DIR']
 else:
-    TAILOR_DIR = os.path.abspath('..')
+    TAILSEEKER_DIR = os.path.abspath('..')
 
 PKGCONFIG_CMD = os.environ.get('PKGCONFIG_CMD', 'pkg-config')
 
@@ -44,12 +44,12 @@ def pkgconfig(package, **kw):
             kw.setdefault('extra_compile_args', []).append(token)
     return kw
 
-def fix_tailor_path():
+def fix_tailseeker_path():
     content = open('tailseeker.in').read()
-    content_fixed = content.replace('%%TAILOR_DIR%%', TAILOR_DIR)
+    content_fixed = content.replace('%%TAILSEEKER_DIR%%', TAILSEEKER_DIR)
     open('tailseeker', 'w').write(content_fixed)
 
-fix_tailor_path()
+fix_tailseeker_path()
 
 srcfile = 'pythonext/tailseqext.c'
 modname = 'tailseqext'
@@ -57,7 +57,7 @@ htslib_flags = pkgconfig('htslib')
 
 setup(name = modname,
       version = '0.2',
-      description = 'extension modules for TAIL-seq',
+      description = 'Internal extension module for tailseeker',
       author = 'Hyeshik Chang',
       author_email = 'hyeshik@snu.ac.kr',
       url = 'http://highthroughput.org',

@@ -90,7 +90,7 @@ check_requirements() {
 
   PATHSCONFTMP="$CONFDIR/.paths.conf"
 
-  echo "tailor: $(pwd)" > "$PATHSCONFTMP"
+  echo "tailseeker: $(pwd)" > "$PATHSCONFTMP"
 
   if executable "$PATHSCONFTMP" "python3" "Python 3" && \
      executable "$PATHSCONFTMP" "pkg-config" && \

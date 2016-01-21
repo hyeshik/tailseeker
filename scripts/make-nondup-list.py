@@ -23,7 +23,7 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.fileutils import open_gzip_buffered, MultiJoinIterator
+from tailseeker.fileutils import open_gzip_buffered, MultiJoinIterator
 import subprocess as sp
 from io import TextIOWrapper
 import os

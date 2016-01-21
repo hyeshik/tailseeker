@@ -23,7 +23,7 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.fileutils import LineParser, open_gzip_buffered
+from tailseeker.fileutils import LineParser, open_gzip_buffered
 from base64 import b64decode
 import numpy as np
 import sys

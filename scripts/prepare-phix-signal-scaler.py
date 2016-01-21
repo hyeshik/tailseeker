@@ -23,9 +23,9 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.fileutils import TemporaryDirectory
-from tailor.parsers import parse_sqi
-from tailor.parallel import open_tabix_parallel, TabixOpener
+from tailseeker.fileutils import TemporaryDirectory
+from tailseeker.parsers import parse_sqi
+from tailseeker.parallel import open_tabix_parallel, TabixOpener
 from concurrent import futures
 import subprocess as sp
 import numpy as np

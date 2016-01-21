@@ -23,9 +23,9 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.parsers import parse_sqi_lite, parse_polya_calls
-from tailor.parallel import open_tabix_parallel
-from tailor.fileutils import TemporaryDirectory, MultiJoinIterator
+from tailseeker.parsers import parse_sqi_lite, parse_polya_calls
+from tailseeker.parallel import open_tabix_parallel
+from tailseeker.fileutils import TemporaryDirectory, MultiJoinIterator
 from tailseqext import SimpleBGZFWriter
 from concurrent import futures
 from collections import Counter

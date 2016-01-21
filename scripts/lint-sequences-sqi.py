@@ -23,10 +23,10 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.fileutils import (
+from tailseeker.fileutils import (
     TemporaryDirectory, open_gzip_buffered, MultiJoinIterator)
-from tailor.parallel import open_tabix_parallel, TabixOpener
-from tailor.parsers import parse_sqi_lite
+from tailseeker.parallel import open_tabix_parallel, TabixOpener
+from tailseeker.parsers import parse_sqi_lite
 from tailseqext import SimpleBGZFWriter
 from collections import Counter
 from concurrent import futures

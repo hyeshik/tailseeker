@@ -35,8 +35,8 @@ class Configurations:
 
     PATH_CONF_FILE = 'conf/paths.conf'
 
-    def __init__(self, tailor_dir, settings_file):
-        self.tailor_dir = tailor_dir
+    def __init__(self, tailseeker_dir, settings_file):
+        self.tailseeker_dir = tailseeker_dir
         self.confdata = self.load_config(settings_file)
         self.expand_sample_settings()
 
@@ -50,7 +50,7 @@ class Configurations:
                 incfiles = [incfiles]
 
             for predfile in incfiles:
-                confpath = os.path.join(self.tailor_dir, 'conf', predfile)
+                confpath = os.path.join(self.tailseeker_dir, 'conf', predfile)
                 predconf = self.load_config(open(confpath))
                 confdict.update(predconf)
 
@@ -93,7 +93,7 @@ class Configurations:
             user_specified.update(finalized)
 
     def export_paths(self, namespace):
-        pathconf = os.path.join(self.tailor_dir, self.PATH_CONF_FILE)
+        pathconf = os.path.join(self.tailseeker_dir, self.PATH_CONF_FILE)
         pathsettings = yaml.load(open(pathconf)) if os.path.exists(pathconf) else {}
         if 'paths' in self.confdata:
             pathsettings.update(self.confdata['paths'])
@@ -123,8 +123,8 @@ class Configurations:
             raise KeyError("Sample {} not available in settings".format(repr(name)))
 
 
-def scan_selectable_confs(tailor_dir):
-    conffiles = glob.glob(os.path.join(tailor_dir, 'conf', '*.conf'))
+def scan_selectable_confs(tailseeker_dir):
+    conffiles = glob.glob(os.path.join(tailseeker_dir, 'conf', '*.conf'))
 
     for conffilename in conffiles:
         confdata = yaml.load(open(conffilename))

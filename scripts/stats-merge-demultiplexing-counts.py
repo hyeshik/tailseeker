@@ -23,7 +23,7 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.powersnake import *
+from tailseeker.powersnake import *
 import pandas as pd
 
 

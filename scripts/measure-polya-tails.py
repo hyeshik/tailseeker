@@ -23,9 +23,9 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.parsers import parse_sqi, parse_pascore
-from tailor.parallel import open_tabix_parallel
-from tailor.fileutils import (
+from tailseeker.parsers import parse_sqi, parse_pascore
+from tailseeker.parallel import open_tabix_parallel
+from tailseeker.fileutils import (
     ParallelMatchingReader, TemporaryDirectory, MultiJoinIterator)
 from tailseqext import SimpleBGZFWriter
 from concurrent import futures

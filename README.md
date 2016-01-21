@@ -11,9 +11,9 @@ Dependencies:
  * pip3 install -r requirements.txt
 
 
-## Tailseeker/Tailor package
+## Tailseeker package
 
-Copyright (c) 2013-2015 Institute for Basic Science
+Copyright (c) 2013-2016 Institute for Basic Science
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),

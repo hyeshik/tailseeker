@@ -23,11 +23,11 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailor.parallel import open_tabix_parallel
-from tailor.parsers import parse_sqi
-from tailor.sequtils import reverse_complement
-from tailor.fileutils import TemporaryDirectory
-from tailor.signalproc import TAILseqSignalProcessor
+from tailseeker.parallel import open_tabix_parallel
+from tailseeker.parsers import parse_sqi
+from tailseeker.sequtils import reverse_complement
+from tailseeker.fileutils import TemporaryDirectory
+from tailseeker.signalproc import TAILseqSignalProcessor
 from tailseqext import PolyALocator, SimpleBGZFWriter
 from concurrent import futures
 from base64 import b64encode

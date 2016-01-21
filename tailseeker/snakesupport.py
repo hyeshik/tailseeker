@@ -55,22 +55,22 @@ def immediate_clearing(arg, sntemp=temp):
 
 
 #========== Initializations ============
-sys.path.append(TAILOR_DIR)
-from tailor.powersnake import *
+sys.path.append(TAILSEEKER_DIR)
+from tailseeker.powersnake import *
 
 # Load and parse configuration settings.
-SETTINGS_FILE = os.path.abspath('tailorconf.yaml')
+SETTINGS_FILE = os.path.abspath('tailseeker.yaml')
 
-from tailor import configurations
-CONF = configurations.Configurations(TAILOR_DIR, open(SETTINGS_FILE))
+from tailseeker import configurations
+CONF = configurations.Configurations(TAILSEEKER_DIR, open(SETTINGS_FILE))
 
 # Verify directories and links.
 WRKDIR = os.getcwd()
-RESOURCESDIR = os.path.join(TAILOR_DIR, 'resources')
-BINDIR = os.path.join(TAILOR_DIR, 'bin')
+RESOURCESDIR = os.path.join(TAILSEEKER_DIR, 'resources')
+BINDIR = os.path.join(TAILSEEKER_DIR, 'bin')
 SCRATCHDIR = (CONF['scratch_dir'] if 'scratch_dir' in CONF
-                                  else os.path.join(TAILOR_DIR, 'scratch'))
-SCRIPTSDIR = os.path.join(TAILOR_DIR, 'scripts')
+                                  else os.path.join(TAILSEEKER_DIR, 'scratch'))
+SCRIPTSDIR = os.path.join(TAILSEEKER_DIR, 'scripts')
 CONF.export_paths(globals())
 create_scratch_link()
 
@@ -108,6 +108,6 @@ shell.prefix(('set -e; set -o pipefail; '
                      'TABIX_CMD="{TABIX_CMD}" '
                      'TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}" '
                      + CONF.get('envvars', '') + '; ').format(
-                PYTHONPATH=TAILOR_DIR, SCRATCHDIR=SCRATCHDIR, BGZIP_CMD=BGZIP_CMD,
+                PYTHONPATH=TAILSEEKER_DIR, SCRATCHDIR=SCRATCHDIR, BGZIP_CMD=BGZIP_CMD,
                 TABIX_CMD=TABIX_CMD))
 
