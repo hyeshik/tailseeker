@@ -44,6 +44,14 @@ def create_scratch_link():
             os.makedirs(origpath)
         os.symlink(origpath, linkpath)
 
+all_intermediate_files = set()
+def lazy_clearing(arg):
+    all_intermediate_files.add(arg)
+    return arg
+
+def immediate_clearing(arg, sntemp=temp):
+    all_intermediate_files.add(arg)
+    return sntemp(arg)
 
 
 #========== Initializations ============
@@ -67,11 +75,11 @@ CONF.export_paths(globals())
 create_scratch_link()
 
 if not CONF['clean_intermediate_files']:
-    nonfinal = temp = lambda arg: arg
+    nonfinal = temp = lazy_clearing
 elif CONF['clean_intermediate_files'] == 'some':
-    nonfinal = lambda arg: arg
+    nonfinal, temp = lazy_clearing, immediate_clearing
 elif CONF['clean_intermediate_files'] == 'immediately':
-    nonfinal = temp
+    nonfinal = temp = immediate_clearing
 else:
     raise ValueError('Setting clean_intermediate_files should be one among immediately, some, '
                      'or no.')

@@ -44,7 +44,8 @@
 
 
 static struct BarcodeInfo *
-assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *barcodes)
+assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *barcodes,
+               int *pmismatches)
 {
     struct BarcodeInfo *bestidx, *pidx;
     int bestmismatches, secondbestfound, i;
@@ -70,10 +71,14 @@ assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *bar
     }
 
     if (bestidx == NULL || secondbestfound ||
-            bestmismatches > bestidx->maximum_index_mismatches)
+            bestmismatches > bestidx->maximum_index_mismatches) {
+        *pmismatches = -1;
         return NULL;
-    else
+    }
+    else {
+        *pmismatches = bestmismatches;
         return bestidx;
+    }
 }
 
 
@@ -118,6 +123,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
     char sequence_formatted[ncycles+1], quality_formatted[ncycles+1];
     char intensity_formatted[ncycles*8+1];
     struct BarcodeInfo *noncontrol_barcodes;
+    int mismatches;
 
     int8_t ssw_score_mat[CONTROL_ALIGN_BASE_COUNT * CONTROL_ALIGN_BASE_COUNT];
     int8_t *control_seq;
@@ -156,6 +162,8 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
             return -1;
         }
 
+    mismatches = 0;
+
     for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
         struct BarcodeInfo *bc;
         int delimiter_end;
@@ -164,7 +172,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
         format_intensity(intensity_formatted, intensities, ncycles, clusterno, scalefactor);
 
         bc = assign_barcode(sequence_formatted + barcode_start, barcode_length,
-                            noncontrol_barcodes);
+                            noncontrol_barcodes, &mismatches);
         if (bc != NULL)
             /* barcode is assigned to a regular sample. do nothing here. */;
         else if (control_info == NULL) /* no control sequence is given. treat it Unknown. */
@@ -187,9 +195,18 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
                     return -1;
             }
 
+        if (mismatches <= 0) /* no mismatches or falling back to PhiX/Unknown. */
+            bc->clusters_mm0++;
+        else if (mismatches == 1)
+            bc->clusters_mm1++;
+        else
+            bc->clusters_mm2plus++;
+
         delimiter_end = find_delimiter_end_position(sequence_formatted, bc);
-        if (bc->delimiter_length > 0 && delimiter_end < 0 && !keep_no_delimiter)
+        if (bc->delimiter_length > 0 && delimiter_end < 0 && !keep_no_delimiter) {
+            bc->clusters_nodelim++;
             continue;
+        }
 
         if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%s\t%s\t%s\n", laneid, tile,
                     firstclusterno + clusterno, delimiter_end, sequence_formatted,
@@ -434,6 +451,33 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
 }
 
 
+static int
+write_demultiplexing_statistics(const char *output, struct BarcodeInfo *barcodes)
+{
+    FILE *fp;
+
+    fp = fopen(output, "w");
+    if (fp == NULL)
+        return -1;
+
+    fprintf(fp, "name,index,max_index_mm,delim,delim_pos,max_delim_mm,"
+                "cln_no_index_mm,cln_1_index_mm,cln_2+_index_mm,"
+                "cln_no_delim\n");
+
+    for (; barcodes != NULL; barcodes = barcodes->next)
+        fprintf(fp, "%s,%s,%d,%s,%d,%d,%d,%d,%d,%d\n",
+                barcodes->name, barcodes->index, barcodes->maximum_index_mismatches,
+                barcodes->delimiter, barcodes->delimiter_pos,
+                barcodes->maximum_delimiter_mismatches, barcodes->clusters_mm0,
+                barcodes->clusters_mm1, barcodes->clusters_mm2plus,
+                barcodes->clusters_nodelim);
+
+    fclose(fp);
+
+    return 0;
+}
+
+
 static void
 usage(const char *prog)
 {
@@ -467,6 +511,8 @@ tailseq-retrieve-signals 2.0\
 \n                                    in \"name,first_cycle,length\".\
 \n  -B,  --block-size=NUM             number of clusters in a processing unit\
 \n                                    (default: 262144).\
+\n  -o,  --demultiplex-stats=PATH     file path where write cluster count statistics\
+\n                                    on demultiplexing (default: no output)\
 \n\
 \nAll cycle numbers or positions are in 1-based inclusive system.\
 \n\
@@ -478,6 +524,7 @@ int
 main(int argc, char *argv[])
 {
     char *datadir, *runid, *writercmd;
+    char *demultiplex_stats_filename;
     int keep_no_delimiter_flag;
     int lane, tile, ncycles, blocksize;
     int barcode_start, barcode_length;
@@ -503,11 +550,13 @@ main(int argc, char *argv[])
         {"writer-command",      required_argument,  0,                          'w'},
         {"filter-control",      required_argument,  0,                          'f'},
         {"block-size",          required_argument,  0,                          'B'},
+        {"demultiplex-stats",   required_argument,  0,                          'o'},
         {"help",                no_argument,        0,                          'h'},
         {0, 0, 0, 0}
     };
 
     datadir = runid = writercmd = NULL;
+    demultiplex_stats_filename = NULL;
     keep_no_delimiter_flag = 0;
     lane = tile = ncycles = barcode_start = -1;
     scalefactor = 0;
@@ -521,7 +570,7 @@ main(int argc, char *argv[])
     while (1) {
         int option_index=0;
 
-        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:hf:B:", long_options, &option_index);
+        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:hf:B:o:", long_options, &option_index);
 
         /* Detect the end of the options. */
         if (c == -1)
@@ -633,6 +682,8 @@ main(int argc, char *argv[])
                     newbc->delimiter_pos = atoi(tokens[4]) - 1;
                     newbc->delimiter_length = strlen(newbc->delimiter);
                     newbc->maximum_delimiter_mismatches = atoi(tokens[5]);
+                    newbc->clusters_mm0 = newbc->clusters_mm1 = 0;
+                    newbc->clusters_mm2plus = newbc->clusters_nodelim = 0;
                     newbc->stream = NULL;
 
                     if (newbc->name == NULL || newbc->index == NULL ||
@@ -712,6 +763,10 @@ main(int argc, char *argv[])
 
             case 'B': /* --block-size */
                 blocksize = atoi(optarg);
+                break;
+
+            case 'o': /* --demultiplex-stats */
+                demultiplex_stats_filename = strdup(optarg);
                 break;
 
             case 'h':
@@ -842,6 +897,11 @@ main(int argc, char *argv[])
     free(datadir);
     free(runid);
     free(writercmd);
+
+    if (r == 0 && demultiplex_stats_filename != NULL) {
+        r = write_demultiplexing_statistics(demultiplex_stats_filename, barcodes);
+        free(demultiplex_stats_filename);
+    }
 
     while (barcodes != NULL) {
         struct BarcodeInfo *bk;

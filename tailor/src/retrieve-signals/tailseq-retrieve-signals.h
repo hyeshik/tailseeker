@@ -82,6 +82,10 @@ struct BarcodeInfo {
     int maximum_index_mismatches;
     int maximum_delimiter_mismatches;
     FILE *stream;
+    uint32_t clusters_mm0;
+    uint32_t clusters_mm1;
+    uint32_t clusters_mm2plus;
+    uint32_t clusters_nodelim;
     struct BarcodeInfo *next;
 };
 

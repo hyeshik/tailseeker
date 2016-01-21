@@ -92,6 +92,18 @@ rule all:
 
 
 def clear_generated_files(include_targets=False):
+    cleared_files = 0
+    for pattern in all_intermediate_files:
+        from snakemake.utils import listfiles
+
+        for filename, wildcards in listfiles(pattern):
+            if os.path.isfile(filename):
+                os.unlink(filename)
+                cleared_files += 1
+    else:
+        if cleared_files > 0:
+            print('{} intermediate file(s) were removed.'.format(cleared_files))
+
     for dir in INTERMEDIATE_DIRS:
         if os.path.islink(dir):
             realpath = os.readlink(dir)
@@ -175,7 +187,8 @@ rule demultiplex_signals:
         regular = map(temp, expand('scratch/demux-sqi/{sample}_{{tile}}.sqi.gz',
                                    sample=ALL_SAMPLES)),
         unknown = temp('scratch/demux-sqi/Unknown_{tile}.sqi.gz'),
-        phixcontrol = temp('scratch/demux-sqi/PhiX_{tile}.sqi.gz')
+        phixcontrol = temp('scratch/demux-sqi/PhiX_{tile}.sqi.gz'),
+        demuxstats = temp('stats/demultiplexing-{tile}.csv')
     threads: min(len(EXP_SAMPLES) + 2, 8)
     run:
         tileinfo = TILES[wildcards.tile]
@@ -196,6 +209,7 @@ rule demultiplex_signals:
             '--barcode-start', index_read_start, '--barcode-length', index_read_length,
             '--writer-command', '{BGZIP_CMD} -c > ' + output_filename,
             '--filter-control', 'PhiX,{},{}'.format(phix_cycle_start, phix_cycle_length),
+            '--demultiplex-stats', output.demuxstats,
         ]
 
         altcalls = determine_inputs_demultiplex_signals(wildcards, as_dict=True)
@@ -536,5 +550,12 @@ rule plot_global_polya_length_distributions:
     shell: '{PYTHON3_CMD} {SCRIPTSDIR}/plot-virtual-gel.py \
                     --tagcounts {input} --controls {params.controls} \
                     --samples {params.samples} --output-plot {output}'
+
+rule merge_demultiplexing_stats:
+    input: expand('stats/demultiplexing-{tile}.csv', tile=sorted(TILES))
+    output: 'stats/demultiplexing.csv'
+    params: tiles=sorted(TILES)
+    run:
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/stats-merge-demultiplexing-counts.py')
 
 # ex: syntax=snakemake
