@@ -551,6 +551,7 @@ rule plot_global_polya_length_distributions:
                     --tagcounts {input} --controls {params.controls} \
                     --samples {params.samples} --output-plot {output}'
 
+TARGETS.append('stats/demultiplexing.csv')
 rule merge_demultiplexing_stats:
     input: expand('stats/demultiplexing-{tile}.csv', tile=sorted(TILES))
     output: 'stats/demultiplexing.csv'
