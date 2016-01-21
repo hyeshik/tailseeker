@@ -25,10 +25,23 @@
 #
 
 __all__ = [
-    'reverse_complement',
+    'reverse_complement', 'grouper',
 ]
+
+from itertools import islice
+
 
 revcmptrans = str.maketrans('ATUGCatugc', 'TAACGtaacg')
 def reverse_complement(seq):
     return seq.translate(revcmptrans)[::-1]
+
+
+# from http://stackoverflow.com/a/8991553
+def grouper(n, iterable):
+    it = iter(iterable)
+    while True:
+       chunk = tuple(islice(it, n))
+       if not chunk:
+           return
+       yield chunk
 

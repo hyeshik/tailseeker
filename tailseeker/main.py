@@ -63,7 +63,7 @@ THREADS_MAXIMUM_CORE = CONF['maximum_threads']
 
 INTERMEDIATE_DIRS = [
     'dupfilter', 'polya', 'scores', 'scratch',
-    'sequences', 'signalproc', 'learning',
+    'sequences', 'signalproc', 'learning', 'tables',
 ]
 
 
@@ -184,10 +184,10 @@ rule demultiplex_signals:
     """
     input: determine_inputs_demultiplex_signals
     output:
-        regular = map(temp, expand('scratch/demux-sqi/{sample}_{{tile}}.sqi.gz',
+        regular = map(temp, expand('tables/primary_sqi/{sample}_{{tile}}.h5',
                                    sample=ALL_SAMPLES)),
-        unknown = temp('scratch/demux-sqi/Unknown_{tile}.sqi.gz'),
-        phixcontrol = temp('scratch/demux-sqi/PhiX_{tile}.sqi.gz'),
+        unknown = temp('tables/primary_sqi/Unknown_{tile}.h5'),
+        phixcontrol = temp('tables/primary_sqi/PhiX_{tile}.h5'),
         demuxstats = temp('stats/demultiplexing-{tile}.csv')
     threads: min(len(EXP_SAMPLES) + 2, 8)
     run:
@@ -195,11 +195,14 @@ rule demultiplex_signals:
         index_read_start, index_read_end, read_no = CONF['read_cycles'][INDEX_READS[0]]
         index_read_length = index_read_end - index_read_start + 1
 
-        output_filename = 'scratch/demux-sqi/XX_{tile}.sqi.gz'.format(tile=wildcards.tile)
-
         phix_cycle_base = CONF['read_cycles'][PHIX_ID_REF[0]][0]
         phix_cycle_start = phix_cycle_base + PHIX_ID_REF[1] - 1
         phix_cycle_length = PHIX_ID_REF[2]
+
+        writer_command = (
+            '{PYTHON3_CMD} {SCRIPTSDIR}/write-sqi-to-table.py '
+            '--output tables/primary_sqi/_SAMPLE__{wildcards.tile}.h5 '
+            '--tilename {wildcards.tile} --samplename XX')
 
         options = [
             '--data-dir', tileinfo['intensitiesdir'],
@@ -207,7 +210,7 @@ rule demultiplex_signals:
             '--tile', tileinfo['tile'], '--ncycles', NUM_CYCLES,
             '--signal-scale', sequencers.get_signalscale(tileinfo['type']),
             '--barcode-start', index_read_start, '--barcode-length', index_read_length,
-            '--writer-command', '{BGZIP_CMD} -c > ' + output_filename,
+            '--writer-command', writer_command,
             '--filter-control', 'PhiX,{},{}'.format(phix_cycle_start, phix_cycle_length),
             '--demultiplex-stats', output.demuxstats,
         ]
