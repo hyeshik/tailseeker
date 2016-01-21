@@ -24,14 +24,10 @@
 #
 
 from tailseeker.fileutils import LineParser, open_gzip_buffered
+from tailseqext import decode_intensity
 from base64 import b64decode
 import numpy as np
 import sys
-
-if sys.version_info[0] >= 3:
-    from tailseqext import decode_intensity
-else:
-    from tailseqext2 import decode_intensity
 
 readid_key = lambda x: (x.tile, x.cluster)
 decode_ascii = lambda x: x.decode('ascii')
