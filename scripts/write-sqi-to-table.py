@@ -27,42 +27,48 @@ import tables
 
 TILENAME_LENGTH = 5
 
-def create_table(h5, group, samplename, tilename, ncycles, nchannels):
 
-    class SeqQualIntensity(tables.IsDescription):
+def create_tables(h5, group, samplename, tilename, ncycles, nchannels):
+
+    class SeqQual(tables.IsDescription):
         tile = tables.StringCol(TILENAME_LENGTH, pos=0)
         cluster = tables.UInt64Col(pos=1)
         istart = tables.Int16Col(pos=2)
         seq = tables.StringCol(ncycles, pos=3)
         qual = tables.UInt8Col(shape=(ncycles,), pos=4)
-        intensity = tables.Int16Col(shape=(ncycles, nchannels), pos=5)
+        #intensity = tables.Int16Col(shape=(ncycles, nchannels), pos=5)
 
-    table = h5.create_table(group, tilename, SeqQualIntensity,
-                    'SQI array for sample {} from tile {}'.format(samplename, tilename))
+    subgroup = h5.create_group(group, samplename,
+                    'SQI arrays for sample {} from tile {}'.format(samplename, tilename))
 
-    return table
+    seqqual = h5.create_table(subgroup, 'seqqual', SeqQual,
+                              'Sequences and quality scores for sample {} from '
+                              'tile {}'.format(samplename, tilename))
+    intensities = h5.create_earray(subgroup, 'intensities', tables.UInt8Atom(),
+                                   (0, ncycles, nchannels),
+                'Signal intensities for sample {} from tile {}'.format(samplename, tilename))
+
+    return seqqual, intensities
 
 
 def sqi2tbl(output_file, input_file, samplename, tilename, compression_level):
-    filters = tables.Filters(complib='blosc:blosclz', complevel=compression_level)
+    filters = tables.Filters(complib='blosc:zlib', complevel=compression_level)
 
     with tables.open_file(output_file, mode='w',
                           title='Tailseeker seq-qual-intensity file',
                           filters=filters) as h5out:
         group = h5out.create_group('/', 'primary_sqi',
                                    'SQI arrays right after demultiplexing')
-        subgrp = h5out.create_group('/primary_sqi', samplename,
-                                    'Sample {}'.format(samplename))
-        table = None
+        seqqual = intensities = None
 
         for spot in parse_sqi(input_file):
-            if table is None: # the first row
+            if seqqual is None: # the first row
                 ncycles, nchannels = spot.intensity.shape # shape of intensity array
-                table = create_table(h5out, subgrp, samplename, tilename, ncycles, nchannels)
+                seqqual, intensities = (
+                    create_tables(h5out, group, samplename, tilename, ncycles, nchannels))
 
-            table.append([
-                (spot.tile, spot.cluster, spot.istart, spot.seq, spot.qual, spot.intensity)
-            ])
+            seqqual.append([(spot.tile, spot.cluster, spot.istart, spot.seq, spot.qual)])
+            intensities.append([spot.intensity])
 
 
 def parse_arguments():
