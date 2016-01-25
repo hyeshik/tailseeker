@@ -22,36 +22,34 @@
 #
 
 from tailseeker.parsers import parse_sqi
+from tailseeker.sequencers import encode_gcid
 import numpy as np
 import tables
 
-TILENAME_LENGTH = 5
 
-
-def create_tables(h5, group, samplename, tilename, ncycles, nchannels):
+def create_tables(h5, group, samplename, tileid, ncycles, nchannels):
 
     class SeqQual(tables.IsDescription):
-        tile = tables.StringCol(TILENAME_LENGTH, pos=0)
-        cluster = tables.UInt64Col(pos=1)
-        istart = tables.Int16Col(pos=2)
-        seq = tables.StringCol(ncycles, pos=3)
-        qual = tables.UInt8Col(shape=(ncycles,), pos=4)
+        gcid = tables.Int64Col(pos=0)
+        istart = tables.Int16Col(pos=1)
+        seq = tables.StringCol(ncycles, pos=2)
+        qual = tables.UInt8Col(shape=(ncycles,), pos=3)
         #intensity = tables.Int16Col(shape=(ncycles, nchannels), pos=5)
 
     subgroup = h5.create_group(group, samplename,
-                    'SQI arrays for sample {} from tile {}'.format(samplename, tilename))
+                    'SQI arrays for sample {} from tile {}'.format(samplename, tileid))
 
     seqqual = h5.create_table(subgroup, 'seqqual', SeqQual,
                               'Sequences and quality scores for sample {} from '
-                              'tile {}'.format(samplename, tilename))
+                              'tile {}'.format(samplename, tileid))
     intensities = h5.create_earray(subgroup, 'intensities', tables.UInt8Atom(),
                                    (0, ncycles, nchannels),
-                'Signal intensities for sample {} from tile {}'.format(samplename, tilename))
+                'Signal intensities for sample {} from tile {}'.format(samplename, tileid))
 
     return seqqual, intensities
 
 
-def sqi2tbl(output_file, input_file, samplename, tilename, compression_level):
+def sqi2tbl(output_file, input_file, samplename, tileid, compression_level):
     filters = tables.Filters(complib='blosc:zlib', complevel=compression_level)
 
     with tables.open_file(output_file, mode='w',
@@ -65,10 +63,15 @@ def sqi2tbl(output_file, input_file, samplename, tilename, compression_level):
             if seqqual is None: # the first row
                 ncycles, nchannels = spot.intensity.shape # shape of intensity array
                 seqqual, intensities = (
-                    create_tables(h5out, group, samplename, tilename, ncycles, nchannels))
+                    create_tables(h5out, group, samplename, tileid, ncycles, nchannels))
 
-            seqqual.append([(spot.tile, spot.cluster, spot.istart, spot.seq, spot.qual)])
+            gcid = encode_gcid(tileid, spot.cluster)
+
+            seqqual.append([(gcid, spot.istart, spot.seq, spot.qual)])
             intensities.append([spot.intensity])
+
+        if seqqual is not None:
+            seqqual.cols.cluster.create_csindex()
 
 
 def parse_arguments():
@@ -78,8 +81,8 @@ def parse_arguments():
                                                  'input from stdin into a HDF5 storage.')
     parser.add_argument('--output', dest='output', metavar='FILE', type=str,
                         required=True, help='Path to the new file is located')
-    parser.add_argument('--tilename', dest='tilename', metavar='NAME', type=str,
-                        required=True, help='Name of the tile currently processing')
+    parser.add_argument('--tileid', dest='tileid', metavar='NAME', type=int,
+                        required=True, help='ID number of the tile currently processing')
     parser.add_argument('--samplename', dest='samplename', metavar='NAME', type=str,
                         required=True, help='Name of the sample currently processing')
     parser.add_argument('--compression-level', dest='comp_level', metavar='NUM', type=int,
@@ -99,6 +102,6 @@ if __name__ == '__main__':
         else options.output)
 
     sqi2tbl(output_file, os.fdopen(0, 'rb'),
-            options.samplename, options.tilename,
+            options.samplename, options.tileid,
             options.comp_level)
 

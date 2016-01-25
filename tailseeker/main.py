@@ -151,7 +151,7 @@ rule basecall_ayb:
     output: temp('scratch/aybcalls/{read}_{tile}.fastq.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
-        tileinfo = TILES[wildcards.tile]
+        tileinfo = TILES[int(wildcards.tile)]
         readname = wildcards.read
         first_cycle, last_cycle, read_no = CONF['read_cycles'][readname]
         read_length = last_cycle - first_cycle + 1
@@ -191,7 +191,7 @@ rule demultiplex_signals:
         demuxstats = temp('stats/demultiplexing-{tile}.csv')
     threads: min(len(EXP_SAMPLES) + 2, 8)
     run:
-        tileinfo = TILES[wildcards.tile]
+        tileinfo = TILES[int(wildcards.tile)]
         index_read_start, index_read_end, read_no = CONF['read_cycles'][INDEX_READS[0]]
         index_read_length = index_read_end - index_read_start + 1
 
@@ -202,7 +202,7 @@ rule demultiplex_signals:
         writer_command = (
             '{PYTHON3_CMD} {SCRIPTSDIR}/write-sqi-to-table.py '
             '--output tables/primary_sqi/_SAMPLE__{wildcards.tile}.h5 '
-            '--tilename {wildcards.tile} --samplename XX')
+            '--tileid {wildcards.tile} --samplename XX')
 
         options = [
             '--data-dir', tileinfo['intensitiesdir'],
@@ -255,88 +255,56 @@ rule index_tabix:
     shell: '{TABIX_CMD} -s1 -b2 -e2 -0 {input}'
 
 
-TARGETS.extend(expand('stats/{sample}.duplicates.csv', sample=EXP_SAMPLES))
-rule find_duplicated_reads:
-    input: sqi='scratch/merged-sqi/{sample}.sqi.gz', \
-           sqiindex='scratch/merged-sqi/{sample}.sqi.gz.tbi'
-    output: duplist=temp('dupfilter/{sample}.duplist.gz'), \
-            dupstats='stats/{sample}.duplicates.csv', \
-            dupcounts=nonfinal('dupfilter/{sample}.dupcounts.gz')
-    threads: THREADS_MAXIMUM_CORE
-    run:
-        if wildcards.sample in CONF['dupcheck_regions']:
-            checkregions = CONF['dupcheck_regions'][wildcards.sample]
-            regionsspec = ' '.join('--region {}:{}'.format(begin, end)
-                                   for begin, end in checkregions)
-            shell('{PYTHON3_CMD} {SCRIPTSDIR}/find-duplicates.py \
-                    --parallel {threads} --output-dupcounts {output.dupcounts} \
-                    --output-stats {output.dupstats} {regionsspec} {input.sqi} | \
-                    sort -k1,1 -k2,2n | gzip -c - > {output.duplist}')
-        else:
-            # create null lists to make subsequent rules happy
-            import gzip
-            gzip.open(output.duplist, 'w')
-            open(output.dupstats, 'w')
-            gzip.open(output.dupcounts, 'w')
-
-
-def determine_inputs_for_nondup_id_list(wildcards):
-    sample = wildcards.sample
-    if sample in EXP_SAMPLES:
-        return ['scratch/merged-sqi/{}.sqi.gz'.format(sample),
-                'dupfilter/{}.duplist.gz'.format(sample)]
-    elif sample in SPIKEIN_SAMPLES:
-        return ['scratch/merged-sqi/{}.sqi.gz'.format(sample)]
-    else:
-        raise ValueError("Unknown sample {}.".format(sample))
-
-rule make_nondup_id_list:
-    input: determine_inputs_for_nondup_id_list
-    output: temp('dupfilter/{sample}.nondup_ids.gz')
-    run:
-        if len(input) == 2: # experimental samples
-            input = suffix_filter(input)
-            shell('zcat {input[sqi.gz]} | cut -f1,2 | \
-                   {PYTHON3_CMD} {SCRIPTSDIR}/make-nondup-list.py --from /dev/stdin \
-                        --exclude {input[duplist.gz]} | \
-                   {BGZIP_CMD} -c /dev/stdin > {output}')
-        elif len(input) == 1: # spikein samples
-            shell('zcat {input} | cut -f1,2 | {BGZIP_CMD} -c /dev/stdin > {output}')
-        else:
-            raise ValueError("make_nondup_id_list: programming error")
-
-
-rule generate_lint_sqi:
+rule filter_sequence_reads:
     input:
-        sqi='scratch/merged-sqi/{sample}.sqi.gz',
-        sqi_index='scratch/merged-sqi/{sample}.sqi.gz.tbi',
-        whitelist='dupfilter/{sample}.nondup_ids.gz',
-        whitelist_index='dupfilter/{sample}.nondup_ids.gz.tbi'
-    output: nonfinal('sequences/{sample}.sqi.gz')
+        expand('tables/primary_sqi/{{sample}}_{tile}.h5', tile=sorted(TILES))
+    output: dupstats=temp('scratch/stats/{sample}.duplicates.csv'), \
+            filtstats='stats/{sample}.filters.csv', \
+            uniqids=nonfinal('tables/uniqids/{sample}.h5'), \
+            uniqsqi=nonfinal('tables/sqi/{sample}.h5')
+    params: tileids=sorted(TILES)
     threads: THREADS_MAXIMUM_CORE
     run:
         sample = wildcards.sample
-        umiopt = balanceopt = ''
+        umiopt = balanceopt = fingerprintopt = ''
 
         if sample in CONF['umi_fixed_sequence']:
             umiopt = ('--umi-sequence {} --umi-position {} '
                       '--umi-mismatch 1').format(CONF['umi_fixed_sequence'][sample],
                                                  CONF['read_cycles']['R3'][0])
-        elif sample in CONF['umi_length']:
-            umiend = CONF['read_cycles']['R3'][0] - 1 + CONF['umi_length'][sample]
-            umiopt = '--umi-end {}'.format(umiend)
 
         if sample in CONF['balance_check']:
             balanceopt = ('--balance-region {}:{} --balance-minimum {}').format(*
                             CONF['balance_check'][sample])
 
-        # This script uses three threads per a parallel job. Process jobs as many as half of
-        # the allowed threads which is optimal as there are some bottlenecks in the first two
-        # processes in each pipe.
-        paralleljobs = max(1, threads // 2)
-        shell('{PYTHON3_CMD} {SCRIPTSDIR}/lint-sequences-sqi.py --id-list {input.whitelist} \
-                --output {output} \
-                --parallel {paralleljobs} {umiopt} {balanceopt} {input.sqi}')
+        if wildcards.sample in CONF['dupcheck_regions']:
+            checkregions = CONF['dupcheck_regions'][wildcards.sample]
+            fingerprintopt = (
+                ' '.join('--fingerprint-region {}:{}'.format(begin, end)
+                         for begin, end in checkregions) +
+                ' --output-duplicity-stats {output.dupstats}'.format(output=output))
+        else:
+            # Touch this file to statisfy the snakemake's output file checks
+            open(output.dupstats, 'w')
+
+        sqifiles = ['{}:{}'.format(tileid, filename)
+                    for tileid, filename in zip(params.tileids, input)]
+
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/filter-sequence-reads.py \
+                --sample-name {wildcards.sample} \
+                --output-filter-stats {output.filtstats} \
+                --output-uniqids {output.uniqids} \
+                --output-uniq-sqi {output.uniqsqi} \
+                --parallel {threads} \
+                {fingerprintopt} {umiopt} {balanceopt} \
+                {sqifiles}')
+
+
+TARGETS.extend(expand('stats/{sample}.duplicates.csv', sample=EXP_SAMPLES))
+rule copy_duplicate_count_stats:
+    input: 'scratch/stats/{sample}.duplicates.csv'
+    output: 'stats/{sample}.duplicates.csv'
+    shell: 'cp {input} {output}'
 
 
 rule collect_color_matrices:
@@ -558,7 +526,7 @@ TARGETS.append('stats/demultiplexing.csv')
 rule merge_demultiplexing_stats:
     input: expand('stats/demultiplexing-{tile}.csv', tile=sorted(TILES))
     output: 'stats/demultiplexing.csv'
-    params: tiles=sorted(TILES)
+    params: tiles=[TILES[tileno] for tileno in sorted(TILES)]
     run:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/stats-merge-demultiplexing-counts.py')
 

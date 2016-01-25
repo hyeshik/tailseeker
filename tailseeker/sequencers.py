@@ -50,8 +50,19 @@ INTENSITIES_SUBDIR = {
 }
 
 
+def encode_gcid(tile, clusterno):
+    return (tile << 32) | (clusterno)
+
+def decode_gcid(gcid):
+    return gcid >> 32, gcid & 0xffffffff
+
+def tile_range_cond(tile, var='gcid'):
+    return '(({var} >= {min}) & ({var} < {max}))'.format(var=var, min=tile << 32,
+                                                         max=(tile + 1) << 32)
+
 def get_tiles(conf):
     tilemaps = {}
+    tileno = 0
 
     for source in conf['sources']:
         try:
@@ -61,17 +72,17 @@ def get_tiles(conf):
                                 source['type']))
 
         for tile in tiles:
-            tileid = source['id'] + tile
-            tilemaps[tileid] = {
+            tilemaps[tileno] = {
                 'datadir': source['dir'],
                 'intensitiesdir':
                     os.path.join(source['dir'], INTENSITIES_SUBDIR[source['type']]),
                 'lane': source['lane'],
                 'type': source['type'],
                 'tile': tile,
-                'id': tileid,
+                'id': tileno,
                 'laneid': source['id'],
             }
+            tileno += 1
 
     return tilemaps
 

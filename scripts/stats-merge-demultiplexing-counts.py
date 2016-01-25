@@ -27,16 +27,17 @@ from tailseeker.powersnake import *
 import pandas as pd
 
 
-def load_tile_demux_table(tile, filename):
+def load_tile_demux_table(tileinfo, filename):
     tbl = pd.read_csv(filename, na_values=None, keep_default_na=False)
-    tbl.insert(0, 'tile', tile)
+    tbl.insert(0, 'lane', tileinfo['lane'])
+    tbl.insert(1, 'tile', tileinfo['tile'])
     return tbl
 
 
 def process(tile_table_pairs, output):
     tilestats = pd.concat(
-        [load_tile_demux_table(tile, tablefile)
-         for tile, tablefile in tile_table_pairs], axis=0)
+        [load_tile_demux_table(tileinfo, tablefile)
+         for tileinfo, tablefile in tile_table_pairs], axis=0)
 
     SUM_FIELDS = 'cln_no_index_mm cln_1_index_mm cln_2+_index_mm cln_no_delim'.split()
     aggfuncs = {c: 'sum' for c in SUM_FIELDS}
@@ -45,9 +46,10 @@ def process(tile_table_pairs, output):
 
     totalsum = tilestats.groupby('name').agg(aggfuncs).reset_index()[tilestats.columns]
     totalsum['tile'] = '(total)'
+    totalsum['lane'] = '(total)'
 
     merged = pd.concat([totalsum,
-                        tilestats.sort_values(by=['name', 'tile'])], axis=0)
+                        tilestats.sort_values(by=['name', 'lane', 'tile'])], axis=0)
     merged['cln_passed'] = (
         merged['cln_no_index_mm cln_1_index_mm cln_2+_index_mm'.split()].sum(axis=1) -
         merged['cln_no_delim'])
