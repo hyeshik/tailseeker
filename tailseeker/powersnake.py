@@ -70,9 +70,9 @@ def load_snakemake_params():
     del os.environ[PARAMETER_PASSING_ENVVAR]
 
     for varname, value in options.items():
-        if not isinstance(value, int):
+        if isinstance(value, tuple) and value[0] == '__snakemake__':
             nl = Namedlist()
-            for k, v in value:
+            for k, v in value[1]:
                 nl.append(v)
                 if k is not None:
                     nl.add_name(k)
@@ -80,7 +80,7 @@ def load_snakemake_params():
         setattr(builtins, varname, value)
 
 
-def external_script(_command):
+def external_script(_command, morevars=[]):
     import inspect, json, tempfile
 
     VARS_TO_PASS = 'input output threads wildcards params'.split()
@@ -88,11 +88,13 @@ def external_script(_command):
     callerlocal = inspect.currentframe().f_back.f_locals
     callerglobal = inspect.currentframe().f_back.f_globals
     packed = {}
-    for var in VARS_TO_PASS:
-        if isinstance(callerlocal[var], int):
-            packed[var] = callerlocal[var]
+    for var in VARS_TO_PASS + morevars:
+        value = callerlocal[var] if var in callerlocal else callerglobal[var]
+
+        if type(value).__module__.startswith('snakemake'):
+            packed[var] = '__snakemake__', list(value.allitems())
         else:
-            packed[var] = list(callerlocal[var].allitems())
+            packed[var] = value
 
     with tempfile.NamedTemporaryFile(mode='wt') as tmpfile:
         json.dump(packed, tmpfile)

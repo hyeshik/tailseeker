@@ -235,20 +235,6 @@ rule demultiplex_signals:
               ' '.join('"{}"'.format(opt) for opt in options))
 
 
-rule merge_sqi:
-    """
-    Merges split sqi.gz files demultiplexed from the original Illumina internal formats
-    into one. This will be indexed using tabix for efficient searching and parallel processing.
-    Although the official design goal of the BGZF format includes simple concatenations
-    of BGZF files, EOF record at the end of the files must be removed during the concatenation.
-    """
-    input: expand('scratch/demux-sqi/{{sample}}_{tile}.sqi.gz', tile=TILES)
-    output: temp('scratch/merged-sqi/{sample}.sqi.gz')
-    run:
-        input = sorted(input) # to make tabix happy.
-        shell('{PYTHON3_CMD} {SCRIPTSDIR}/bgzf-merge.py --output {output} {input}')
-
-
 rule index_tabix:
     input: '{name}.gz'
     output: nonfinal('{name}.gz.tbi')
@@ -310,19 +296,8 @@ rule copy_duplicate_count_stats:
 rule collect_color_matrices:
     output: nonfinal('signalproc/colormatrix.pickle')
     run:
-        import base64, pickle
-
-        matrix_files = {}
-        for vtile, tileinfo in TILES.items():
-            matrix_dir = os.path.join(tileinfo['intensitiesdir'], 'BaseCalls', 'Matrix')
-            matrix_filename = 's_{tileinfo[lane]}_READNO_{tileinfo[tile]}_matrix.txt'.format(
-                                tileinfo=tileinfo)
-            matrix_fn_pattern = os.path.join(matrix_dir, matrix_filename)
-            matrix_files[vtile] = matrix_fn_pattern
-
-        tilemapping = base64.encodebytes(pickle.dumps(matrix_files, 0)).decode('ascii')
-        shell('{PYTHON3_CMD} {SCRIPTSDIR}/collect-color-matrices.py \
-                    --tile-mapping \'{tilemapping}\' --output {output}')
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/collect-color-matrices.py',
+                        ['TILES'])
 
 
 TARGETS.extend(['stats/signal-scaling-basis.csv'])

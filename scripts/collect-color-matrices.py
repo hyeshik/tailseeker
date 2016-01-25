@@ -23,11 +23,13 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
+from tailseeker.powersnake import *
 import numpy as np
 import os
 import re
 import pickle
 import base64
+
 
 def load_colormatrix(filename):
     elements = list(map(float, open(filename).read().split()))
@@ -49,10 +51,9 @@ def load_decrosstalk_matrices(tilemapping):
 
     return matrices
 
-def run(options):
-    tilemapping = pickle.loads(base64.b64decode(options.tilemapping))
+def run(tilemapping, output):
     matrices = load_decrosstalk_matrices(tilemapping)
-    pickle.dump(matrices, open(options.output, 'wb'))
+    pickle.dump(matrices, open(output, 'wb'))
 
 def parse_arguments():
     import argparse
@@ -66,9 +67,23 @@ def parse_arguments():
                         help='Output file for collected matrices')
     options = parser.parse_args()
 
-    return options
+    tilemapping = pickle.loads(base64.b64decode(options.tilemapping))
 
-if __name__ == '__main__':
-    options = parse_arguments()
-    run(options)
+    return tilemapping, options.output
+
+
+if is_snakemake_child:
+    matrix_files = {}
+    for vtile, tileinfo in TILES.items():
+        matrix_dir = os.path.join(tileinfo['intensitiesdir'], 'BaseCalls', 'Matrix')
+        matrix_filename = 's_{tileinfo[lane]}_READNO_{tileinfo[tile]}_matrix.txt'.format(
+                            tileinfo=tileinfo)
+        matrix_fn_pattern = os.path.join(matrix_dir, matrix_filename)
+        matrix_files[vtile] = matrix_fn_pattern
+
+    run(matrix_files, output[0])
+
+elif __name__ == '__main__':
+    tilemapping, output = parse_arguments()
+    run(tilemapping, output)
 
