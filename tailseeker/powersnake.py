@@ -70,7 +70,7 @@ def load_snakemake_params():
     del os.environ[PARAMETER_PASSING_ENVVAR]
 
     for varname, value in options.items():
-        if isinstance(value, tuple) and value[0] == '__snakemake__':
+        if isinstance(value, (tuple, list)) and value[0] == '__snakemake__':
             nl = Namedlist()
             for k, v in value[1]:
                 nl.append(v)

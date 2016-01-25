@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2014-5 Institute for Basic Science
+# Copyright (c) 2014-6 Institute for Basic Science
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,25 +23,23 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
+from tailseeker.powersnake import *
 from tailseeker.fileutils import TemporaryDirectory
-from tailseeker.parsers import parse_sqi
-from tailseeker.parallel import open_tabix_parallel, TabixOpener
 from concurrent import futures
 import subprocess as sp
 import numpy as np
+import pandas as pd
 from numpy import linalg
+import tables
 import os
-import glob
 import pickle
 import sys
-import csv
-import re
 from itertools import chain
 from collections import defaultdict
 
 
 def load_decrosstalk_matrices(options):
-    colormtx = pickle.load(open(options.colormtx, 'rb'))
+    colormtx = pickle.load(open(options['color_matrix'], 'rb'))
 
     decrosstalk_matrices = {}
     for (vtile, readno), mtx in colormtx.items():
@@ -84,38 +82,45 @@ def normalize_spot_intensity(intensity, decrosstalk_matrix, norm_params, interva
                      for basei, (basalvalue, dynrange) in enumerate(norm_params)]).T
 
 
-def collect_signal_stats(options, opener, outputname):
-    tilenumber = None
+def open_signal_iterator(inputfilename):
+    inputfile = tables.open_file(inputfilename, 'r')
+    seqquals = inputfile.get_node('/primary_sqi/PhiX/seqqual')
+    intensities = inputfile.get_node('/primary_sqi/PhiX/intensities')
+
+    return inputfile, zip(seqquals.iterrows(), intensities.iterrows())
+
+
+def collect_signal_stats(options, tileid, inputfile, outputname):
     signalpool = defaultdict(list)
-    readnumber = options.readno
-    decrosstalk_matrices = load_decrosstalk_matrices(options)
+    readnumber = options['readno']
+    decrosstalk_matrix = load_decrosstalk_matrices(options)[tileid, readnumber]
 
-    base2i = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
-    base2iexcluded = {'A': [1, 2, 3], 'C': [0, 2, 3], 'G': [0, 1, 3], 'T': [0, 1, 2]}
+    base2i = {b'A'[0]: 0, b'C'[0]: 1, b'G'[0]: 2, b'T'[0]: 3}
+    base2iexcluded = {b'A'[0]: [1, 2, 3], b'C'[0]: [0, 2, 3],
+                      b'G'[0]: [0, 1, 3], b'T'[0]: [0, 1, 2]}
 
-    read_range = list(map(int, options.readrange.split(':')))
+    read_range = list(options['read_range'])
     read_range[0] -= 1
     read_slice = slice(*read_range)
-    spotreference_slice = slice(read_range[0], read_range[0] + options.spotnormlen)
+    spotreference_slice = slice(read_range[0], read_range[0] + options['spot_norm_length'])
 
-    for spot in parse_sqi(opener()):
-        if tilenumber is None:
-            tilenumber = spot.tile
-            decrosstalk_matrix = decrosstalk_matrices[tilenumber, readnumber]
+    inputtable, itersigs = open_signal_iterator(inputfile)
 
-        norm_params = get_calibration_means(spot.seq, spot.intensity,
+    for seqqual, intensities in itersigs:
+        seq = seqqual['seq']
+
+        norm_params = get_calibration_means(seq, intensities,
                                             decrosstalk_matrix, spotreference_slice)
         if norm_params is None: # no positive signal from any cycles for one or more channels
             continue
 
-        normalized_signal = normalize_spot_intensity(spot.intensity, decrosstalk_matrix,
+        normalized_signal = normalize_spot_intensity(intensities, decrosstalk_matrix,
                                                      norm_params, read_slice)
 
-        for cycleno, (base, normsig) in enumerate(zip(spot.seq[read_slice],
-                                                      normalized_signal)):
+        for cycleno, (base, normsig) in enumerate(zip(seq[read_slice], normalized_signal)):
             signalpool[base, cycleno].append(normsig.tostring())
 
-    cyclenorm_params = {}
+    cyclenorm_params = np.nan * np.ones([read_range[1] - read_range[0], 4, 2])
     bad_cycles = []
     num_samples = []
 
@@ -123,24 +128,24 @@ def collect_signal_stats(options, opener, outputname):
         cycleno_full = cycle + read_range[0]
         cyclesignals = []
 
-        for base in 'ACGT':
+        for base in b'ACGT':
             signals = np.fromstring(b''.join(signalpool[base, cycle]), np.float64)
             cyclesignals.append(signals.reshape([len(signals) // 4, 4]))
 
         # Calculate mean signals for positively or negatively called positions for
         # each of A, C, G, and T in each cycle.
         bad_cycle = False
-        for basei, base in enumerate('ACGT'):
+        for basei, base in enumerate(b'ACGT'):
             if len(cyclesignals[basei]) == 0:
                 print('No positive signal was found for tile {}, cycle {},'
-                      ' base {}'.format(tilenumber, cycle, base), file=sys.stderr)
+                      ' base {}'.format(tileid, cycleno_full, base), file=sys.stderr)
                 bad_cycle = True
                 break
             posmean = cyclesignals[basei][:, basei].mean()
             negmean = np.mean(list(chain(*[cyclesignals[other][:, basei]
                                            for other in base2iexcluded[base]])))
 
-            cyclenorm_params[cycleno_full, base] = negmean, posmean - negmean
+            cyclenorm_params[cycle, basei] = negmean, posmean - negmean
 
         if bad_cycle:
             bad_cycles.append(cycleno_full)
@@ -148,82 +153,85 @@ def collect_signal_stats(options, opener, outputname):
         else:
             num_samples.append(min(map(len, cyclesignals)))
 
+    pickle.dump((tileid, cyclenorm_params, bad_cycles, num_samples), open(outputname, 'wb'))
 
-    pickle.dump(({tilenumber: cyclenorm_params},
-                 {tilenumber: bad_cycles},
-                 {tilenumber: num_samples}), open(outputname, 'wb'))
+    inputtable.close()
 
     return outputname
 
 
-def run(options):
-    infile = options.infile[0]
-    #collect_signal_stats(options, open_tabix_parallel(infile)[0], options.output)
-    #raise SystemExit
-    executorclass = (
-        futures.ThreadPoolExecutor if options.parallel == 1 else futures.ProcessPoolExecutor)
+def write_out_signal_parameters(iter_results, outputfile):
+    with tables.open_file(outputfile, 'w') as outf:
+        sigprocgrp = outf.create_group('/', 'signalproc',
+                                       'Parameters related to signal processing')
+        phixgrp = outf.create_group('/signalproc', 'phix',
+                                    'Signal scale normalization parameters from PhiX')
 
-    with executorclass(options.parallel) as executor, \
+        scalegrp = outf.create_group(phixgrp, 'scaling', 'Scaling normalization ranges')
+        badcyclesgrp = outf.create_group(phixgrp, 'badcycles',
+                                         'List of cycles with low quality signal')
+        refcountsgrp = outf.create_group(phixgrp, 'refcounts',
+                                         'Number of reference spots')
+
+        # Save this for the CSV output later
+        badcycles_ret, refcounts_ret = {}, {}
+
+        for tileid, scaling, badcycles, refcounts in iter_results:
+            tilename = 'tile_{}'.format(tileid)
+
+            scaling_arr = outf.create_array(scalegrp, tilename, scaling)
+            badcycles_arr = outf.create_array(badcyclesgrp, tilename, badcycles)
+            refcounts_arr = outf.create_array(refcountsgrp, tilename, refcounts)
+
+            badcycles_ret[tileid] = badcycles
+            refcounts_ret[tileid] = refcounts
+
+    return badcycles_ret, refcounts_ret
+
+
+def run(options):
+    executorclass = (
+        futures.ThreadPoolExecutor if options['parallel'] == 1 else futures.ProcessPoolExecutor)
+
+    with executorclass(options['parallel']) as executor, \
             TemporaryDirectory(asobj=True) as tmpdir:
         jobs = []
 
-        for jobno, opener in enumerate(open_tabix_parallel(infile)):
+        for tileid, filename in options['infiles'].items():
             outputname = tmpdir.next_output_file()
-            job = executor.submit(collect_signal_stats, options, opener, outputname)
+            job = executor.submit(collect_signal_stats, options, tileid, filename, outputname)
             jobs.append(job)
 
-        scale_parameter_outputs = {}
-        bad_cycles_outputs = {}
-        num_samples_outputs = {}
-        for j in jobs:
-            scaleparams, badcycles, numsamples = pickle.load(open(j.result(), 'rb'))
-            scale_parameter_outputs.update(scaleparams)
-            bad_cycles_outputs.update(badcycles)
-            num_samples_outputs.update(numsamples)
+        iter_results = (pickle.load(open(j.result(), 'rb')) for j in jobs)
+        badcycles, refcounts = write_out_signal_parameters(iter_results, options['output'])
 
-        pickle.dump(scale_parameter_outputs, open(options.output, 'wb'))
+        if options['output_sample_count'] is not None:
+            refcountstbl = pd.DataFrame.from_items(sorted(refcounts.items()))
+            refcountstbl.index += options['read_range'][0]
+            refcountstbl.index.rename('cycle', inplace=True)
+            refcountstbl.to_csv(options['output_sample_count'])
 
-        if options.samplecountcsv is not None:
-            sc_out = csv.writer(open(options.samplecountcsv, 'w'))
-            read_range = list(map(int, options.readrange.split(':')))
-
-            sc_out.writerow(['Tile'] + list(range(read_range[0], read_range[1] + 1)))
-            for tile, samplecounts in sorted(num_samples_outputs.items()):
-                sc_out.writerow([tile] + samplecounts)
+        if options['output_bad_cycles'] is not None:
+            badcyclestbl = pd.DataFrame.from_items([
+                                (tile, [len(cycles), ' '.join(map(str, cycles))])
+                                 for tile, cycles in sorted(badcycles.items())]).T
+            badcyclestbl.columns = ('count', 'cycle numbers')
+            badcyclestbl.index.rename('tile', inplace=True)
+            badcyclestbl.to_csv(options['output_bad_cycles'])
 
 
-def parse_arguments():
-    import argparse
+if is_snakemake_child:
+    options = {
+        'infiles': dict(zip(params.tileids, input.signals)),
+        'parallel': threads,
+        'output': output.paramout,
+        'readno': readno,
+        'color_matrix': input.colormatrix,
+        'read_range': (readstart, readend),
+        'spot_norm_length': spotnormlen,
+        'output_sample_count': output.refcntstats_out,
+        'output_bad_cycles': output.badcycles_out,
+    }
 
-    parser = argparse.ArgumentParser(description='Calculates normalization parameters '
-                                                 'for fluorescence signals')
-    parser.add_argument(dest='infile', metavar='FILE', type=str, nargs=1,
-                        help='Path to a sqi file')
-    parser.add_argument('--parallel', dest='parallel', metavar='NUMBER', type=int, default=1,
-                        help='Number of parallel processes')
-    parser.add_argument('--output', dest='output', metavar='FILE', type=str, required=True,
-                        help='Output file for collected statistics')
-    parser.add_argument('--read', dest='readno', metavar='NUMBER', type=int, required=True,
-                        help='Read number to process (3 in the standard paired-end setup).')
-    parser.add_argument('--color-matrix', dest='colormtx', metavar='FILE', type=str,
-                        required=True,
-                        help='Path to a pickle file that contains color matrices.')
-    parser.add_argument('--read-range', dest='readrange', metavar='start:end', type=str,
-                        required=True,
-                        help='Cycle number range of the read in 1-based inclusive coordinate.')
-    parser.add_argument('--spot-norm-length', dest='spotnormlen', metavar='LEN', type=int,
-                        default=20,
-                        help='Use the first N cycles for detection of spot brightness')
-    parser.add_argument('--sample-number-stats', dest='samplecountcsv', metavar='FILE',
-                        type=str, default=None,
-                        help='Statistical output for sample counts used in distribution '
-                             'estimations.')
-    options = parser.parse_args()
-
-    return options
-
-
-if __name__ == '__main__':
-    options = parse_arguments()
     run(options)
 

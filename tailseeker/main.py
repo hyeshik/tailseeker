@@ -296,28 +296,27 @@ rule copy_duplicate_count_stats:
 rule collect_color_matrices:
     output: nonfinal('signalproc/colormatrix.pickle')
     run:
-        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/collect-color-matrices.py',
-                        ['TILES'])
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/collect-color-matrices.py', ['TILES'])
 
 
-TARGETS.extend(['stats/signal-scaling-basis.csv'])
+TARGETS.extend(['stats/signal-scaling-references.csv',
+                'stats/signal-scaling-badcycles.csv',])
 rule calculate_phix_signal_scaling_factor:
     input:
-        phix='scratch/merged-sqi/PhiX.sqi.gz',
-        phix_index='scratch/merged-sqi/PhiX.sqi.gz.tbi',
+        signals=expand('tables/primary_sqi/PhiX_{tile}.h5', tile=sorted(TILES)),
         colormatrix='signalproc/colormatrix.pickle'
     output:
-        paramout=nonfinal('signalproc/signal-scaling.phix-ref.pickle'),
-        statsout='stats/signal-scaling-basis.csv'
+        paramout=nonfinal('tables/signalproc/phix.h5'),
+        refcntstats_out='stats/signal-scaling-references.csv',
+        badcycles_out='stats/signal-scaling-badcycles.csv'
+    params: tileids=sorted(TILES)
     threads: THREADS_MAXIMUM_CORE
-    resources: high_end_cpu=1
     run:
         readstart, readend, readno = CONF['read_cycles']['R3']
-        shell('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-phix-signal-scaler.py --parallel {threads} \
-                --output {output.paramout} --read {readno} \
-                --read-range {readstart}:{readend} \
-                --color-matrix {input.colormatrix} \
-                --sample-number-stats {output.statsout} {input.phix}')
+        spotnormlen = 20 # Use first N cycles for detection of spot brightness
+
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-phix-signal-scaler.py',
+                        ['readstart', 'readend', 'readno', 'spotnormlen'])
 
 
 rule prepare_signal_stabilizer:

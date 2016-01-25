@@ -39,7 +39,7 @@ def load_decrosstalk_matrices(tilemapping):
     matrices = {}
 
     for tile, path in tilemapping.items():
-        tile = str(tile)
+        tile = int(tile)
         path = str(path)
 
         allfiles = os.listdir(os.path.dirname(path))
@@ -55,22 +55,6 @@ def run(tilemapping, output):
     matrices = load_decrosstalk_matrices(tilemapping)
     pickle.dump(matrices, open(output, 'wb'))
 
-def parse_arguments():
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Collect color matrices from the original '
-                                                 'run output')
-    parser.add_argument('--tile-mapping', dest='tilemapping', metavar='STR', type=str,
-                        required=True,
-                        help='base64-encoded pickle dump of a dictionary')
-    parser.add_argument('--output', dest='output', metavar='FILE', type=str, required=True,
-                        help='Output file for collected matrices')
-    options = parser.parse_args()
-
-    tilemapping = pickle.loads(base64.b64decode(options.tilemapping))
-
-    return tilemapping, options.output
-
 
 if is_snakemake_child:
     matrix_files = {}
@@ -82,8 +66,4 @@ if is_snakemake_child:
         matrix_files[vtile] = matrix_fn_pattern
 
     run(matrix_files, output[0])
-
-elif __name__ == '__main__':
-    tilemapping, output = parse_arguments()
-    run(tilemapping, output)
 
