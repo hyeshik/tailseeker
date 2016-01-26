@@ -45,7 +45,7 @@ def load_decrosstalk_matrices(tilemapping):
         allfiles = os.listdir(os.path.dirname(path))
         fnpattern = re.compile(os.path.basename(path).replace('READNO', '(\d+)'))
         for match in filter(None, (fnpattern.search(fn) for fn in allfiles)):
-            readno = match.groups()[0]
+            readno = int(match.groups()[0])
             fullfn = os.path.join(os.path.dirname(path), match.group())
             matrices[tile, readno] = load_colormatrix(fullfn)
 

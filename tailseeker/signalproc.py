@@ -26,6 +26,7 @@
 import pickle
 import time
 import numpy as np
+import tables
 from numpy import linalg
 from scipy.interpolate import interp1d
 
@@ -43,8 +44,7 @@ class TAILseqSignalProcessor:
         self.read_interval = slice(intv_start, intv_stop)
         self.intensity_norm_length = intensity_norm_length
 
-        scale_orig = pickle.load(open(normparamsfile, 'rb'))
-        self.scaleparams = self.adopt_scale_params(scale_orig)
+        self.scaleparams = self.load_scale_params(normparamsfile)
         self.colormtx = self.load_decrosstalk_matrices(colormtxfile, readname)
 
         self.lowsignalmask = lowsignalmask
@@ -59,16 +59,16 @@ class TAILseqSignalProcessor:
 
         return decrosstalk_matrices
 
-    def adopt_scale_params(self, original_params):
+    def load_scale_params(self, normparamsfile):
         scale_params = {}
         na_fill = (np.nan, np.nan)
 
-        for tile, params in original_params.items():
-            structured_params = np.array([[params.get((cycle, base), na_fill)
-                                           for base in 'ACGT']
-                                         for cycle in range(self.intv_start, self.intv_stop)])
-            scale_params[tile] = structured_params.transpose()
-            # shape = (2, 4, 251) in the standard setup
+        with tables.open_file(normparamsfile, 'r') as npfile:
+            for sarray in npfile.get_node('/signalproc/phix/scaling'):
+                tileid = int(sarray.name.split('_')[-1])
+
+                scale_params[tileid] = np.transpose(sarray)
+                # shape = (2, 4, 251) in the standard setup
 
         return scale_params
 

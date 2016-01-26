@@ -322,33 +322,40 @@ rule calculate_phix_signal_scaling_factor:
 rule prepare_signal_stabilizer:
     input:
         colormatrix='signalproc/colormatrix.pickle',
-        signals='sequences/{sample}.sqi.gz',
-        signals_index='sequences/{sample}.sqi.gz.tbi',
-        cyclescaling='signalproc/signal-scaling.phix-ref.pickle'
-    output: nonfinal('signalproc/signal-scaling-{sample}.stabilizer.pickle')
+        signals='tables/sqi/{sample}.h5',
+        globalscaling='tables/signalproc/phix.h5'
+    output: nonfinal('tables/signalproc/sample_{sample}.h5')
     threads: THREADS_MAXIMUM_CORE
     run:
-        umi_length = CONF['umi_length'][wildcards.sample]
-        high_probe_range = '{}:{}'.format(
-                umi_length + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[0],
-                umi_length + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[1])
-        high_probe_scale_inspection = '{}:{}'.format(
-                umi_length + SIGNAL_STABILIZER_TARGET_RANGE[0],
-                umi_length + SIGNAL_STABILIZER_TARGET_RANGE[1])
-        high_probe_scale_basis = '{}:{}'.format(
-                umi_length + SIGNAL_STABILIZER_REFERENCE_RANGE[0],
-                umi_length + SIGNAL_STABILIZER_REFERENCE_RANGE[1])
+        balancer_length = CONF['umi_length'][wildcards.sample]
+        normalizer_conf = CONF['persample_signal_normalizer']
+        read_cycles = CONF['read_cycles']
 
-        cyclestart, cycleend, readno = CONF['read_cycles']['R3']
-        shell('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-signal-stabilizer.py \
-                --parallel {threads} --output {output} \
-                --read {readno} --color-matrix {input.colormatrix} \
-                --cycle-scaling {input.cyclescaling} \
-                --high-probe-range {high_probe_range} \
-                --high-probe-scale-inspection {high_probe_scale_inspection} \
-                --high-probe-scale-basis {high_probe_scale_basis} \
-                --read-range {cyclestart}:{cycleend} --spot-norm-length {umi_length} \
-                {input.signals}')
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-signal-stabilizer.py',
+                        ['balancer_length', 'normalizer_conf', 'read_cycles'])
+
+        if 0:
+            balancer_length = CONF['umi_length'][wildcards.sample]
+            high_probe_range = '{}:{}'.format(
+                    balancer_length + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[0],
+                    balancer_length + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[1])
+            high_probe_scale_inspection = '{}:{}'.format(
+                    balancer_length + SIGNAL_STABILIZER_TARGET_RANGE[0],
+                    balancer_length + SIGNAL_STABILIZER_TARGET_RANGE[1])
+            high_probe_scale_basis = '{}:{}'.format(
+                    balancer_length + SIGNAL_STABILIZER_REFERENCE_RANGE[0],
+                    balancer_length + SIGNAL_STABILIZER_REFERENCE_RANGE[1])
+
+            cyclestart, cycleend, readno = CONF['read_cycles']['R3']
+            shell('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-signal-stabilizer.py \
+                    --parallel {threads} --output {output} \
+                    --read {readno} --color-matrix {input.colormatrix} \
+                    --cycle-scaling {input.cyclescaling} \
+                    --high-probe-range {high_probe_range} \
+                    --high-probe-scale-inspection {high_probe_scale_inspection} \
+                    --high-probe-scale-basis {high_probe_scale_basis} \
+                    --read-range {cyclestart}:{cycleend} --spot-norm-length {balancer_length} \
+                    {input.signals}')
 
 
 def determine_inputs_calc_pasignals_v2(wildcards):
