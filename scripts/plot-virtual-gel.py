@@ -133,7 +133,7 @@ def plot(options, controlsamples, expsamples):
         LANE_SPACE + LANE_WIDTH * len(samples), LANE_WIDTH)
 
     ax.set_xticks(sample_label_tickpos)
-    ax.set_xticklabels(samples, rotation=60)
+    ax.set_xticklabels(samples, rotation=60, ha='left', va='bottom')
 
     ax.xaxis.tick_top()
 
