@@ -42,7 +42,7 @@ def create_tables(h5, group, samplename, tileid, ncycles, nchannels):
     seqqual = h5.create_table(subgroup, 'seqqual', SeqQual,
                               'Sequences and quality scores for sample {} from '
                               'tile {}'.format(samplename, tileid))
-    intensities = h5.create_earray(subgroup, 'intensities', tables.UInt8Atom(),
+    intensities = h5.create_earray(subgroup, 'intensities', tables.Int16Atom(),
                                    (0, ncycles, nchannels),
                 'Signal intensities for sample {} from tile {}'.format(samplename, tileid))
 
@@ -71,7 +71,7 @@ def sqi2tbl(output_file, input_file, samplename, tileid, compression_level):
             intensities.append([spot.intensity])
 
         if seqqual is not None:
-            seqqual.cols.cluster.create_csindex()
+            seqqual.cols.gcid.create_csindex()
 
 
 def parse_arguments():

@@ -334,29 +334,6 @@ rule prepare_signal_stabilizer:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-signal-stabilizer.py',
                         ['balancer_length', 'normalizer_conf', 'read_cycles'])
 
-        if 0:
-            balancer_length = CONF['umi_length'][wildcards.sample]
-            high_probe_range = '{}:{}'.format(
-                    balancer_length + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[0],
-                    balancer_length + SIGNAL_STABILIZER_POLYA_DETECTION_RANGE[1])
-            high_probe_scale_inspection = '{}:{}'.format(
-                    balancer_length + SIGNAL_STABILIZER_TARGET_RANGE[0],
-                    balancer_length + SIGNAL_STABILIZER_TARGET_RANGE[1])
-            high_probe_scale_basis = '{}:{}'.format(
-                    balancer_length + SIGNAL_STABILIZER_REFERENCE_RANGE[0],
-                    balancer_length + SIGNAL_STABILIZER_REFERENCE_RANGE[1])
-
-            cyclestart, cycleend, readno = CONF['read_cycles']['R3']
-            shell('{PYTHON3_CMD} {SCRIPTSDIR}/prepare-signal-stabilizer.py \
-                    --parallel {threads} --output {output} \
-                    --read {readno} --color-matrix {input.colormatrix} \
-                    --cycle-scaling {input.cyclescaling} \
-                    --high-probe-range {high_probe_range} \
-                    --high-probe-scale-inspection {high_probe_scale_inspection} \
-                    --high-probe-scale-basis {high_probe_scale_basis} \
-                    --read-range {cyclestart}:{cycleend} --spot-norm-length {balancer_length} \
-                    {input.signals}')
-
 
 def determine_inputs_calc_pasignals_v2(wildcards):
     sample = wildcards.sample
