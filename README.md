@@ -22,12 +22,13 @@ using it.
       [my patch](https://github.com/hyeshik/AYB2) to work with the recent Illumina
       sequencers.
   * Python modules
-    * [Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home)
+    * [Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home) - 3.5 or higher
     * [GHMM](http://ghmm.org) – use
       [my helper script](https://github.com/hyeshik/tailseeker/blob/master/support/install-ghmm.sh) to
       install it for Python 3.
     * [NumPy](http://numpy.org)
     * [SciPy](http://www.scipy.org)
+    * [pandas](http://pandas.pydata.org)
     * [BioPython](http://biopython.org/wiki/Main_Page)
     * [scikit-learn](http://scikit-learn.org/stable/)
     * [matplotlib](http://matplotlib.org)
