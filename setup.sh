@@ -163,7 +163,9 @@ build_internal_programs()
   echo ""
   rm -rf "$TOPDIR/bin"
   make || return 1
-  $PYTHON setup.py build $1 || return 1
+
+  distutils_args=$(echo "$1" | sed -e 's/--user//g')
+  $PYTHON setup.py build $distutils_args || return 1
 }
 
 install_internal_programs()

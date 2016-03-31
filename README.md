@@ -1,17 +1,117 @@
-## Tailseeker 2.0
+# Tailseeker 2
 
-Dependencies:
+Tailseeker is the official pipeline for TAIL-seq, which measures poly(A) tail
+lengths and 3′-end modifications with Illumina SBS sequencers.
 
- * GSNAP or STAR
- * samtools
- * htslib
- * GHMM
- * Python 3.4 or higher
- * AYB2 (optional) -- install my patched version from https://github.com/hyeshik/AYB2
- * pip3 install -r requirements.txt
+It is not yet fully stable for generic uses. Please feel free to ask anything
+to Hyeshik Chang &lt;hyeshik@snu.ac.kr&gt; whenever you are stuck on a problem while
+using it. 
+
+## Prerequisite tools
+
+  * Python 3.3 or higher
+  * Generic build tools
+    * pkg-config
+    * bash
+    * wget
+    * make and a C compiler toolchain
+    * whiptail
+  * Command line tools for bioinformatics
+    * [htslib](http://www.htslib.org)
+    * [All Your Bases](http://www.ebi.ac.uk/goldman-srv/AYB/) - requires
+      [my patch](https://github.com/hyeshik/AYB2) to work with the recent Illumina
+      sequencers.
+  * Python modules
+    * [Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home)
+    * [GHMM](http://ghmm.org) – use
+      [my helper script](https://github.com/hyeshik/tailseeker/blob/master/support/install-ghmm.sh) to
+      install it for Python 3.
+    * [NumPy](http://numpy.org)
+    * [SciPy](http://www.scipy.org)
+    * [BioPython](http://biopython.org/wiki/Main_Page)
+    * [scikit-learn](http://scikit-learn.org/stable/)
+    * [matplotlib](http://matplotlib.org)
+    * [PyYAML](http://pyyaml.org)
+
+The toolchains and generic command line utilities can be installed if
+you're managing a Ubuntu box:
+
+    sudo apt-get install whiptail pkg-config gcc wget make
+
+You can install the Python modules in the list with this command from the
+top source directory:
+
+    pip3 install --user -r src/requirements.txt
 
 
-## Tailseeker package
+## Installing
+
+A script in the top directory will check the paths of prerequisite tools and 
+guide you to set configurations correctly. Please run:
+
+    ./setup.sh
+
+
+## Running the pipeline
+
+  1. Copy the full output hierarchy from MiSeq or HiSeq to somewhere in
+     your machine.
+  2. Create an empty scratch directory. This is used for storing temporary files
+     which is accessed by usually heavily I/O-bound tasks. It is recommended
+     to locate this in a SSD or a mirrored RAID volume.
+  3. Create an empty work directory. This is used for storing the final result
+     files and the intermediate files which you may want to look into when
+     something went wrong.
+  4. Copy `templates/miseq-v2.yaml` to the work directory as a new name `tailseeker.yaml`.
+  5. Edit the copied setting file, `tailseeker.yaml`, to change the options and
+     paths to the directories. More options are specified in `conf/default-miseq.conf` and
+     `conf/defaults.conf`. They are overridden if you put lines in your `tailseeker.yaml`.
+  6. Run the pipeline with one of these commands:
+ 
+     ```sh
+     # In case you have an access to a job queuing system of a cluster. Change 150 to the
+     # maximum number of jobs that you can put into the queue at a time.
+     tailseeker run -c qsub -j 150
+
+     # In case you have a single multi-core machine,
+     tailseeker run -j
+     ```
+
+     All [Snakemake options](https://bitbucket.org/snakemake/snakemake/wiki/Documentation#markdown-header-all-options)
+     can be used in `tailseeker run`, too.
+
+  7. Take a look at the `qcplots/` on the work directory. The plots there show how
+     poly(A) length calling was accurate.
+
+  8. Use FASTQ files in `fastq/` for the subsequent analyses. It will contain
+     `_R5.fastq.gz` and `_R3.fastq.gz` files for each sample. `_R5` includes
+     the sequences from the 5′-end of the RNA fragments, which is generally
+     sequenced by read 1. `_R3` is from the other end. Each sequence entry
+     has the identifier names in the following structure:
+
+    ```
+      +------------------------- Tile number with an internal lane identifier.
+      |       +----------------- Serial number of the sequence, which is unique
+      |       |                  in the tile.
+    a1101:00003863:010:002
+                    |   |
+                    |   +------- Length of additions modifications to poly(A).
+                    +----------- Length of poly(A) tail.
+                    
+    When a sequence AATTTTTTTTTTGTACGGAT is found in the _R3 file with the name
+    above, it can be understood that:
+     - Poly(A) length is 10 nt.
+     - There is a two nt-long U tail to the poly(A) tail.
+       (_R3 is in its reverse complement form.)
+     - The 3′-end sequence of 3′ UTR or a transcript body is ATCCGTAC. This is
+       usually not reliable when poly(A) tail is longer than ~12 nt due to
+       the untrackable phasing issues in long homopolymers.
+    ```
+
+
+# Software licenses
+
+## The tailseeker suite
 
 Copyright (c) 2013-2016 Institute for Basic Science
 
