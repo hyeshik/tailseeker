@@ -1,0 +1,19 @@
+include:    defaults-miseq.conf
+
+run_id:         ms054
+scratch_dir:    /scratch/hyeshik/tailseeker/ms054
+sources:
+    - id:       a
+      type:     MiSeq-V2
+      dir:      /datastore/miseq/2015/150319_M00714_0319_000000000-AWLWL
+      lane:     1
+
+experimental_samples:
+    Control1:   GCCAAT
+    Control2:   TGATAC
+    KD1:        ATGAGC
+    KD2:        CAGGCG
+
+clean_intermediate_files: immediately
+
+# ex: sw=4 sts=4 et
