@@ -27,6 +27,7 @@
 __all__ = [
     'prepare_cumulative',
     'colormap_lch',
+    'estimate_2d_density',
 ]
 
 import numpy as np
@@ -53,4 +54,10 @@ def prepare_cumulative(grp, width=100, reverse=False):
     if reverse:
         yvalues = yvalues[::-1]
     return xvalues, yvalues
+
+def estimate_2d_density(x, y, bw=None):
+    from scipy.stats import gaussian_kde
+    positions = np.vstack([x, y])
+    kernel = gaussian_kde(positions, bw_method=bw)
+    return kernel(positions)
 
