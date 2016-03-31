@@ -3,17 +3,17 @@ CC=	gcc
 CFLAGS=	-O3 -Wall -Werror
 bindir=	../bin
 
-PROG=	${bindir}/sqi2fq ${bindir}/tailseq-retrieve-signals
+PROG=	${bindir}/sqi2fq ${bindir}/tailseq-sigproc
 
-RETRIEVE_SIGNALS_OBJECTS=	\
-	retrieve-signals/tailseq-retrieve-signals.o \
-	retrieve-signals/cifreader.o \
-	retrieve-signals/bclreader.o \
-	retrieve-signals/altcalls.o \
-	retrieve-signals/phix_control.o \
-	retrieve-signals/controlaligner.o \
-	retrieve-signals/my_strstr.o \
-	retrieve-signals/ssw.o
+SIGPROC_OBJECTS=	\
+	sigproc/tailseq-sigproc.o \
+	sigproc/cifreader.o \
+	sigproc/bclreader.o \
+	sigproc/altcalls.o \
+	sigproc/phix_control.o \
+	sigproc/controlaligner.o \
+	sigproc/my_strstr.o \
+	sigproc/ssw.o
 
 SQI2FQ_OBJECTS=	\
 	sqi2fq/sqi2fq.o
@@ -23,12 +23,12 @@ SQI2FQ_OBJECTS=	\
 .c.o:
 	${CC} -c ${CFLAGS} ${DFLAGS} ${INCLUDES} $< -o $@
 
-all: ${bindir}/sqi2fq ${bindir}/tailseq-retrieve-signals
+all: ${bindir}/sqi2fq ${bindir}/tailseq-sigproc
 #	python setup.py install --user
 #	python test.py
 
 clean:
-	rm -f ${RETRIEVE_SIGNALS_OBJECTS} ${SQI2FQ_OBJECTS}
+	rm -f ${SIGPROC_OBJECTS} ${SQI2FQ_OBJECTS}
 
 distclean: clean
 	rm -f ${PROG}
@@ -37,6 +37,6 @@ ${bindir}/sqi2fq: ${SQI2FQ_OBJECTS}
 	mkdir -p ${bindir}
 	${CC} ${CFLAGS} -o $@ $<
 
-${bindir}/tailseq-retrieve-signals: ${RETRIEVE_SIGNALS_OBJECTS}
-	${CC} ${CFLAGS} -o $@ ${RETRIEVE_SIGNALS_OBJECTS} -lz
+${bindir}/tailseq-sigproc: ${SIGPROC_OBJECTS}
+	${CC} ${CFLAGS} -o $@ ${SIGPROC_OBJECTS} -lz
 

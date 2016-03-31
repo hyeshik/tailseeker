@@ -32,7 +32,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <endian.h>
-#include "tailseq-retrieve-signals.h"
+#include "tailseq-sigproc.h"
 
 
 #define CIF_HEADER_SIZE 13

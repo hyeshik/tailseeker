@@ -1,5 +1,5 @@
 /*
- * tailseq-retrieve-signals.h
+ * tailseq-sigproc.h
  *
  * Copyright (c) 2015 Hyeshik Chang
  * 
@@ -24,8 +24,8 @@
  * - Hyeshik Chang <hyeshik@snu.ac.kr>
  */
 
-#ifndef _TAILSEQ_RETRIEVE_SIGNALS_H_
-#define _TAILSEQ_RETRIEVE_SIGNALS_H_
+#ifndef _TAILSEQ_SIGPROC_H_
+#define _TAILSEQ_SIGPROC_H_
 
 #include <stdio.h>
 #include <stdint.h>

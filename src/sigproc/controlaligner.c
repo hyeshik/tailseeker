@@ -35,7 +35,7 @@
 #include <limits.h>
 #include <endian.h>
 #include <zlib.h>
-#include "tailseq-retrieve-signals.h"
+#include "tailseq-sigproc.h"
 #include "ssw.h"
 
 

@@ -1,5 +1,5 @@
 /*
- * tailseq-retrieve-signals.c
+ * tailseq-sigproc.c
  *
  * Copyright (c) 2015 Hyeshik Chang
  * 
@@ -33,7 +33,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include "tailseq-retrieve-signals.h"
+#include "tailseq-sigproc.h"
 
 
 #define DEFAULT_BATCH_BLOCK_SIZE    262144
@@ -482,7 +482,7 @@ static void
 usage(const char *prog)
 {
     printf("\
-tailseq-retrieve-signals 2.0\
+tailseq-sigproc 3.0\
 \n - collects intensities and base calls from Illumina sequencing for TAIL-seq\
 \n\
 \nUsage: %s [OPTION]...\
