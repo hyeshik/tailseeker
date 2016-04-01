@@ -116,7 +116,9 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
                       int scalefactor, int barcode_start, int barcode_length,
                       struct BarcodeInfo *barcodes,
                       struct CIFData **intensities, struct BCLData **basecalls,
-                      struct ControlFilterInfo *control_info, int keep_no_delimiter)
+                      struct ControlFilterInfo *control_info,
+                      struct PolyARulerParameters *ruler_params,
+                      int keep_no_delimiter)
 {
     uint32_t cycleno, clusterno;
     uint32_t clustersinblock;
@@ -131,6 +133,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
     int32_t min_control_alignment_score, control_alignment_mask_len;
 
     struct PolyAFinderParameters *polya_params;
+
 
     /* set the starting point of index matching to non-special (other than Unknown and control)
      * barcodes */
@@ -231,9 +234,44 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
 
             /* Process the signals */
 #define POLYA_SIGNAL_PROC_TRIGGER   10
+#define READ2_START                 57 /* 0-based, right-excluded */
+#define READ2_END                   308 /* 0-based, right-excluded */
+#define READ2_LENGTH                (308-57)
             polya_len = polya_end - polya_start;
             if (polya_len >= POLYA_SIGNAL_PROC_TRIGGER) {
-                ;
+                struct IntensitySet spot_intensities[READ2_LENGTH];
+                int polya_len_from_sig;
+
+                fetch_intensity(spot_intensities, intensities, READ2_START,
+                                READ2_LENGTH, clusterno);
+                printf(" --> %c %d %d %d %d\n", sequence_formatted[READ2_START],
+                            spot_intensities[0].value[0],
+                            spot_intensities[0].value[1],
+                            spot_intensities[0].value[2],
+                            spot_intensities[0].value[3]);
+                {
+                    /* XXX Temporary testing for decrosstalk */
+                    float dsignals[4];
+                    float *colormtxptr;
+                    int j;
+
+                    colormtxptr = ruler_params->colormatrix;
+                    for (j = 0; j < 4; j++) {
+                        dsignals[j] =
+                            colormtxptr[0] * spot_intensities[0].value[0] +
+                            colormtxptr[1] * spot_intensities[0].value[1] +
+                            colormtxptr[2] * spot_intensities[0].value[2] +
+                            colormtxptr[3] * spot_intensities[0].value[3];
+                        colormtxptr += 4;
+                    }
+
+                    printf(" --> %.1f %.1f %.1f %.1f\n",
+                            dsignals[0], dsignals[1], dsignals[2], dsignals[3]);
+                }
+
+                polya_len_from_sig = measure_polya_len(spot_intensities,
+                        sequence_formatted + READ2_START, READ2_LENGTH, ruler_params);
+                printf(" --> %d\n", polya_len_from_sig);
             }
         }
 
@@ -375,7 +413,7 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
         int scalefactor, int barcode_start, int barcode_length,
         struct BarcodeInfo *barcodes, const char *writercmd,
         struct AlternativeCallInfo *altcalls, struct ControlFilterInfo *control_info,
-        int blocksize, int keep_no_delimiter)
+        struct PolyARulerParameters *rulerparams, int blocksize, int keep_no_delimiter)
 {
     struct CIFReader **cifreader;
     struct BCLReader **bclreader;
@@ -429,7 +467,7 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
         printf("%sDemultiplexing and writing\n", msgprefix);
         if (demultiplex_and_write(laneid, tile, ncycles, nclusters - clusters_to_go,
                                   scalefactor, barcode_start, barcode_length, barcodes,
-                                  intensities, basecalls, control_info,
+                                  intensities, basecalls, control_info, rulerparams,
                                   keep_no_delimiter) == -1)
             goto onError;
 
@@ -528,6 +566,7 @@ tailseq-sigproc 3.0\
 \n  -a,  --barcode-length=NUM         length of index read.\
 \n  -w,  --writer-command=COMMAND     shell command to run to write .sqi\
 \n                                    output (usually a stream compressor.)\
+\n  -x,  --color-matrix=PATH          fluorescence crosstalk estimation matrix.\
 \n\
 \nOptional parameters:\
 \n  -s,  --signal-scale=NUM           number of digits in radix 2 to scale\
@@ -556,6 +595,7 @@ main(int argc, char *argv[])
 {
     char *datadir, *runid, *writercmd;
     char *demultiplex_stats_filename;
+    char *color_matrix_filename;
     int keep_no_delimiter_flag;
     int lane, tile, ncycles, blocksize;
     int barcode_start, barcode_length;
@@ -563,6 +603,7 @@ main(int argc, char *argv[])
     struct BarcodeInfo *barcodes;
     struct AlternativeCallInfo *altcalls;
     struct ControlFilterInfo controlinfo;
+    struct PolyARulerParameters rulerparams;
     int c, r;
 
     struct option long_options[] =
@@ -582,12 +623,14 @@ main(int argc, char *argv[])
         {"filter-control",      required_argument,  0,                          'f'},
         {"block-size",          required_argument,  0,                          'B'},
         {"demultiplex-stats",   required_argument,  0,                          'o'},
+        {"color-matrix",        required_argument,  0,                          'x'},
         {"help",                no_argument,        0,                          'h'},
         {0, 0, 0, 0}
     };
 
     datadir = runid = writercmd = NULL;
     demultiplex_stats_filename = NULL;
+    color_matrix_filename = NULL;
     keep_no_delimiter_flag = 0;
     lane = tile = ncycles = barcode_start = -1;
     scalefactor = 0;
@@ -598,10 +641,24 @@ main(int argc, char *argv[])
     controlinfo.first_cycle = controlinfo.read_length = -1;
     blocksize = DEFAULT_BATCH_BLOCK_SIZE;
 
+    /* XXX TEMPORARY ================ */
+    rulerparams.balancer_start = 0;
+    rulerparams.balancer_end = 20;
+    rulerparams.balancer_minimum_occurrence = 2;
+    rulerparams.balancer_num_positive_samples = 2;
+    rulerparams.balancer_num_negative_samples = 4;
+    rulerparams.dark_cycles_threshold = 10;
+    rulerparams.max_dark_cycles = 5;
+    rulerparams.polya_score_threshold = .2;
+    rulerparams.tsignal_term_k = 15;
+    rulerparams.tsignal_term_center = .75;
+    /* XXX TEMPORARY ================ */
+
     while (1) {
         int option_index=0;
 
-        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:hf:B:o:", long_options, &option_index);
+        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:hf:B:o:x:", long_options,
+                        &option_index);
 
         /* Detect the end of the options. */
         if (c == -1)
@@ -800,6 +857,10 @@ main(int argc, char *argv[])
                 demultiplex_stats_filename = strdup(optarg);
                 break;
 
+            case 'x': /* --color-matrix */
+                color_matrix_filename = strdup(optarg);
+                break;
+
             case 'h':
                 usage(argv[0]);
                 exit(0);
@@ -868,6 +929,16 @@ main(int argc, char *argv[])
         return -1;
     }
 
+    if (color_matrix_filename == NULL) {
+        usage(argv[0]);
+        fprintf(stderr, "--color-matrix is not set.\n");
+        return -1;
+    }
+
+    if (load_color_matrix(rulerparams.colormatrix,
+                          color_matrix_filename) < 0)
+        return -1;
+
     if (controlinfo.first_cycle >= 0) {
         struct BarcodeInfo *control;
 
@@ -922,7 +993,7 @@ main(int argc, char *argv[])
 
         r = process(datadir, runid, lane, tile, ncycles, scalefactor, barcode_start,
                     barcode_length, barcodes, writercmd, altcalls,
-                    pctlinfo, blocksize, keep_no_delimiter_flag);
+                    pctlinfo, &rulerparams, blocksize, keep_no_delimiter_flag);
     }
     
     free(datadir);
