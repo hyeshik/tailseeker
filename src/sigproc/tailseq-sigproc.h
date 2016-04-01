@@ -120,6 +120,8 @@ struct ControlFilterInfo {
 #define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
 #define CONTROL_ALIGN_MINIMUM_SCORE         0.65
 
+struct PolyAFinderParameters;
+
 
 /* bclreader.c */
 extern struct BCLReader *open_bcl_file(const char *filename);
@@ -173,5 +175,13 @@ extern int try_alignment_to_control(const char *sequence_read, const int8_t *con
 
 /* my_strstr.c */
 extern char *my_strnstr(const char *s, const char *find, size_t len);
+
+/* findpolya.c */
+extern struct PolyAFinderParameters *create_polya_finder_parameters(int score_t,
+                    int score_acg, int score_n, size_t max_term_mod);
+extern void destroy_polya_finder_parameters(struct PolyAFinderParameters *params);
+extern uint32_t find_polya(const char *seq, size_t seqlen,
+                           struct PolyAFinderParameters *params);
+
 
 #endif
