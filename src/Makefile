@@ -13,6 +13,7 @@ SIGPROC_OBJECTS=	\
 	sigproc/phix_control.o \
 	sigproc/controlaligner.o \
 	sigproc/my_strstr.o \
+	sigproc/findpolya.o \
 	sigproc/ssw.o
 
 SQI2FQ_OBJECTS=	\

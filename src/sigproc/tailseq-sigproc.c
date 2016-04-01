@@ -130,6 +130,8 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
     ssize_t control_seq_length;
     int32_t min_control_alignment_score, control_alignment_mask_len;
 
+    struct PolyAFinderParameters *polya_params;
+
     /* set the starting point of index matching to non-special (other than Unknown and control)
      * barcodes */
     for (noncontrol_barcodes = barcodes;
@@ -163,6 +165,13 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
         }
 
     mismatches = 0;
+
+    polya_params = create_polya_finder_parameters(1, -10, -5, 30);
+    if (polya_params == NULL) {
+        if (control_seq != NULL)
+            free(control_seq);
+        return -1;
+    }
 
     for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
         struct BarcodeInfo *bc;
@@ -208,6 +217,26 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
             continue;
         }
 
+        if (delimiter_end >= 0) {
+            uint32_t polya_ret;
+            int polya_start, polya_end, polya_len;
+
+            /* Locate the starting position of poly(A) tail if available */
+            polya_ret = find_polya(sequence_formatted + delimiter_end,
+                                   ncycles - delimiter_end, polya_params);
+            polya_start = polya_ret >> 16;
+            polya_end = polya_ret & 0xffff;
+            printf("%d-%d // %s\n", polya_start, polya_end,
+                                    sequence_formatted + delimiter_end);
+
+            /* Process the signals */
+#define POLYA_SIGNAL_PROC_TRIGGER   10
+            polya_len = polya_end - polya_start;
+            if (polya_len >= POLYA_SIGNAL_PROC_TRIGGER) {
+                ;
+            }
+        }
+
         if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%s\t%s\t%s\n", laneid, tile,
                     firstclusterno + clusterno, delimiter_end, sequence_formatted,
                     quality_formatted, intensity_formatted) < 0) {
@@ -221,6 +250,8 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
 
     if (control_seq != NULL)
         free(control_seq);
+
+    free(polya_params);
 
     return 0;
 }
