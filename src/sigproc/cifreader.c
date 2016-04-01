@@ -197,6 +197,24 @@ free_cif_data(struct CIFData *data)
 
 
 void
+fetch_intensity(struct IntensitySet *signalout, struct CIFData **intensities,
+                int firstcycle, int ncycles, uint32_t clusterno)
+{
+    int i;
+
+    for (i = 0; i < ncycles; i++) {
+        int16_t *valueset;
+
+        valueset = intensities[firstcycle + i]->intensity[clusterno].value;
+        signalout[i].value[0] = valueset[0];
+        signalout[i].value[1] = valueset[1];
+        signalout[i].value[2] = valueset[2];
+        signalout[i].value[3] = valueset[3];
+    }
+}
+
+
+void
 format_intensity(char *inten, struct CIFData **intensities,
                  int ncycles, uint32_t clusterno, int scalefactor)
 {

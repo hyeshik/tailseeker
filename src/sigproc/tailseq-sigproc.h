@@ -122,6 +122,23 @@ struct ControlFilterInfo {
 
 struct PolyAFinderParameters;
 
+struct PolyARulerParameters {
+    int balancer_start;
+    int balancer_end;
+    int balancer_minimum_occurrence;
+    int balancer_num_positive_samples;
+    int balancer_num_negative_samples;
+
+    float colormatrix[NUM_CHANNELS * NUM_CHANNELS];
+
+    float dark_cycles_threshold;
+    int max_dark_cycles;
+
+    float polya_score_threshold;
+    float tsignal_term_k;
+    float tsignal_term_center;
+};
+
 
 /* bclreader.c */
 extern struct BCLReader *open_bcl_file(const char *filename);
@@ -145,6 +162,8 @@ extern int load_cif_data(struct CIFReader *cif, struct CIFData *data, uint32_t n
 extern void free_cif_data(struct CIFData *data);
 extern void format_intensity(char *inten, struct CIFData **intensities,
                              int ncycles, uint32_t clusterno, int scalefactor);
+extern void fetch_intensity(struct IntensitySet *signalout, struct CIFData **intensities,
+                            int firstcycle, int ncycles, uint32_t clusterno);
 extern struct CIFReader **open_cif_readers(const char *msgprefix, const char *datadir,
                                            int lane, int tile, int ncycles);
 extern void close_cif_readers(struct CIFReader **readers, int ncycles);
@@ -182,6 +201,15 @@ extern struct PolyAFinderParameters *create_polya_finder_parameters(int score_t,
 extern void destroy_polya_finder_parameters(struct PolyAFinderParameters *params);
 extern uint32_t find_polya(const char *seq, size_t seqlen,
                            struct PolyAFinderParameters *params);
+
+/* signalproc.c */
+extern int measure_polya_len(struct IntensitySet *intensities, const char *seq,
+                             int ncycles, struct PolyARulerParameters *params);
+extern int load_color_matrix(float *mtx, const char *filename);
+
+
+/* misc.c */
+extern int inverse_4x4_matrix(const float *m, float *out);
 
 
 #endif

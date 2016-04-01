@@ -14,6 +14,8 @@ SIGPROC_OBJECTS=	\
 	sigproc/controlaligner.o \
 	sigproc/my_strstr.o \
 	sigproc/findpolya.o \
+	sigproc/signalproc.o \
+	sigproc/misc.o \
 	sigproc/ssw.o
 
 SQI2FQ_OBJECTS=	\
