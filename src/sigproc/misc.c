@@ -1,7 +1,5 @@
-#include <xmmintrin.h>
-
 /*
- * Functions for 4x4 matrix inversion by Gaussian elimiation. The operation
+ * Functions for 4x4 matrix inversion by Gaussian elimination. The operation
  * is usually run only once during the whole process execution. Therefore,
  * there is no need for optimizations for speed here. The code is adopted
  * from the gamesxmath's blog:
