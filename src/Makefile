@@ -1,6 +1,7 @@
 CC=	gcc
 #CFLAGS=	-O3 -Wall -Werror -pg
 CFLAGS=	-O3 -Wall -Werror
+LIBS=	-lz -lm
 bindir=	../bin
 
 PROG=	${bindir}/sqi2fq ${bindir}/tailseq-sigproc
@@ -41,5 +42,5 @@ ${bindir}/sqi2fq: ${SQI2FQ_OBJECTS}
 	${CC} ${CFLAGS} -o $@ $<
 
 ${bindir}/tailseq-sigproc: ${SIGPROC_OBJECTS}
-	${CC} ${CFLAGS} -o $@ ${SIGPROC_OBJECTS} -lz
+	${CC} ${CFLAGS} -o $@ ${SIGPROC_OBJECTS} ${LIBS}
 
