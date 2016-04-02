@@ -34,6 +34,17 @@
 
 #define NUM_CHANNELS        4
 
+#define PAFLAG_BARCODE_HAS_MISMATCHES       1
+#define PAFLAG_DELIMITER_NOT_FOUND          2
+#define PAFLAG_DELIMITER_HAS_MISMATCH       4
+#define PAFLAG_DELIMITER_IS_SHIFTED         8
+#define PAFLAG_BALANCER_BIASED              16
+#define PAFLAG_BALANCER_SIGNAL_BAD          32
+#define PAFLAG_MEASURED_FROM_FLUORESCENCE   64
+#define PAFLAG_DARKCYCLE_EXISTS             128
+#define PAFLAG_DARKCYCLE_OVER_THRESHOLD     256
+#define PAFLAG_HAVE_3P_MODIFICATION         512
+
 
 #define BCLREADER_OVERRIDDEN    ((struct BCLReader *)1)
                                 /* placeholder for overridden cycles by an alternative call */
@@ -197,16 +208,17 @@ extern char *my_strnstr(const char *s, const char *find, size_t len);
 
 /* findpolya.c */
 extern struct PolyAFinderParameters *create_polya_finder_parameters(int score_t,
-                    int score_acg, int score_n, size_t max_term_mod);
+                    int score_acg, int score_n, size_t max_term_mod, size_t min_polya_len);
 extern void destroy_polya_finder_parameters(struct PolyAFinderParameters *params);
 extern uint32_t find_polya(const char *seq, size_t seqlen,
                            struct PolyAFinderParameters *params);
 
 /* signalproc.c */
-extern int measure_polya_len(struct IntensitySet *intensities, const char *seq,
-                             int ncycles, struct PolyARulerParameters *params);
 extern int load_color_matrix(float *mtx, const char *filename);
-
+extern int measure_polya_length(struct CIFData **intensities,
+                  const char *sequence_formatted, int ncycles, uint32_t clusterno,
+                  int delimiter_end, struct PolyAFinderParameters *finder_params,
+                  struct PolyARulerParameters *ruler_params, int *procflags);
 
 /* misc.c */
 extern int inverse_4x4_matrix(const float *m, float *out);

@@ -42,7 +42,6 @@
  * 3080 bytes per cluster for regular 51+251 set-up.
  * then, 262144 clusters takes 770 MiB up for storing data. */
 
-
 static struct BarcodeInfo *
 assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *barcodes,
                int *pmismatches)
@@ -83,7 +82,8 @@ assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *bar
 
 
 static int
-find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode)
+find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode,
+                            int *flags)
 {
     static const int offsets[]={0, -1, 1, 9999};
     const int *poffset;
@@ -103,9 +103,17 @@ find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode)
         for (i = ndiff = 0; i < barcode->delimiter_length; i++)
             ndiff += (barcode->delimiter[i] != delimpos_offset[i]);
 
-        if (ndiff <= barcode->maximum_delimiter_mismatches)
+        if (ndiff <= barcode->maximum_delimiter_mismatches) {
+            if (ndiff > 0)
+                *flags |= PAFLAG_DELIMITER_HAS_MISMATCH;
+            if (*poffset != 0)
+                *flags |= PAFLAG_DELIMITER_IS_SHIFTED;
+
             return barcode->delimiter_pos + barcode->delimiter_length + *poffset;
+        }
     }
+
+    *flags |= PAFLAG_DELIMITER_NOT_FOUND;
 
     return -1;
 }
@@ -169,7 +177,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
 
     mismatches = 0;
 
-    polya_params = create_polya_finder_parameters(1, -10, -5, 30);
+    polya_params = create_polya_finder_parameters(1, -10, -5, 10, 5);
     if (polya_params == NULL) {
         if (control_seq != NULL)
             free(control_seq);
@@ -178,7 +186,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
 
     for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
         struct BarcodeInfo *bc;
-        int delimiter_end;
+        int delimiter_end, procflags=0;
 
         format_basecalls(sequence_formatted, quality_formatted, basecalls, ncycles, clusterno);
         format_intensity(intensity_formatted, intensities, ncycles, clusterno, scalefactor);
@@ -209,71 +217,25 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
 
         if (mismatches <= 0) /* no mismatches or falling back to PhiX/Unknown. */
             bc->clusters_mm0++;
-        else if (mismatches == 1)
-            bc->clusters_mm1++;
-        else
-            bc->clusters_mm2plus++;
+        else {
+            procflags |= PAFLAG_BARCODE_HAS_MISMATCHES;
 
-        delimiter_end = find_delimiter_end_position(sequence_formatted, bc);
+            if (mismatches == 1)
+                bc->clusters_mm1++;
+            else
+                bc->clusters_mm2plus++;
+        }
+
+        delimiter_end = find_delimiter_end_position(sequence_formatted, bc, &procflags);
         if (bc->delimiter_length > 0 && delimiter_end < 0 && !keep_no_delimiter) {
             bc->clusters_nodelim++;
             continue;
         }
 
-        if (delimiter_end >= 0) {
-            uint32_t polya_ret;
-            int polya_start, polya_end, polya_len;
-
-            /* Locate the starting position of poly(A) tail if available */
-            polya_ret = find_polya(sequence_formatted + delimiter_end,
-                                   ncycles - delimiter_end, polya_params);
-            polya_start = polya_ret >> 16;
-            polya_end = polya_ret & 0xffff;
-            printf("%d-%d // %s\n", polya_start, polya_end,
-                                    sequence_formatted + delimiter_end);
-
-            /* Process the signals */
-#define POLYA_SIGNAL_PROC_TRIGGER   10
-#define READ2_START                 57 /* 0-based, right-excluded */
-#define READ2_END                   308 /* 0-based, right-excluded */
-#define READ2_LENGTH                (308-57)
-            polya_len = polya_end - polya_start;
-            if (polya_len >= POLYA_SIGNAL_PROC_TRIGGER) {
-                struct IntensitySet spot_intensities[READ2_LENGTH];
-                int polya_len_from_sig;
-
-                fetch_intensity(spot_intensities, intensities, READ2_START,
-                                READ2_LENGTH, clusterno);
-                printf(" --> %c %d %d %d %d\n", sequence_formatted[READ2_START],
-                            spot_intensities[0].value[0],
-                            spot_intensities[0].value[1],
-                            spot_intensities[0].value[2],
-                            spot_intensities[0].value[3]);
-                {
-                    /* XXX Temporary testing for decrosstalk */
-                    float dsignals[4];
-                    float *colormtxptr;
-                    int j;
-
-                    colormtxptr = ruler_params->colormatrix;
-                    for (j = 0; j < 4; j++) {
-                        dsignals[j] =
-                            colormtxptr[0] * spot_intensities[0].value[0] +
-                            colormtxptr[1] * spot_intensities[0].value[1] +
-                            colormtxptr[2] * spot_intensities[0].value[2] +
-                            colormtxptr[3] * spot_intensities[0].value[3];
-                        colormtxptr += 4;
-                    }
-
-                    printf(" --> %.1f %.1f %.1f %.1f\n",
-                            dsignals[0], dsignals[1], dsignals[2], dsignals[3]);
-                }
-
-                polya_len_from_sig = measure_polya_len(spot_intensities,
-                        sequence_formatted + READ2_START, READ2_LENGTH, ruler_params);
-                printf(" --> %d\n", polya_len_from_sig);
-            }
-        }
+        if (delimiter_end >= 0)
+            measure_polya_length(intensities, sequence_formatted, ncycles,
+                              clusterno, delimiter_end, polya_params,
+                              ruler_params, &procflags);
 
         if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%s\t%s\t%s\n", laneid, tile,
                     firstclusterno + clusterno, delimiter_end, sequence_formatted,

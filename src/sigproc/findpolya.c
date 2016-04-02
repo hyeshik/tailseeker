@@ -38,12 +38,13 @@
 struct PolyAFinderParameters {
     int weights[256];
     size_t max_terminal_modifications;
+    size_t min_polya_length;
 };
 
 
 struct PolyAFinderParameters *
 create_polya_finder_parameters(int score_t, int score_acg, int score_n,
-                               size_t max_term_mod)
+                               size_t max_term_mod, size_t min_polya_length)
 {
     struct PolyAFinderParameters *params;
 
@@ -57,6 +58,7 @@ create_polya_finder_parameters(int score_t, int score_acg, int score_n,
     params->weights['N'] = score_n;
     
     params->max_terminal_modifications = max_term_mod;
+    params->min_polya_length = min_polya_length;
 
     return params;
 }
@@ -114,5 +116,8 @@ find_polya(const char *seq, size_t seqlen, struct PolyAFinderParameters *params)
     while (seq[longest_j] != 'T' && longest_j >= longest_i)
         longest_j--;
 
-    return ((uint32_t)longest_i << 16) | (longest_j + 1);
+    if (longest_j + 1 - longest_i < params->min_polya_length)
+        return 0;
+    else
+        return ((uint32_t)longest_i << 16) | (longest_j + 1);
 }
