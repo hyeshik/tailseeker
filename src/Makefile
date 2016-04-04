@@ -16,6 +16,7 @@ SIGPROC_OBJECTS=	\
 	sigproc/my_strstr.o \
 	sigproc/findpolya.o \
 	sigproc/signalproc.o \
+	sigproc/spotanalyzer.o \
 	sigproc/misc.o \
 	sigproc/ssw.o
 

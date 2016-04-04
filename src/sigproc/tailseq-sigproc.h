@@ -234,6 +234,15 @@ extern int measure_polya_length(struct CIFData **intensities,
 extern void precalc_score_tables(struct PolyARulerParameters *params,
                                  float t_score_k, float t_score_center);
 
+/* spotanalyzer.c */
+extern int process_spots(const char *laneid, int tile, int ncycles,
+                uint32_t firstclusterno, int scalefactor, int barcode_start,
+                int barcode_length, struct BarcodeInfo *barcodes,
+                struct CIFData **intensities, struct BCLData **basecalls,
+                struct ControlFilterInfo *control_info,
+                struct PolyARulerParameters *ruler_params,
+                int keep_no_delimiter);
+
 /* misc.c */
 extern int inverse_4x4_matrix(const float *m, float *out);
 
