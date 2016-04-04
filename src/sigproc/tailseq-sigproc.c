@@ -158,9 +158,10 @@ load_intensities_and_basecalls(struct CIFReader **cifreader, struct BCLReader **
 
 static int
 process(const char *datadir, const char *laneid, int lane, int tile, int ncycles,
-        int scalefactor, int barcode_start, int barcode_length,
+        int threep_start, int threep_length, int index_start, int index_length,
         struct BarcodeInfo *barcodes, const char *writercmd,
         struct AlternativeCallInfo *altcalls, struct ControlFilterInfo *control_info,
+        struct PolyAFinderParameters *finderparams,
         struct PolyARulerParameters *rulerparams, int blocksize, int keep_no_delimiter)
 {
     struct CIFReader **cifreader;
@@ -214,9 +215,9 @@ process(const char *datadir, const char *laneid, int lane, int tile, int ncycles
 
         printf("%sDemultiplexing and writing\n", msgprefix);
         if (process_spots(laneid, tile, ncycles, nclusters - clusters_to_go,
-                          scalefactor, barcode_start, barcode_length, barcodes,
-                          intensities, basecalls, control_info, rulerparams,
-                          keep_no_delimiter) == -1)
+                          threep_start, threep_length, index_start, index_length,
+                          barcodes, intensities, basecalls, control_info,
+                          finderparams, rulerparams, keep_no_delimiter) == -1)
             goto onError;
 
         clusters_to_go -= clusters_to_read;
@@ -310,19 +311,17 @@ tailseq-sigproc 3.0\
 \n  -l,  --lane=NUM                   lane number.\
 \n  -t,  --tile=NUM                   tile number.\
 \n  -n,  --ncycles=NUM                number of cycles.\
-\n  -b,  --barcode-start=NUM          the first cycle of index read.\
-\n  -a,  --barcode-length=NUM         length of index read.\
+\n  -i,  --index-read=BEGIN,LENGTH    cycle number range of the index read.\
+\n  -e,  --threep-read=BEGIN,LENGTH   cycle number range of the 3'-end read.\
 \n  -w,  --writer-command=COMMAND     shell command to run to write .sqi\
 \n                                    output (usually a stream compressor.)\
 \n  -x,  --color-matrix=PATH          fluorescence crosstalk estimation matrix.\
 \n\
 \nOptional parameters:\
-\n  -s,  --signal-scale=NUM           number of digits in radix 2 to scale\
-\n                                    signal intensity down. (default: 0)\
 \n  -c,  --alternative-call=SPEC      FASTQ file to replace base calls.\
 \n                                    specify as \"filename,first_cycle\".\
 \n  -m,  --sample=SPEC                sample information as formatted in\
-\n            \"name,index,max_index_miss,delimiter,delimiter_position,max_delim_miss\".\
+\n            \"name,index,max_index_miss,delimiter,delimiter_pos,max_delim_miss,fingerprint,max_fingerprint_miss,umi_pos,umi_length\".\
 \n       --keep-no-delimiter          don't skip reads where a delimiter\
 \n                                    is not found.\
 \n  -f,  --filter-control=SPEC        sort out PhiX control reads by sequence\
@@ -331,10 +330,20 @@ tailseq-sigproc 3.0\
 \n                                    (default: 262144).\
 \n  -o,  --demultiplex-stats=PATH     file path where write cluster count statistics\
 \n                                    on demultiplexing (default: no output)\
+\n  -s,  --sigproc-trigger=NUM        poly(A) length to handle over to fluorescence\
+\n                                    signal processor (default: 10)\
+\n       --minimum-polya-length=NUM   suppress poly(A) calling when shorter \
+\n                                    than this. (default: 5)\
+\n       --maximum-modifications=NUM  maximum length of non-poly(A) modifications \
+\n                                    to poly(A). (default: 10)\
+\n       --weight-T=NUM               poly(A) finder weight for T (default: 1) \
+\n       --weight-ACG=NUM             poly(A) finder weight for A/C/G \
+\n                                    (default: -10) \
+\n       --weight-N=NUM               poly(A) finder weight for N (default: -5) \
 \n\
-\nAll cycle numbers or positions are in 1-based inclusive system.\
+\nAll cycle numbers or positions follow the 1-based inclusive system.\
 \n\
-\nMail bug reports and suggestions to Hyeshik Chang <hyeshik@snu.ac.kr>.\n", prog);
+\nMail bug reports and suggestions to Hyeshik Chang <hyeshik@snu.ac.kr>.\n\n", prog);
 }
 
 
@@ -346,11 +355,12 @@ main(int argc, char *argv[])
     char *color_matrix_filename;
     int keep_no_delimiter_flag;
     int lane, tile, ncycles, blocksize;
-    int barcode_start, barcode_length;
-    int scalefactor;
+    int index_start, index_length;
+    int threep_start, threep_length;
     struct BarcodeInfo *barcodes;
     struct AlternativeCallInfo *altcalls;
     struct ControlFilterInfo controlinfo;
+    struct PolyAFinderParameters finderparams;
     struct PolyARulerParameters rulerparams;
     int c, r;
 
@@ -363,15 +373,20 @@ main(int argc, char *argv[])
         {"tile",                required_argument,  0,                          't'},
         {"ncycles",             required_argument,  0,                          'n'},
         {"alternative-call",    required_argument,  0,                          'c'},
-        {"signal-scale",        required_argument,  0,                          's'},
-        {"barcode-start",       required_argument,  0,                          'b'},
-        {"barcode-length",      required_argument,  0,                          'a'},
+        {"index-read",          required_argument,  0,                          'i'},
+        {"threep-read",         required_argument,  0,                          'e'},
         {"sample",              required_argument,  0,                          'm'},
         {"writer-command",      required_argument,  0,                          'w'},
         {"filter-control",      required_argument,  0,                          'f'},
         {"block-size",          required_argument,  0,                          'B'},
         {"demultiplex-stats",   required_argument,  0,                          'o'},
         {"color-matrix",        required_argument,  0,                          'x'},
+        {"sigproc-trigger",     required_argument,  0,                          's'},
+        {"minimum-polya-length",required_argument,  0,                          'M'},
+        {"maximum-modifications",required_argument, 0,                          'X'},
+        {"weight-T",            required_argument,  0,                          'T'},
+        {"weight-ACG",          required_argument,  0,                          'A'},
+        {"weight-N",            required_argument,  0,                          'N'},
         {"help",                no_argument,        0,                          'h'},
         {0, 0, 0, 0}
     };
@@ -380,14 +395,23 @@ main(int argc, char *argv[])
     demultiplex_stats_filename = NULL;
     color_matrix_filename = NULL;
     keep_no_delimiter_flag = 0;
-    lane = tile = ncycles = barcode_start = -1;
-    scalefactor = 0;
-    barcode_length = 6;
+    lane = tile = ncycles = index_start = threep_start = -1;
+    index_length = 6;
+    threep_length = -1;
     barcodes = NULL;
     altcalls = NULL;
     controlinfo.name[0] = 0;
     controlinfo.first_cycle = controlinfo.read_length = -1;
     blocksize = DEFAULT_BATCH_BLOCK_SIZE;
+
+    finderparams.max_terminal_modifications = 10;
+    finderparams.min_polya_length = 5;
+    finderparams.sigproc_trigger_polya_length = 10;
+    memset(finderparams.weights, 0, sizeof(finderparams.weights));
+    finderparams.weights[(int)'T'] = 1;
+    finderparams.weights[(int)'A'] = finderparams.weights[(int)'C'] =
+        finderparams.weights[(int)'G'] = -10;
+    finderparams.weights[(int)'N'] = -5;
 
     /* XXX TEMPORARY ================ */
     rulerparams.balancer_start = 0;
@@ -405,8 +429,9 @@ main(int argc, char *argv[])
     while (1) {
         int option_index=0;
 
-        c = getopt_long(argc, argv, "d:r:l:t:n:s:b:a:m:w:hf:B:o:x:", long_options,
-                        &option_index);
+        c = getopt_long(argc, argv,
+                        "d:r:l:t:n:s:i:e:m:w:hf:B:o:x:M:",
+                        long_options, &option_index);
 
         /* Detect the end of the options. */
         if (c == -1)
@@ -473,16 +498,52 @@ main(int argc, char *argv[])
                 }
                 break;
 
-            case 's': /* --signal-scale */
-                scalefactor = atoi(optarg);
+            case 'i': /* --index-read */
+                {
+#define INDEX_OPTION_TOKENS   2
+                    char *str, *saveptr;
+                    char *tokens[INDEX_OPTION_TOKENS];
+                    int j;
+
+                    saveptr = NULL;
+                    for (j = 0, str = optarg; j < INDEX_OPTION_TOKENS; j++, str = NULL) {
+                        tokens[j] = strtok_r(str, ",", &saveptr);
+                        if (tokens[j] == NULL)
+                            break;
+                    }
+
+                    if (j != INDEX_OPTION_TOKENS) {
+                        fprintf(stderr, "Index read range specified in illegal format.\n");
+                        return -1;
+                    }
+
+                    index_start = atoi(tokens[0]) - 1;
+                    index_length = atoi(tokens[1]);
+                }
                 break;
 
-            case 'b': /* --barcode-start */
-                barcode_start = atoi(optarg) - 1;
-                break;
+            case 'e': /* --threep-read */
+                {
+#define THREEP_OPTION_TOKENS   2
+                    char *str, *saveptr;
+                    char *tokens[THREEP_OPTION_TOKENS];
+                    int j;
 
-            case 'a': /* --barcode-length */
-                barcode_length = atoi(optarg);
+                    saveptr = NULL;
+                    for (j = 0, str = optarg; j < THREEP_OPTION_TOKENS; j++, str = NULL) {
+                        tokens[j] = strtok_r(str, ",", &saveptr);
+                        if (tokens[j] == NULL)
+                            break;
+                    }
+
+                    if (j != THREEP_OPTION_TOKENS) {
+                        fprintf(stderr, "3' read range specified in illegal format.\n");
+                        return -1;
+                    }
+
+                    threep_start = atoi(tokens[0]) - 1;
+                    threep_length = atoi(tokens[1]);
+                }
                 break;
 
             case 'm': /* --sample */
@@ -622,6 +683,32 @@ main(int argc, char *argv[])
                 color_matrix_filename = strdup(optarg);
                 break;
 
+            case 's': /* --sigproc-trigger */
+                finderparams.sigproc_trigger_polya_length = atoi(optarg);
+                break;
+
+            case 'M': /* --minimum-polya-length */
+                finderparams.min_polya_length = atoi(optarg);
+                break;
+
+            case 'X': /* --maximum-modifications */
+                finderparams.max_terminal_modifications = atoi(optarg);
+                break;
+
+            case 'T': /* --weight-T */
+                finderparams.weights[(int)'T'] = atoi(optarg);
+                break;
+
+            case 'A': /* --weight-ACG */
+                finderparams.weights[(int)'A'] =
+                    finderparams.weights[(int)'C'] =
+                    finderparams.weights[(int)'G'] = atoi(optarg);
+                break;
+
+            case 'N': /* --weight-N */
+                finderparams.weights[(int)'N'] = atoi(optarg);
+                break;
+
             case 'h':
                 usage(argv[0]);
                 exit(0);
@@ -666,15 +753,15 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    if (barcode_start < 0) {
+    if (index_start < 0) {
         usage(argv[0]);
-        fprintf(stderr, "--barcode-start is not set.\n");
+        fprintf(stderr, "--index-read is not set.\n");
         return -1;
     }
 
-    if (barcode_length < 0) {
+    if (threep_start < 0) {
         usage(argv[0]);
-        fprintf(stderr, "--barcode-length is not set.\n");
+        fprintf(stderr, "--threep-read is not set.\n");
         return -1;
     }
 
@@ -707,12 +794,12 @@ main(int argc, char *argv[])
         memset(control, 0, sizeof(struct BarcodeInfo));
         control->name = strdup(controlinfo.name);
 
-        control->index = malloc(barcode_length + 1);
-        memset(control->index, 'X', barcode_length);
+        control->index = malloc(index_length + 1);
+        memset(control->index, 'X', index_length);
 
         control->delimiter = strdup("");
         control->delimiter_pos = -1;
-        control->maximum_index_mismatches = barcode_length;
+        control->maximum_index_mismatches = index_length;
         control->maximum_delimiter_mismatches = -1;
         control->fingerprint = strdup("");
         control->next = barcodes;
@@ -729,12 +816,12 @@ main(int argc, char *argv[])
         memset(fallback, 0, sizeof(struct BarcodeInfo));
         fallback->name = strdup("Unknown");
 
-        fallback->index = malloc(barcode_length + 1);
-        memset(fallback->index, 'X', barcode_length);
+        fallback->index = malloc(index_length + 1);
+        memset(fallback->index, 'X', index_length);
 
         fallback->delimiter = strdup("");
         fallback->delimiter_pos = -1;
-        fallback->maximum_index_mismatches = barcode_length;
+        fallback->maximum_index_mismatches = index_length;
         fallback->maximum_delimiter_mismatches = -1;
         fallback->fingerprint = strdup("");
         fallback->next = barcodes;
@@ -750,9 +837,11 @@ main(int argc, char *argv[])
         else
             pctlinfo = NULL;
 
-        r = process(datadir, runid, lane, tile, ncycles, scalefactor, barcode_start,
-                    barcode_length, barcodes, writercmd, altcalls,
-                    pctlinfo, &rulerparams, blocksize, keep_no_delimiter_flag);
+        r = process(datadir, runid, lane, tile, ncycles,
+                    threep_start, threep_length, index_start, index_length,
+                    barcodes, writercmd, altcalls,
+                    pctlinfo, &finderparams, &rulerparams, blocksize,
+                    keep_no_delimiter_flag);
     }
     
     free(datadir);

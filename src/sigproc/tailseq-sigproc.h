@@ -140,7 +140,12 @@ struct ControlFilterInfo {
 #define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
 #define CONTROL_ALIGN_MINIMUM_SCORE         0.65
 
-struct PolyAFinderParameters;
+struct PolyAFinderParameters {
+    int weights[256];
+    size_t max_terminal_modifications;
+    size_t min_polya_length;
+    size_t sigproc_trigger_polya_length;
+};
 
 #define T_INTENSITY_SCORE_BINS              200
 struct PolyARulerParameters {
@@ -229,17 +234,20 @@ extern uint32_t find_polya(const char *seq, size_t seqlen,
 extern int load_color_matrix(float *mtx, const char *filename);
 extern int measure_polya_length(struct CIFData **intensities,
                   const char *sequence_formatted, int ncycles, uint32_t clusterno,
-                  int delimiter_end, struct PolyAFinderParameters *finder_params,
+                  int threep_start, int threep_length, int delimiter_end,
+                  struct PolyAFinderParameters *finder_params,
                   struct PolyARulerParameters *ruler_params, int *procflags);
 extern void precalc_score_tables(struct PolyARulerParameters *params,
                                  float t_score_k, float t_score_center);
 
 /* spotanalyzer.c */
 extern int process_spots(const char *laneid, int tile, int ncycles,
-                uint32_t firstclusterno, int scalefactor, int barcode_start,
-                int barcode_length, struct BarcodeInfo *barcodes,
+                uint32_t firstclusterno, int threep_start, int threep_length,
+                int barcode_start, int barcode_length,
+                struct BarcodeInfo *barcodes,
                 struct CIFData **intensities, struct BCLData **basecalls,
                 struct ControlFilterInfo *control_info,
+                struct PolyAFinderParameters *finder_params,
                 struct PolyARulerParameters *ruler_params,
                 int keep_no_delimiter);
 

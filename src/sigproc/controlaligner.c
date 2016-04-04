@@ -36,7 +36,7 @@
 #include <endian.h>
 #include <zlib.h>
 #include "tailseq-sigproc.h"
-#include "ssw.h"
+#include "contrib/ssw.h"
 
 
 #define CONTROL_SEQUENCE_SPACING            20 /* space between forward and reverse strands */

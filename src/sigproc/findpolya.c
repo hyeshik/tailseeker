@@ -35,41 +35,6 @@
 #include "tailseq-sigproc.h"
 
 
-struct PolyAFinderParameters {
-    int weights[256];
-    size_t max_terminal_modifications;
-    size_t min_polya_length;
-};
-
-
-struct PolyAFinderParameters *
-create_polya_finder_parameters(int score_t, int score_acg, int score_n,
-                               size_t max_term_mod, size_t min_polya_length)
-{
-    struct PolyAFinderParameters *params;
-
-    params = (struct PolyAFinderParameters *)malloc(sizeof(struct PolyAFinderParameters));
-    if (params == NULL)
-        return NULL;
-
-    memset(params->weights, 0, sizeof(int) * 256);
-    params->weights['T'] = score_t;
-    params->weights['A'] = params->weights['C'] = params->weights['G'] = score_acg;
-    params->weights['N'] = score_n;
-    
-    params->max_terminal_modifications = max_term_mod;
-    params->min_polya_length = min_polya_length;
-
-    return params;
-}
-
-void
-destroy_polya_finder_parameters(struct PolyAFinderParameters *params)
-{
-    if (params != NULL)
-        free(params);
-}
-
 uint32_t
 find_polya(const char *seq, size_t seqlen, struct PolyAFinderParameters *params)
 {

@@ -127,10 +127,12 @@ count_fingerprint_mismatches(const char *seq, int pos, struct BarcodeInfo *barco
 
 int
 process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno,
-              int scalefactor, int barcode_start, int barcode_length,
+              int threep_start, int threep_length,
+              int barcode_start, int barcode_length,
               struct BarcodeInfo *barcodes,
               struct CIFData **intensities, struct BCLData **basecalls,
               struct ControlFilterInfo *control_info,
+              struct PolyAFinderParameters *finder_params,
               struct PolyARulerParameters *ruler_params,
               int keep_no_delimiter)
 {
@@ -145,8 +147,6 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
     int8_t *control_seq;
     ssize_t control_seq_length;
     int32_t min_control_alignment_score, control_alignment_mask_len;
-
-    struct PolyAFinderParameters *polya_params;
 
 
     /* set the starting point of index matching to non-special (other than Unknown and control)
@@ -183,20 +183,13 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
 
     mismatches = 0;
 
-    polya_params = create_polya_finder_parameters(1, -10, -5, 10, 5);
-    if (polya_params == NULL) {
-        if (control_seq != NULL)
-            free(control_seq);
-        return -1;
-    }
-
     for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
         struct BarcodeInfo *bc;
         int delimiter_end, procflags=0;
         int polya_len;
 
         format_basecalls(sequence_formatted, quality_formatted, basecalls, ncycles, clusterno);
-        format_intensity(intensity_formatted, intensities, ncycles, clusterno, scalefactor);
+        format_intensity(intensity_formatted, intensities, ncycles, clusterno, 0);
 
         bc = assign_barcode(sequence_formatted + barcode_start, barcode_length,
                             noncontrol_barcodes, &mismatches);
@@ -235,8 +228,8 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
 
         /* Check fingerprint sequences with defined allowed mismatches. */
         if (bc->fingerprint_length > 0) {
-#define READ2_START                 57 /* 0-based, right-excluded */
-            mismatches = count_fingerprint_mismatches(sequence_formatted, READ2_START, bc);
+            mismatches = count_fingerprint_mismatches(sequence_formatted,
+                                                      threep_start, bc);
             if (mismatches > bc->maximum_fingerprint_mismatches) {
                 bc->clusters_fpmismatch++;
                 continue;
@@ -258,7 +251,8 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
             else
                 polya_len = measure_polya_length(intensities,
                         sequence_formatted, ncycles, clusterno,
-                        delimiter_end, polya_params, ruler_params,
+                        threep_start, threep_length,
+                        delimiter_end, finder_params, ruler_params,
                         &procflags);
         }
 
@@ -291,8 +285,6 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
 
     if (control_seq != NULL)
         free(control_seq);
-
-    free(polya_params);
 
     return 0;
 }

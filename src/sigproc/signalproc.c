@@ -394,7 +394,8 @@ load_color_matrix(float *mtx, const char *filename)
 int
 measure_polya_length(struct CIFData **intensities,
                      const char *sequence_formatted, int ncycles,
-                     uint32_t clusterno, int delimiter_end,
+                     uint32_t clusterno, int threep_start,
+                     int threep_length, int delimiter_end,
                      struct PolyAFinderParameters *finder_params,
                      struct PolyARulerParameters *ruler_params,
                      int *procflags)
@@ -414,12 +415,6 @@ measure_polya_length(struct CIFData **intensities,
     if (polya_start > 0)
         *procflags |= PAFLAG_HAVE_3P_MODIFICATION;
 
-/* XXX set these constants from arguments */
-#define POLYA_SIGNAL_PROC_TRIGGER   10
-#define READ2_START                 57 /* 0-based, right-excluded */
-#define READ2_END                   308 /* 0-based, right-excluded */
-#define READ2_LENGTH                (308-57)
-/* XXX */
     /* Check balancer region for all spots including non-poly(A)
      * ones. This can be used to suppress the biased filtering of
      * low-quality spots with poly(A)+ tags against poly(A)- tags.
@@ -428,11 +423,12 @@ measure_polya_length(struct CIFData **intensities,
         size_t balancer_length=ruler_params->balancer_end - ruler_params->balancer_start;
         struct IntensitySet spot_intensities[balancer_length];
 
-        fetch_intensity(spot_intensities, intensities, READ2_START,
+        fetch_intensity(spot_intensities, intensities, threep_start,
                         balancer_length, clusterno);
 
         if (check_balancer(signal_range_low, signal_range_bandwidth,
-                           spot_intensities, sequence_formatted + READ2_START,
+                           spot_intensities,
+                           sequence_formatted + threep_start,
                            ruler_params, procflags) < 0)
             return -1;
     }
@@ -443,8 +439,8 @@ measure_polya_length(struct CIFData **intensities,
 #endif
 
     /* Process the signals */
-    if (polya_len >= POLYA_SIGNAL_PROC_TRIGGER) {
-        size_t insert_len=READ2_END - delimiter_end;
+    if (polya_len >= finder_params->sigproc_trigger_polya_length) {
+        size_t insert_len=threep_start + threep_length - delimiter_end;
         struct IntensitySet spot_intensities[insert_len];
         int polya_len_from_sig;
 
@@ -458,7 +454,8 @@ measure_polya_length(struct CIFData **intensities,
         printf(" --> pA (%d)\n", polya_len_from_sig);
 #endif
 
-        if (polya_len_from_sig >= POLYA_SIGNAL_PROC_TRIGGER) {
+        if (polya_len_from_sig >=
+                finder_params->sigproc_trigger_polya_length) {
             *procflags |= PAFLAG_MEASURED_FROM_FLUORESCENCE;
             return polya_len_from_sig;
         }

@@ -13,12 +13,13 @@ SIGPROC_OBJECTS=	\
 	sigproc/altcalls.o \
 	sigproc/phix_control.o \
 	sigproc/controlaligner.o \
-	sigproc/my_strstr.o \
 	sigproc/findpolya.o \
 	sigproc/signalproc.o \
 	sigproc/spotanalyzer.o \
-	sigproc/misc.o \
-	sigproc/ssw.o
+	sigproc/contrib/ini.o \
+	sigproc/contrib/my_strstr.o \
+	sigproc/contrib/misc.o \
+	sigproc/contrib/ssw.o
 
 SQI2FQ_OBJECTS=	\
 	sqi2fq/sqi2fq.o
