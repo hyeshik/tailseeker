@@ -87,16 +87,25 @@ struct BarcodeInfo;
 struct BarcodeInfo {
     char *name;
     char *index;
+
     char *delimiter;
     int delimiter_pos;
     int delimiter_length;
+
+    char *fingerprint;
+    int fingerprint_pos;
+    int fingerprint_length;
+
     int maximum_index_mismatches;
     int maximum_delimiter_mismatches;
+    int maximum_fingerprint_mismatches;
+
     FILE *stream;
     uint32_t clusters_mm0;
     uint32_t clusters_mm1;
     uint32_t clusters_mm2plus;
     uint32_t clusters_nodelim;
+    uint32_t clusters_fpmismatch;
     struct BarcodeInfo *next;
 };
 
@@ -133,6 +142,7 @@ struct ControlFilterInfo {
 
 struct PolyAFinderParameters;
 
+#define T_INTENSITY_SCORE_BINS              200
 struct PolyARulerParameters {
     int balancer_start;
     int balancer_end;
@@ -145,9 +155,11 @@ struct PolyARulerParameters {
     float dark_cycles_threshold;
     int max_dark_cycles;
 
+    float maximum_entropy;
+    float t_intensity_score[T_INTENSITY_SCORE_BINS + 1];
+
     float polya_score_threshold;
-    float tsignal_term_k;
-    float tsignal_term_center;
+    float downhill_extension_weight;
 };
 
 
@@ -219,6 +231,8 @@ extern int measure_polya_length(struct CIFData **intensities,
                   const char *sequence_formatted, int ncycles, uint32_t clusterno,
                   int delimiter_end, struct PolyAFinderParameters *finder_params,
                   struct PolyARulerParameters *ruler_params, int *procflags);
+extern void precalc_score_tables(struct PolyARulerParameters *params,
+                                 float t_score_k, float t_score_center);
 
 /* misc.c */
 extern int inverse_4x4_matrix(const float *m, float *out);

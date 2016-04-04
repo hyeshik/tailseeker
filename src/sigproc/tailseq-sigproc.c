@@ -89,9 +89,6 @@ find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode,
     const int *poffset;
     const char *delimpos;
 
-    if (barcode->maximum_delimiter_mismatches < 0)
-        return -1;
-
     delimpos = sequence + barcode->delimiter_pos;
 
     for (poffset = &offsets[0]; *poffset < 9999; poffset++) {
@@ -116,6 +113,24 @@ find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode,
     *flags |= PAFLAG_DELIMITER_NOT_FOUND;
 
     return -1;
+}
+
+
+static int
+count_fingerprint_mismatches(const char *seq, int pos, struct BarcodeInfo *barcodes)
+{
+    const char *readp, *fpp;
+    int mismatches;
+
+    if (barcodes->fingerprint_length <= 0)
+        return 0;
+
+    readp = seq + pos;
+    fpp = barcodes->fingerprint;
+    for (mismatches = 0; *fpp != '\0'; fpp++, readp++)
+        mismatches += (*fpp != *readp);
+
+    return mismatches;
 }
 
 
@@ -187,6 +202,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
     for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
         struct BarcodeInfo *bc;
         int delimiter_end, procflags=0;
+        int polya_len;
 
         format_basecalls(sequence_formatted, quality_formatted, basecalls, ncycles, clusterno);
         format_intensity(intensity_formatted, intensities, ncycles, clusterno, scalefactor);
@@ -226,17 +242,51 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
                 bc->clusters_mm2plus++;
         }
 
-        delimiter_end = find_delimiter_end_position(sequence_formatted, bc, &procflags);
-        if (bc->delimiter_length > 0 && delimiter_end < 0 && !keep_no_delimiter) {
-            bc->clusters_nodelim++;
-            continue;
+        /* Check fingerprint sequences with defined allowed mismatches. */
+        if (bc->fingerprint_length > 0) {
+#define READ2_START                 57 /* 0-based, right-excluded */
+            mismatches = count_fingerprint_mismatches(sequence_formatted, READ2_START, bc);
+            if (mismatches > bc->maximum_fingerprint_mismatches) {
+                bc->clusters_fpmismatch++;
+                continue;
+            }
         }
 
-        if (delimiter_end >= 0)
-            measure_polya_length(intensities, sequence_formatted, ncycles,
-                              clusterno, delimiter_end, polya_params,
-                              ruler_params, &procflags);
+        if (bc->delimiter_length <= 0)
+            polya_len = -1;
+        else {
+            delimiter_end = find_delimiter_end_position(sequence_formatted,
+                                                        bc, &procflags);
+            if (delimiter_end < 0) {
+                bc->clusters_nodelim++;
+                if (!keep_no_delimiter)
+                    continue;
 
+                polya_len = -1;
+            }
+            else
+                polya_len = measure_polya_length(intensities,
+                        sequence_formatted, ncycles, clusterno,
+                        delimiter_end, polya_params, ruler_params,
+                        &procflags);
+        }
+
+        if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%d\t%d\t",
+                    laneid, tile, firstclusterno + clusterno,
+                    procflags, delimiter_end, polya_len) < 0) {
+            perror("demultiplex_and_write");
+
+            if (control_seq != NULL)
+                free(control_seq);
+            return -1;
+        }
+        {
+            int i;
+            for (i = 0; i < 30; i++)
+                fprintf(bc->stream, "%c", sequence_formatted[delimiter_end + i]);
+            fprintf(bc->stream, "\n");
+        }
+/*
         if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%s\t%s\t%s\n", laneid, tile,
                     firstclusterno + clusterno, delimiter_end, sequence_formatted,
                     quality_formatted, intensity_formatted) < 0) {
@@ -245,7 +295,7 @@ demultiplex_and_write(const char *laneid, int tile, int ncycles, uint32_t firstc
             if (control_seq != NULL)
                 free(control_seq);
             return -1;
-        }
+        }*/
     }
 
     if (control_seq != NULL)
@@ -493,15 +543,15 @@ write_demultiplexing_statistics(const char *output, struct BarcodeInfo *barcodes
 
     fprintf(fp, "name,index,max_index_mm,delim,delim_pos,max_delim_mm,"
                 "cln_no_index_mm,cln_1_index_mm,cln_2+_index_mm,"
-                "cln_no_delim\n");
+                "cln_fp_mm,cln_no_delim\n");
 
     for (; barcodes != NULL; barcodes = barcodes->next)
-        fprintf(fp, "%s,%s,%d,%s,%d,%d,%d,%d,%d,%d\n",
+        fprintf(fp, "%s,%s,%d,%s,%d,%d,%d,%d,%d,%d,%d\n",
                 barcodes->name, barcodes->index, barcodes->maximum_index_mismatches,
                 barcodes->delimiter, barcodes->delimiter_pos,
                 barcodes->maximum_delimiter_mismatches, barcodes->clusters_mm0,
                 barcodes->clusters_mm1, barcodes->clusters_mm2plus,
-                barcodes->clusters_nodelim);
+                barcodes->clusters_fpmismatch, barcodes->clusters_nodelim);
 
     fclose(fp);
 
@@ -611,9 +661,9 @@ main(int argc, char *argv[])
     rulerparams.balancer_num_negative_samples = 4;
     rulerparams.dark_cycles_threshold = 10;
     rulerparams.max_dark_cycles = 5;
-    rulerparams.polya_score_threshold = .2;
-    rulerparams.tsignal_term_k = 15;
-    rulerparams.tsignal_term_center = .75;
+    rulerparams.polya_score_threshold = .1;
+    rulerparams.downhill_extension_weight = .49;
+    precalc_score_tables(&rulerparams, 20.f, .75f);
     /* XXX TEMPORARY ================ */
 
     while (1) {
@@ -701,20 +751,20 @@ main(int argc, char *argv[])
 
             case 'm': /* --sample */
                 {
-#define SAMPLE_OPTION_TOKENS        6
+#define SAMPLE_OPTION_TOKENS        8
                     struct BarcodeInfo *newbc;
-                    char *str, *saveptr;
+                    char *str;
                     char *tokens[SAMPLE_OPTION_TOKENS];
                     int j;
 
-                    saveptr = NULL;
-                    for (j = 0, str = optarg; j < SAMPLE_OPTION_TOKENS; j++, str = NULL) {
-                        tokens[j] = strtok_r(str, ",", &saveptr);
+                    for (j = 0, str = optarg; j < SAMPLE_OPTION_TOKENS; j++) {
+                        tokens[j] = strsep(&str, ",");
                         if (tokens[j] == NULL)
                             break;
                     }
 
                     if (j != SAMPLE_OPTION_TOKENS) {
+                        fprintf(stderr, "j=%d\n", j);
                         fprintf(stderr, "A sample specified with illegal format.\n");
                         return -1;
                     }
@@ -732,8 +782,12 @@ main(int argc, char *argv[])
                     newbc->delimiter_pos = atoi(tokens[4]) - 1;
                     newbc->delimiter_length = strlen(newbc->delimiter);
                     newbc->maximum_delimiter_mismatches = atoi(tokens[5]);
+                    newbc->fingerprint = strdup(tokens[6]);
+                    newbc->fingerprint_length = strlen(newbc->fingerprint);
+                    newbc->maximum_fingerprint_mismatches = atoi(tokens[7]);
                     newbc->clusters_mm0 = newbc->clusters_mm1 = 0;
                     newbc->clusters_mm2plus = newbc->clusters_nodelim = 0;
+                    newbc->clusters_fpmismatch = 0;
                     newbc->stream = NULL;
 
                     if (newbc->name == NULL || newbc->index == NULL ||
@@ -749,9 +803,18 @@ main(int argc, char *argv[])
                         return -1;
                     }
 
-                    if (newbc->maximum_delimiter_mismatches < 0 ||
-                            newbc->maximum_delimiter_mismatches >= strlen(newbc->delimiter)) {
+                    if (newbc->delimiter_length > 0 && (
+                            newbc->maximum_delimiter_mismatches < 0 ||
+                            newbc->maximum_delimiter_mismatches >= strlen(newbc->delimiter))) {
                         fprintf(stderr, "Maximum delimiter mismatches were out of range "
+                                        "for sample `%s'.\n", newbc->name);
+                        return -1;
+                    }
+
+                    if (newbc->fingerprint_length > 0 && (
+                            newbc->maximum_fingerprint_mismatches < 0 ||
+                            newbc->maximum_fingerprint_mismatches >= newbc->fingerprint_length)) {
+                        fprintf(stderr, "Maximum fingerprint mismatches were out of range "
                                         "for sample `%s'.\n", newbc->name);
                         return -1;
                     }
@@ -905,18 +968,17 @@ main(int argc, char *argv[])
         struct BarcodeInfo *control;
 
         control = malloc(sizeof(struct BarcodeInfo));
+        memset(control, 0, sizeof(struct BarcodeInfo));
         control->name = strdup(controlinfo.name);
 
         control->index = malloc(barcode_length + 1);
         memset(control->index, 'X', barcode_length);
-        control->index[barcode_length] = '\0';
 
         control->delimiter = strdup("");
         control->delimiter_pos = -1;
-        control->delimiter_length = 0;
         control->maximum_index_mismatches = barcode_length;
         control->maximum_delimiter_mismatches = -1;
-        control->stream = NULL;
+        control->fingerprint = strdup("");
         control->next = barcodes;
         controlinfo.barcode = control;
 
@@ -928,18 +990,17 @@ main(int argc, char *argv[])
         struct BarcodeInfo *fallback;
 
         fallback = malloc(sizeof(struct BarcodeInfo));
+        memset(fallback, 0, sizeof(struct BarcodeInfo));
         fallback->name = strdup("Unknown");
 
         fallback->index = malloc(barcode_length + 1);
         memset(fallback->index, 'X', barcode_length);
-        fallback->index[barcode_length] = '\0';
 
         fallback->delimiter = strdup("");
         fallback->delimiter_pos = -1;
-        fallback->delimiter_length = 0;
         fallback->maximum_index_mismatches = barcode_length;
         fallback->maximum_delimiter_mismatches = -1;
-        fallback->stream = NULL;
+        fallback->fingerprint = strdup("");
         fallback->next = barcodes;
 
         barcodes = fallback;

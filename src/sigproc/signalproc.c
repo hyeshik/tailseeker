@@ -35,26 +35,24 @@
 #include <math.h>
 #include "tailseq-sigproc.h"
 
+//#define DEBUG_SIGNAL_PROCESSING
 
-static float maximum_entropy=-1.;
-
-
-static float
+static inline float
 shannon_entropy(const float *probs)
 {
     float res;
     int i;
 
-    res = 0.;
+    res = 0.f;
     for (i = 0; i < NUM_CHANNELS; i++)
-        if (probs[i] > 0.)
+        if (probs[i] > 0.f)
             res -= probs[i] * logf(probs[i]);
 
     return res;
 }
 
 
-static void
+static float
 calculate_maximum_entropy(void)
 {
     float prob[NUM_CHANNELS];
@@ -63,11 +61,29 @@ calculate_maximum_entropy(void)
     for (i = 0; i < NUM_CHANNELS; i++)
         prob[i] = 1. / NUM_CHANNELS;
 
-    maximum_entropy = shannon_entropy(prob);
+    return shannon_entropy(prob);
 }
 
 
-static void
+void
+precalc_score_tables(struct PolyARulerParameters *params, float k, float center)
+{
+    float vpoint;
+    int i;
+
+    params->maximum_entropy = calculate_maximum_entropy();
+
+    for (i = 0; i < T_INTENSITY_SCORE_BINS; i++) {
+        vpoint = (1. * (.5 + i)) / T_INTENSITY_SCORE_BINS;
+        params->t_intensity_score[i] = 1. /
+                    (1. + expf(-k * (vpoint - center)));
+    }
+
+    params->t_intensity_score[T_INTENSITY_SCORE_BINS] = 1.f; /* for t=1.0 */
+}
+
+
+static inline void
 decrosstalk_intensity(float *out, const struct IntensitySet *original,
                       const float *colormatrix)
 {
@@ -98,7 +114,9 @@ check_balance_minimum(const char *seq, const struct PolyARulerParameters *params
     memset(found, 0, sizeof(short) * 256);
 
     for (i = params->balancer_start; i < params->balancer_end; i++) {
+#ifdef DEBUG_SIGNAL_PROCESSING
         printf("%c", seq[i]);
+#endif
         found[(int)seq[i]]++;
     }
 
@@ -133,8 +151,10 @@ probe_signal_ranges(float *signal_range_low, float *signal_range_bandwidth,
 
         decrosstalk_intensity(signals, &intensities[cycle], params->colormatrix);
 
+#ifdef DEBUG_SIGNAL_PROCESSING
         printf(" DXTKsignal %d - %.2f %.2f %.2f %.2f\n", cycle - params->balancer_start,
                     signals[0], signals[1], signals[2], signals[3]);
+#endif
 
         /* TODO: skip cycles to obey the dark cycles parameters. */
         for (channel = 0; channel < NUM_CHANNELS; channel++) {
@@ -161,12 +181,12 @@ probe_signal_ranges(float *signal_range_low, float *signal_range_bandwidth,
     for (channel = 0; channel < NUM_CHANNELS; channel++) {
         float sigsum;
 
-        sigsum = 0.;
+        sigsum = 0.f;
         for (rank = 0; rank < nneg; rank++)
             sigsum += lower_bounds[channel][rank];
         signal_range_low[channel] = sigsum / nneg;
 
-        sigsum = 0.;
+        sigsum = 0.f;
         for (rank = 0; rank < npos; rank++)
             sigsum += upper_bounds[channel][rank];
         signal_range_bandwidth[channel] = sigsum / npos
@@ -183,13 +203,19 @@ check_balancer(float *signal_range_low, float *signal_range_bandwidth,
                struct PolyARulerParameters *params,
                int *flags)
 {
+#ifdef DEBUG_SIGNAL_PROCESSING
     printf(" BALSEQ = ");
+#endif
     if (check_balance_minimum(seq, params) < 0) {
         *flags |= PAFLAG_BALANCER_BIASED;
+#ifdef DEBUG_SIGNAL_PROCESSING
         printf("\n");
+#endif
         return -1;
     }
+#ifdef DEBUG_SIGNAL_PROCESSING
     printf("\n");
+#endif
 
     if (probe_signal_ranges(signal_range_low, signal_range_bandwidth,
                             intensities, params) < 0) {
@@ -197,6 +223,7 @@ check_balancer(float *signal_range_low, float *signal_range_bandwidth,
         return -1;
     }
 
+#ifdef DEBUG_SIGNAL_PROCESSING
     {
         int i;
 
@@ -204,12 +231,13 @@ check_balancer(float *signal_range_low, float *signal_range_bandwidth,
             printf(" BALANCER %d = (%.2f, %.2f)\n", i,
                 signal_range_low[i], signal_range_bandwidth[i]);
     }
+#endif
 
     return 0;
 }
 
 
-static void
+static inline void
 normalize_signals(float *normalized, const float *signals,
                   const float *signal_range_low,
                   const float *signal_range_bandwidth)
@@ -217,12 +245,12 @@ normalize_signals(float *normalized, const float *signals,
     float signal_sum;
     int chan;
 
-    signal_sum = 0.;
+    signal_sum = 0.f;
     for (chan = 0; chan < NUM_CHANNELS; chan++) {
         normalized[chan] = (signals[chan] - signal_range_low[chan])
                             / signal_range_bandwidth[chan];
-        if (normalized[chan] < 0.)
-            normalized[chan] = 0.;
+        if (normalized[chan] < 0.f)
+            normalized[chan] = 0.f;
 
         signal_sum += normalized[chan];
     }
@@ -236,36 +264,37 @@ static int
 process_polya_signal(struct IntensitySet *intensities, int ncycles,
                      const float *signal_range_low,
                      const float *signal_range_bandwidth,
-                     struct PolyARulerParameters *params)
+                     struct PolyARulerParameters *params,
+                     int *flags)
 {
     int cycle, chan, ndarkcycles;
-    int8_t pa_score[ncycles], nonpa_score[ncycles];
+    int score_cumsum, score_cumsum_max, score_argmax_cycle;
+    int downhill_ext_width;
+    float downhill_ext_ground;
 
     ndarkcycles = 0;
-    memset(pa_score, 0, sizeof(int8_t) * ncycles);
-    memset(nonpa_score, 0, sizeof(int8_t) * ncycles);
+    score_cumsum = score_cumsum_max = 0;
+    score_argmax_cycle = -1;
+    downhill_ext_width = 0;
+    downhill_ext_ground = NAN;
 
-    if (maximum_entropy < 0.)
-        calculate_maximum_entropy();
-
-    printf(" ENTROPY ");
     for (cycle = 0; cycle < ncycles; cycle++) {
         float signals[NUM_CHANNELS];
         float normsignals[NUM_CHANNELS];
         float signal_sum;
+        float entropy_score, t_intensity_score, composite_score;
 
         decrosstalk_intensity(signals, &intensities[cycle],
                               params->colormatrix);
 
         /* Skip assigning scores if spot is dark. */
-        signal_sum = 0.;
+        signal_sum = 0.f;
         for (chan = 0; chan < NUM_CHANNELS; chan++)
-            if (signals[chan] > 0.)
+            if (signals[chan] > 0.f)
                 signal_sum += signals[chan];
 
         if (signal_sum < params->dark_cycles_threshold) {
             ndarkcycles++;
-            pa_score[cycle] = nonpa_score[cycle] = 0;
             continue;
         }
 
@@ -273,12 +302,59 @@ process_polya_signal(struct IntensitySet *intensities, int ncycles,
         normalize_signals(normsignals, signals, signal_range_low,
                           signal_range_bandwidth);
 
-        printf(" %d", (int)((maximum_entropy - shannon_entropy(normsignals)) * 100));
+        entropy_score = params->maximum_entropy -
+                        shannon_entropy(normsignals);
+#if NUM_CHANNELS == 4
+#define CHANNEL_T   3
+        t_intensity_score = params->t_intensity_score[
+                (int)(normsignals[CHANNEL_T] * T_INTENSITY_SCORE_BINS)];
+#undef CHANNEL_T
+#else
+#error Unsupported signal channel count.
+#endif
+
+        composite_score = entropy_score * t_intensity_score;
+        score_cumsum += -1 + (composite_score >= params->polya_score_threshold) * 2;
+        if (score_cumsum > score_cumsum_max) {
+            score_cumsum_max = score_cumsum;
+            score_argmax_cycle = cycle;
+
+            downhill_ext_ground = entropy_score;
+            downhill_ext_width = 0;
+        }
+        else if (!isnan(downhill_ext_ground)) {
+            if (downhill_ext_ground > entropy_score) {
+                downhill_ext_width++;
+                downhill_ext_ground = entropy_score;
+            }
+            else
+                downhill_ext_ground = NAN;
+        }
+
+#ifdef DEBUG_SIGNAL_PROCESSING
+        printf("(%03d) %6.2f %6.2f %6.2f %6.2f\t%.2f = %5.2f x %5.2f\t%.2f  %d%s %d\n", cycle,
+                signals[0], signals[1], signals[2], signals[3],
+                composite_score,
+                entropy_score, t_intensity_score, normsignals[3], score_cumsum,
+                score_argmax_cycle == cycle ? "*" : "",
+                downhill_ext_width);
+#endif
     }
 
+#ifdef DEBUG_SIGNAL_PROCESSING
     printf("\n");
+#endif
 
-    return 42;
+    if (ndarkcycles > 0) {
+        *flags |= PAFLAG_DARKCYCLE_EXISTS;
+        if (ndarkcycles >= params->max_dark_cycles) {
+            *flags |= PAFLAG_DARKCYCLE_OVER_THRESHOLD;
+            return -1;
+        }
+    }
+
+    return score_argmax_cycle + 1 +
+           (int)roundf(downhill_ext_width * params->downhill_extension_weight);
 }
 
 
@@ -361,8 +437,10 @@ measure_polya_length(struct CIFData **intensities,
             return -1;
     }
 
+#ifdef DEBUG_SIGNAL_PROCESSING
     printf(" PAFOUND: %d-%d // %s\n", polya_start, polya_end,
                                       sequence_formatted + delimiter_end);
+#endif
 
     /* Process the signals */
     if (polya_len >= POLYA_SIGNAL_PROC_TRIGGER) {
@@ -375,9 +453,16 @@ measure_polya_length(struct CIFData **intensities,
 
         polya_len_from_sig = process_polya_signal(spot_intensities,
                 insert_len, signal_range_low, signal_range_bandwidth,
-                ruler_params);
+                ruler_params, procflags);
+#ifdef DEBUG_SIGNAL_PROCESSING
         printf(" --> pA (%d)\n", polya_len_from_sig);
+#endif
+
+        if (polya_len_from_sig >= POLYA_SIGNAL_PROC_TRIGGER) {
+            *procflags |= PAFLAG_MEASURED_FROM_FLUORESCENCE;
+            return polya_len_from_sig;
+        }
     }
 
-    return 0;
+    return polya_len;
 }

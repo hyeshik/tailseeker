@@ -1,6 +1,6 @@
 CC=	gcc
-#CFLAGS=	-O3 -Wall -Werror -pg
-CFLAGS=	-O3 -Wall -Werror
+#CFLAGS=	-O0 -Wall -Werror -pg -ggdb
+CFLAGS=	-O3 -Wall -Werror -DNDEBUG
 LIBS=	-lz -lm
 bindir=	../bin
 
