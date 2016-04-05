@@ -136,9 +136,9 @@ int ini_parse_stream(ini_reader reader, void* stream, ini_handler handler,
             }
         }
         else if (*start) {
-            /* Not a comment, must be a name[=:]value pair */
-            end = find_chars_or_comment(start, "=:");
-            if (*end == '=' || *end == ':') {
+            /* Not a comment, must be a name=value pair */
+            end = find_chars_or_comment(start, "=");
+            if (*end == '=') {
                 *end = '\0';
                 name = rstrip(start);
                 value = lskip(end + 1);
@@ -149,13 +149,13 @@ int ini_parse_stream(ini_reader reader, void* stream, ini_handler handler,
 #endif
                 rstrip(value);
 
-                /* Valid name[=:]value pair found, call handler */
+                /* Valid name=value pair found, call handler */
                 strncpy0(prev_name, name, sizeof(prev_name));
                 if (!handler(user, section, name, value) && !error)
                     error = lineno;
             }
             else if (!error) {
-                /* No '=' or ':' found on name[=:]value line */
+                /* No '=' found on name=value line */
                 error = lineno;
             }
         }

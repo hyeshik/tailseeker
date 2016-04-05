@@ -114,7 +114,7 @@ guide you to set configurations correctly. Please run:
 
 ## The tailseeker suite
 
-Copyright (c) 2013-2016 Institute for Basic Science
+Copyright (c) 2013-2016 Hyeshik Chang
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),

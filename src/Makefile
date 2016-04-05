@@ -7,18 +7,19 @@ bindir=	../bin
 PROG=	${bindir}/sqi2fq ${bindir}/tailseq-sigproc
 
 SIGPROC_OBJECTS=	\
-	sigproc/tailseq-sigproc.o \
-	sigproc/cifreader.o \
-	sigproc/bclreader.o \
 	sigproc/altcalls.o \
-	sigproc/phix_control.o \
+	sigproc/bclreader.o \
+	sigproc/cifreader.o \
 	sigproc/controlaligner.o \
 	sigproc/findpolya.o \
+	sigproc/parseconfig.o \
+	sigproc/phix_control.o \
 	sigproc/signalproc.o \
 	sigproc/spotanalyzer.o \
+	sigproc/tailseq-sigproc.o \
 	sigproc/contrib/ini.o \
-	sigproc/contrib/my_strstr.o \
 	sigproc/contrib/misc.o \
+	sigproc/contrib/my_strstr.o \
 	sigproc/contrib/ssw.o
 
 SQI2FQ_OBJECTS=	\

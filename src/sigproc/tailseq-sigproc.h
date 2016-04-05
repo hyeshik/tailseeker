@@ -83,6 +83,15 @@ struct CIFData {
     struct IntensitySet intensity[1];
 };
 
+struct UMIInterval;
+struct UMIInterval {
+    int start;
+    int end;
+    int length;
+    int min_quality;
+    float min_fraction_passes;
+};
+
 struct BarcodeInfo;
 struct BarcodeInfo {
     char *name;
@@ -100,12 +109,17 @@ struct BarcodeInfo {
     int maximum_delimiter_mismatches;
     int maximum_fingerprint_mismatches;
 
+    struct UMIInterval *umi_ranges;
+    int umi_ranges_count;
+    int umi_total_length;
+
     FILE *stream;
     uint32_t clusters_mm0;
     uint32_t clusters_mm1;
     uint32_t clusters_mm2plus;
     uint32_t clusters_nodelim;
     uint32_t clusters_fpmismatch;
+    uint32_t clusters_qcfailed;
     struct BarcodeInfo *next;
 };
 
@@ -151,6 +165,7 @@ struct PolyAFinderParameters {
 struct PolyARulerParameters {
     int balancer_start;
     int balancer_end;
+    int balancer_length;
     int balancer_minimum_occurrence;
     int balancer_num_positive_samples;
     int balancer_num_negative_samples;
@@ -167,6 +182,42 @@ struct PolyARulerParameters {
     float downhill_extension_weight;
 };
 
+struct TailseekerConfig {
+    /* section source */
+    char *datadir, *laneid;
+    int lane, tile, total_cycles;
+    int index_start, index_length;
+    int threep_start, threep_length;
+    char *threep_colormatrix_filename;
+
+    /* section options */
+    int keep_no_delimiter;
+    int threads;
+    size_t read_buffer_size;
+    int read_buffer_entry_count;
+
+    /* section output */
+    char *fastq_output;
+    char *stats_output;
+    char *length_dists_output;
+
+    /* section alternative_calls */
+    struct AlternativeCallInfo *altcalls;
+
+    /* section control */
+    struct ControlFilterInfo controlinfo;
+
+    /* section polyA_finder */
+    struct PolyAFinderParameters finderparams;
+
+    /* section polyA_ruler */
+    struct PolyARulerParameters rulerparams;
+    float t_intensity_k, t_intensity_center;
+
+    /* section sample: */
+    struct BarcodeInfo *samples;
+};
+
 
 /* bclreader.c */
 extern struct BCLReader *open_bcl_file(const char *filename);
@@ -180,7 +231,6 @@ extern struct BCLReader **open_bcl_readers(const char *msgprefix, const char *da
                                            int lane, int tile,
                                            int ncycles, struct AlternativeCallInfo *altcalls);
 extern void close_bcl_readers(struct BCLReader **readers, int ncycles);
-
 
 /* cifreader.c */
 extern struct CIFReader *open_cif_file(const char *filename);
@@ -224,9 +274,6 @@ extern int try_alignment_to_control(const char *sequence_read, const int8_t *con
 extern char *my_strnstr(const char *s, const char *find, size_t len);
 
 /* findpolya.c */
-extern struct PolyAFinderParameters *create_polya_finder_parameters(int score_t,
-                    int score_acg, int score_n, size_t max_term_mod, size_t min_polya_len);
-extern void destroy_polya_finder_parameters(struct PolyAFinderParameters *params);
 extern uint32_t find_polya(const char *seq, size_t seqlen,
                            struct PolyAFinderParameters *params);
 
@@ -254,5 +301,8 @@ extern int process_spots(const char *laneid, int tile, int ncycles,
 /* misc.c */
 extern int inverse_4x4_matrix(const float *m, float *out);
 
+/* parseconfig.c */
+extern struct TailseekerConfig *parse_config(const char *filename);
+extern void free_config(struct TailseekerConfig *cfg);
 
 #endif
