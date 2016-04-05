@@ -92,8 +92,8 @@ struct UMIInterval {
     float min_fraction_passes;
 };
 
-struct BarcodeInfo;
-struct BarcodeInfo {
+struct SampleInfo;
+struct SampleInfo {
     char *name;
     char *index;
 
@@ -120,7 +120,7 @@ struct BarcodeInfo {
     uint32_t clusters_nodelim;
     uint32_t clusters_fpmismatch;
     uint32_t clusters_qcfailed;
-    struct BarcodeInfo *next;
+    struct SampleInfo *next;
 };
 
 struct AlternativeCallReader {
@@ -144,7 +144,7 @@ struct ControlFilterInfo {
     char name[CONTROL_NAME_MAX];
     int first_cycle;
     int read_length;
-    struct BarcodeInfo *barcode;
+    struct SampleInfo *barcode;
 };
 
 #define CONTROL_ALIGN_BASE_COUNT            5
@@ -215,7 +215,7 @@ struct TailseekerConfig {
     float t_intensity_k, t_intensity_center;
 
     /* section sample: */
-    struct BarcodeInfo *samples;
+    struct SampleInfo *samples;
 };
 
 
@@ -279,24 +279,15 @@ extern uint32_t find_polya(const char *seq, size_t seqlen,
 
 /* signalproc.c */
 extern int load_color_matrix(float *mtx, const char *filename);
-extern int measure_polya_length(struct CIFData **intensities,
-                  const char *sequence_formatted, int ncycles, uint32_t clusterno,
-                  int threep_start, int threep_length, int delimiter_end,
-                  struct PolyAFinderParameters *finder_params,
-                  struct PolyARulerParameters *ruler_params, int *procflags);
+extern int measure_polya_length(struct TailseekerConfig *cfg,
+                struct CIFData **intensities, const char *sequence_formatted,
+                uint32_t clusterno, int delimiter_end, int *procflags);
 extern void precalc_score_tables(struct PolyARulerParameters *params,
                                  float t_score_k, float t_score_center);
 
 /* spotanalyzer.c */
-extern int process_spots(const char *laneid, int tile, int ncycles,
-                uint32_t firstclusterno, int threep_start, int threep_length,
-                int barcode_start, int barcode_length,
-                struct BarcodeInfo *barcodes,
-                struct CIFData **intensities, struct BCLData **basecalls,
-                struct ControlFilterInfo *control_info,
-                struct PolyAFinderParameters *finder_params,
-                struct PolyARulerParameters *ruler_params,
-                int keep_no_delimiter);
+extern int process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
+                         struct CIFData **intensities, struct BCLData **basecalls);
 
 /* misc.c */
 extern int inverse_4x4_matrix(const float *m, float *out);

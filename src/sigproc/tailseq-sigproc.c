@@ -37,7 +37,7 @@
 
 
 static int
-spawn_writers(const char *writercmd, struct BarcodeInfo *barcodes)
+spawn_writers(const char *writercmd, struct SampleInfo *barcodes)
 {
     for (; barcodes != NULL; barcodes = barcodes->next) {
         char cmd[BUFSIZ];
@@ -56,7 +56,7 @@ spawn_writers(const char *writercmd, struct BarcodeInfo *barcodes)
 
 
 static void
-terminate_writers(struct BarcodeInfo *barcodes)
+terminate_writers(struct SampleInfo *barcodes)
 {
     for (; barcodes != NULL; barcodes = barcodes->next)
         if (barcodes->stream != NULL) {
@@ -151,14 +151,6 @@ load_intensities_and_basecalls(struct CIFReader **cifreader, struct BCLReader **
 
 static int
 process(struct TailseekerConfig *cfg)
-/*
-const char *datadir, const char *laneid, int lane, int tile, int ncycles,
-        int threep_start, int threep_length, int index_start, int index_length,
-        struct BarcodeInfo *barcodes, const char *writercmd,
-        struct AlternativeCallInfo *altcalls, struct ControlFilterInfo *control_info,
-        struct PolyAFinderParameters *finderparams,
-        struct PolyARulerParameters *rulerparams, int blocksize, int keep_no_delimiter)
- */
 {
     struct CIFReader **cifreader;
     struct BCLReader **bclreader;
@@ -219,13 +211,8 @@ const char *datadir, const char *laneid, int lane, int tile, int ncycles,
             goto onError;
 
         printf("%sDemultiplexing and writing\n", msgprefix);
-        if (process_spots(cfg->laneid, cfg->tile, cfg->total_cycles,
-                          nclusters - clusters_to_go,
-                          cfg->threep_start, cfg->threep_length,
-                          cfg->index_start, cfg->index_length,
-                          cfg->samples, intensities, basecalls, &cfg->controlinfo,
-                          &cfg->finderparams, &cfg->rulerparams,
-                          cfg->keep_no_delimiter) == -1)
+        if (process_spots(cfg, nclusters - clusters_to_go,
+                          intensities, basecalls) < 0)
             goto onError;
 
         clusters_to_go -= clusters_to_read;
@@ -278,7 +265,7 @@ const char *datadir, const char *laneid, int lane, int tile, int ncycles,
 
 
 static int
-write_demultiplexing_statistics(const char *output, struct BarcodeInfo *barcodes)
+write_demultiplexing_statistics(const char *output, struct SampleInfo *barcodes)
 {
     FILE *fp;
 

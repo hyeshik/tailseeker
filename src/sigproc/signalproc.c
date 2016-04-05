@@ -392,22 +392,23 @@ load_color_matrix(float *mtx, const char *filename)
 
 
 int
-measure_polya_length(struct CIFData **intensities,
-                     const char *sequence_formatted, int ncycles,
-                     uint32_t clusterno, int threep_start,
-                     int threep_length, int delimiter_end,
-                     struct PolyAFinderParameters *finder_params,
-                     struct PolyARulerParameters *ruler_params,
-                     int *procflags)
+measure_polya_length(struct TailseekerConfig *cfg,
+                     struct CIFData **intensities,
+                     const char *sequence_formatted, uint32_t clusterno,
+                     int delimiter_end, int *procflags)
 {
+    struct PolyARulerParameters *ruler_params;
     float signal_range_bandwidth[NUM_CHANNELS];
     float signal_range_low[NUM_CHANNELS];
     int polya_start, polya_end, polya_len;
     uint32_t polya_ret;
 
+    ruler_params = &cfg->rulerparams;
+
     /* Locate the starting position of poly(A) tail if available */
     polya_ret = find_polya(sequence_formatted + delimiter_end,
-                           ncycles - delimiter_end, finder_params);
+                           cfg->threep_start + cfg->threep_length -
+                           delimiter_end, &cfg->finderparams);
     polya_start = polya_ret >> 16;
     polya_end = polya_ret & 0xffff;
     polya_len = polya_end - polya_start;
@@ -420,15 +421,14 @@ measure_polya_length(struct CIFData **intensities,
      * low-quality spots with poly(A)+ tags against poly(A)- tags.
      */
     {
-        size_t balancer_length=ruler_params->balancer_end - ruler_params->balancer_start;
-        struct IntensitySet spot_intensities[balancer_length];
+        struct IntensitySet spot_intensities[ruler_params->balancer_length];
 
-        fetch_intensity(spot_intensities, intensities, threep_start,
-                        balancer_length, clusterno);
+        fetch_intensity(spot_intensities, intensities, cfg->threep_start,
+                        ruler_params->balancer_length, clusterno);
 
         if (check_balancer(signal_range_low, signal_range_bandwidth,
                            spot_intensities,
-                           sequence_formatted + threep_start,
+                           sequence_formatted + cfg->threep_start,
                            ruler_params, procflags) < 0)
             return -1;
     }
@@ -439,8 +439,8 @@ measure_polya_length(struct CIFData **intensities,
 #endif
 
     /* Process the signals */
-    if (polya_len >= finder_params->sigproc_trigger_polya_length) {
-        size_t insert_len=threep_start + threep_length - delimiter_end;
+    if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
+        size_t insert_len=cfg->threep_start + cfg->threep_length - delimiter_end;
         struct IntensitySet spot_intensities[insert_len];
         int polya_len_from_sig;
 
@@ -455,7 +455,7 @@ measure_polya_length(struct CIFData **intensities,
 #endif
 
         if (polya_len_from_sig >=
-                finder_params->sigproc_trigger_polya_length) {
+                cfg->finderparams.sigproc_trigger_polya_length) {
             *procflags |= PAFLAG_MEASURED_FROM_FLUORESCENCE;
             return polya_len_from_sig;
         }

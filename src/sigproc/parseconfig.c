@@ -236,7 +236,7 @@ feed_polyA_ruler_entry(struct TailseekerConfig *cfg,
 
 
 static int
-feed_sample_umi_entry(struct BarcodeInfo *sample, const char *name,
+feed_sample_umi_entry(struct SampleInfo *sample, const char *name,
                       const char *value)
 {
     const char *numberpart;
@@ -302,20 +302,20 @@ static int
 feed_sample_entry(struct TailseekerConfig *cfg, const char *samplename,
                   const char *name, const char *value)
 {
-    struct BarcodeInfo *sample;
+    struct SampleInfo *sample;
 
     for (sample = cfg->samples; sample != NULL; sample = sample->next)
         if (*name != '\0' && strcmp(sample->name, samplename) == 0)
             break;
 
     if (sample == NULL) {
-        sample = malloc(sizeof(struct BarcodeInfo));
+        sample = malloc(sizeof(struct SampleInfo));
         if (sample == NULL) {
             perror("feed_sample_entry");
             return -1;
         }
 
-        memset(sample, 0, sizeof(struct BarcodeInfo));
+        memset(sample, 0, sizeof(struct SampleInfo));
         sample->name = strdup(samplename);
         sample->next = cfg->samples;
         cfg->samples = sample;
@@ -420,7 +420,7 @@ set_default_configuration(struct TailseekerConfig *cfg)
 static void
 compute_derived_values(struct TailseekerConfig *cfg)
 {
-    struct BarcodeInfo *sample;
+    struct SampleInfo *sample;
 
     cfg->rulerparams.balancer_end = cfg->rulerparams.balancer_start +
                                     cfg->rulerparams.balancer_length;
@@ -451,10 +451,10 @@ compute_derived_values(struct TailseekerConfig *cfg)
 
     /* Add fake samples for PhiX control. */
     if (cfg->controlinfo.name[0] != '\0') {
-        struct BarcodeInfo *control;
+        struct SampleInfo *control;
 
-        control = malloc(sizeof(struct BarcodeInfo));
-        memset(control, 0, sizeof(struct BarcodeInfo));
+        control = malloc(sizeof(struct SampleInfo));
+        memset(control, 0, sizeof(struct SampleInfo));
         control->name = strdup(cfg->controlinfo.name);
 
         control->index = malloc(cfg->index_length + 1);
@@ -473,10 +473,10 @@ compute_derived_values(struct TailseekerConfig *cfg)
 
     /* Add a fall-back entry for "Unknown" reads. */
     {
-        struct BarcodeInfo *fallback;
+        struct SampleInfo *fallback;
 
-        fallback = malloc(sizeof(struct BarcodeInfo));
-        memset(fallback, 0, sizeof(struct BarcodeInfo));
+        fallback = malloc(sizeof(struct SampleInfo));
+        memset(fallback, 0, sizeof(struct SampleInfo));
         fallback->name = strdup("Unknown");
 
         fallback->index = malloc(cfg->index_length + 1);
@@ -556,7 +556,7 @@ free_config(struct TailseekerConfig *cfg)
     free_if_not_null(cfg->length_dists_output);
 
     while (cfg->samples != NULL) {
-        struct BarcodeInfo *bk;
+        struct SampleInfo *bk;
 
         if (cfg->samples->stream != NULL)
             pclose(cfg->samples->stream);

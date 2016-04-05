@@ -33,11 +33,11 @@
 #include "tailseq-sigproc.h"
 
 
-static struct BarcodeInfo *
-assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *barcodes,
+static struct SampleInfo *
+assign_barcode(const char *indexseq, int barcode_length, struct SampleInfo *barcodes,
                int *pmismatches)
 {
-    struct BarcodeInfo *bestidx, *pidx;
+    struct SampleInfo *bestidx, *pidx;
     int bestmismatches, secondbestfound, i;
 
     bestidx = NULL;
@@ -73,7 +73,7 @@ assign_barcode(const char *indexseq, int barcode_length, struct BarcodeInfo *bar
 
 
 static int
-find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode,
+find_delimiter_end_position(const char *sequence, struct SampleInfo *barcode,
                             int *flags)
 {
     static const int offsets[]={0, -1, 1, 9999};
@@ -108,7 +108,7 @@ find_delimiter_end_position(const char *sequence, struct BarcodeInfo *barcode,
 
 
 static int
-count_fingerprint_mismatches(const char *seq, int pos, struct BarcodeInfo *barcodes)
+count_fingerprint_mismatches(const char *seq, int pos, struct SampleInfo *barcodes)
 {
     const char *readp, *fpp;
     int mismatches;
@@ -126,21 +126,14 @@ count_fingerprint_mismatches(const char *seq, int pos, struct BarcodeInfo *barco
 
 
 int
-process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno,
-              int threep_start, int threep_length,
-              int barcode_start, int barcode_length,
-              struct BarcodeInfo *barcodes,
-              struct CIFData **intensities, struct BCLData **basecalls,
-              struct ControlFilterInfo *control_info,
-              struct PolyAFinderParameters *finder_params,
-              struct PolyARulerParameters *ruler_params,
-              int keep_no_delimiter)
+process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
+              struct CIFData **intensities, struct BCLData **basecalls)
 {
     uint32_t cycleno, clusterno;
     uint32_t clustersinblock;
-    char sequence_formatted[ncycles+1], quality_formatted[ncycles+1];
-    char intensity_formatted[ncycles*8+1];
-    struct BarcodeInfo *noncontrol_barcodes;
+    char sequence_formatted[cfg->total_cycles+1], quality_formatted[cfg->total_cycles+1];
+    char intensity_formatted[cfg->total_cycles*8+1];
+    struct SampleInfo *noncontrol_samples;
     int mismatches;
 
     int8_t ssw_score_mat[CONTROL_ALIGN_BASE_COUNT * CONTROL_ALIGN_BASE_COUNT];
@@ -150,10 +143,10 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
 
 
     /* set the starting point of index matching to non-special (other than Unknown and control)
-     * barcodes */
-    for (noncontrol_barcodes = barcodes;
-         noncontrol_barcodes != NULL && noncontrol_barcodes->index[0] != 'X';
-         noncontrol_barcodes = noncontrol_barcodes->next)
+     * samples */
+    for (noncontrol_samples = cfg->samples;
+         noncontrol_samples != NULL && noncontrol_samples->index[0] != 'X';
+         noncontrol_samples = noncontrol_samples->next)
         /* do nothing */;
 
     /* prepare reference sequence for (PhiX) control */
@@ -161,7 +154,7 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
     control_seq_length = -1;
     control_alignment_mask_len = min_control_alignment_score = -1;
 
-    if (control_info != NULL) {
+    if (cfg->controlinfo.name[0] != '\0') {
         initialize_ssw_score_matrix(ssw_score_mat, CONTROL_ALIGN_MATCH_SCORE,
                                     CONTROL_ALIGN_MISMATCH_SCORE);
 
@@ -169,12 +162,13 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
         if (control_seq_length < 0)
             return -1;
 
-        min_control_alignment_score = control_info->read_length * CONTROL_ALIGN_MINIMUM_SCORE;
-        control_alignment_mask_len = control_info->read_length / 2;
+        min_control_alignment_score = cfg->controlinfo.read_length *
+                                      CONTROL_ALIGN_MINIMUM_SCORE;
+        control_alignment_mask_len = cfg->controlinfo.read_length / 2;
     }
 
     clustersinblock = intensities[0]->nclusters;
-    for (cycleno = 0; cycleno < ncycles; cycleno++)
+    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++)
         if (clustersinblock != intensities[cycleno]->nclusters ||
                 clustersinblock != basecalls[cycleno]->nclusters) {
             fprintf(stderr, "Inconsistent number of clusters in cycle %d.\n", cycleno);
@@ -184,29 +178,29 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
     mismatches = 0;
 
     for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
-        struct BarcodeInfo *bc;
+        struct SampleInfo *bc;
         int delimiter_end, procflags=0;
         int polya_len;
 
-        format_basecalls(sequence_formatted, quality_formatted, basecalls, ncycles, clusterno);
-        format_intensity(intensity_formatted, intensities, ncycles, clusterno, 0);
+        format_basecalls(sequence_formatted, quality_formatted, basecalls, cfg->total_cycles, clusterno);
+        format_intensity(intensity_formatted, intensities, cfg->total_cycles, clusterno, 0);
 
-        bc = assign_barcode(sequence_formatted + barcode_start, barcode_length,
-                            noncontrol_barcodes, &mismatches);
+        bc = assign_barcode(sequence_formatted + cfg->index_start, cfg->index_length,
+                            noncontrol_samples, &mismatches);
         if (bc != NULL)
             /* barcode is assigned to a regular sample. do nothing here. */;
-        else if (control_info == NULL) /* no control sequence is given. treat it Unknown. */
-            bc = barcodes; /* the first barcodes in the list is "Unknown". */
+        else if (cfg->controlinfo.name[0] == '\0') /* no control sequence is given. treat it Unknown. */
+            bc = cfg->samples; /* the first samples in the list is "Unknown". */
         else
             switch (try_alignment_to_control(sequence_formatted, control_seq,
-                                             control_seq_length, control_info,
+                                             control_seq_length, &cfg->controlinfo,
                                              ssw_score_mat, min_control_alignment_score,
                                              control_alignment_mask_len)) {
                 case 0: /* not aligned to control, set as Unknown. */
-                    bc = barcodes;
+                    bc = cfg->samples;
                     break;
                 case 1: /* aligned. set as control. */
-                    bc = control_info->barcode; /* set as control */
+                    bc = cfg->controlinfo.barcode; /* set as control */
                     break;
                 case -1: /* error */
                 default:
@@ -229,7 +223,7 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
         /* Check fingerprint sequences with defined allowed mismatches. */
         if (bc->fingerprint_length > 0) {
             mismatches = count_fingerprint_mismatches(sequence_formatted,
-                                                      threep_start, bc);
+                                                      cfg->threep_start, bc);
             if (mismatches > bc->maximum_fingerprint_mismatches) {
                 bc->clusters_fpmismatch++;
                 continue;
@@ -243,21 +237,19 @@ process_spots(const char *laneid, int tile, int ncycles, uint32_t firstclusterno
                                                         bc, &procflags);
             if (delimiter_end < 0) {
                 bc->clusters_nodelim++;
-                if (!keep_no_delimiter)
+                if (!cfg->keep_no_delimiter)
                     continue;
 
                 polya_len = -1;
             }
             else
-                polya_len = measure_polya_length(intensities,
-                        sequence_formatted, ncycles, clusterno,
-                        threep_start, threep_length,
-                        delimiter_end, finder_params, ruler_params,
-                        &procflags);
+                polya_len = measure_polya_length(cfg, intensities,
+                                sequence_formatted, clusterno,
+                                delimiter_end, &procflags);
         }
 
         if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%d\t%d\t",
-                    laneid, tile, firstclusterno + clusterno,
+                    cfg->laneid, cfg->tile, firstclusterno + clusterno,
                     procflags, delimiter_end, polya_len) < 0) {
             perror("demultiplex_and_write");
 
