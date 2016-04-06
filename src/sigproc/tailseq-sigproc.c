@@ -198,6 +198,17 @@ load_intensities_and_basecalls(struct TailseekerConfig *cfg,
 
 
 static int
+distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities,
+                      struct BCLData **basecalls, uint32_t firstclusterno)
+{
+    if (process_spots(cfg, firstclusterno, intensities, basecalls) < 0)
+        return -1;
+
+    return 0;
+}
+
+
+static int
 process(struct TailseekerConfig *cfg)
 {
     struct CIFReader **cifreader;
@@ -209,6 +220,7 @@ process(struct TailseekerConfig *cfg)
     char msgprefix[BUFSIZ];
 
     blocksize = cfg->read_buffer_entry_count;
+    initialize_control_aligner(&cfg->controlinfo);
 
     snprintf(msgprefix, BUFSIZ, "[%s%d] ", cfg->laneid, cfg->tile);
 
@@ -253,9 +265,10 @@ process(struct TailseekerConfig *cfg)
                                            clusters_to_read, intensities, basecalls) == -1)
             goto onError;
 
-        printf("%sDemultiplexing and writing\n", msgprefix);
-        if (process_spots(cfg, nclusters - clusters_to_go,
-                          intensities, basecalls) < 0)
+        printf("%sAnalyzing and writing out\n", msgprefix);
+
+        if (distribute_processing(cfg, intensities, basecalls,
+                                  nclusters - clusters_to_go) < 0)
             goto onError;
 
         clusters_to_go -= clusters_to_read;
@@ -276,6 +289,7 @@ process(struct TailseekerConfig *cfg)
         goto onError;
 
     close_writers(cfg->samples);
+    free_control_aligner(&cfg->controlinfo);
 
     printf("[%s%d] Finished.\n", cfg->laneid, cfg->tile);
 
@@ -302,6 +316,7 @@ process(struct TailseekerConfig *cfg)
     free(basecalls);
 
     close_writers(cfg->samples);
+    free_control_aligner(&cfg->controlinfo);
 
     return -1;
 }

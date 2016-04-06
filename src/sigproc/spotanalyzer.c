@@ -327,36 +327,12 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
     struct SampleInfo *noncontrol_samples;
     int mismatches;
 
-    int8_t ssw_score_mat[CONTROL_ALIGN_BASE_COUNT * CONTROL_ALIGN_BASE_COUNT];
-    int8_t *control_seq;
-    ssize_t control_seq_length;
-    int32_t min_control_alignment_score, control_alignment_mask_len;
-
-
     /* set the starting point of index matching to non-special (other than Unknown and control)
      * samples */
     for (noncontrol_samples = cfg->samples;
          noncontrol_samples != NULL && noncontrol_samples->index[0] != 'X';
          noncontrol_samples = noncontrol_samples->next)
         /* do nothing */;
-
-    /* prepare reference sequence for (PhiX) control */
-    control_seq = NULL;
-    control_seq_length = -1;
-    control_alignment_mask_len = min_control_alignment_score = -1;
-
-    if (cfg->controlinfo.name[0] != '\0') {
-        initialize_ssw_score_matrix(ssw_score_mat, CONTROL_ALIGN_MATCH_SCORE,
-                                    CONTROL_ALIGN_MISMATCH_SCORE);
-
-        control_seq_length = load_control_sequence(&control_seq);
-        if (control_seq_length < 0)
-            return -1;
-
-        min_control_alignment_score = cfg->controlinfo.read_length *
-                                      CONTROL_ALIGN_MINIMUM_SCORE;
-        control_alignment_mask_len = cfg->controlinfo.read_length / 2;
-    }
 
     clustersinblock = intensities[0]->nclusters;
     for (cycleno = 0; cycleno < cfg->threep_length; cycleno++)
@@ -387,10 +363,7 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
         else if (cfg->controlinfo.name[0] == '\0') /* no control sequence is given. treat it Unknown. */
             bc = cfg->samples; /* the first samples in the list is "Unknown". */
         else
-            switch (try_alignment_to_control(sequence_formatted, control_seq,
-                                             control_seq_length, &cfg->controlinfo,
-                                             ssw_score_mat, min_control_alignment_score,
-                                             control_alignment_mask_len)) {
+            switch (try_alignment_to_control(&cfg->controlinfo, sequence_formatted)) {
                 case 0: /* not aligned to control, set as Unknown. */
                     bc = cfg->samples;
                     break;
@@ -400,7 +373,6 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                 case -1: /* error */
                 default:
                     fprintf(stderr, "Failed to align read sequence to control.\n");
-                    free(control_seq);
                     return -1;
             }
 
@@ -458,14 +430,9 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                 procflags, delimiter_end, polya_len, terminal_mods) < 0) {
             perror("process_spots");
 
-            if (control_seq != NULL)
-                free(control_seq);
             return -1;
         }
     }
-
-    if (control_seq != NULL)
-        free(control_seq);
 
     return 0;
 }

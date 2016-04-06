@@ -142,20 +142,26 @@ struct AlternativeCallInfo {
     struct AlternativeCallInfo *next;
 };
 
-#define CONTROL_NAME_MAX    128
-struct ControlFilterInfo {
-    char name[CONTROL_NAME_MAX];
-    int first_cycle;
-    int read_length;
-    struct SampleInfo *barcode;
-};
-
 #define CONTROL_ALIGN_BASE_COUNT            5
 #define CONTROL_ALIGN_MATCH_SCORE           1
 #define CONTROL_ALIGN_MISMATCH_SCORE        2
 #define CONTROL_ALIGN_GAP_OPEN_SCORE        4
 #define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
 #define CONTROL_ALIGN_MINIMUM_SCORE         0.65
+
+#define CONTROL_NAME_MAX    128
+struct ControlFilterInfo {
+    char name[CONTROL_NAME_MAX];
+    int first_cycle;
+    int read_length;
+    struct SampleInfo *barcode;
+
+    int8_t ssw_score_mat[CONTROL_ALIGN_BASE_COUNT * CONTROL_ALIGN_BASE_COUNT];
+    int8_t *control_seq;
+    ssize_t control_seq_length;
+    int32_t min_control_alignment_score;
+    int32_t control_alignment_mask_len;
+};
 
 struct BalancerParameters {
     int start;
@@ -273,14 +279,10 @@ extern const char *phix_control_sequence;
 extern const char *phix_control_sequence_rev;
 
 /* controlaligner.c */
-extern void initialize_ssw_score_matrix(int8_t *score_mat, int8_t match_score,
-                                        int8_t mismatch_score);
-extern ssize_t load_control_sequence(int8_t **control_seq);
-extern int try_alignment_to_control(const char *sequence_read, const int8_t *control_seq,
-                                    ssize_t control_seq_length,
-                                    struct ControlFilterInfo *control_info,
-                                    int8_t *ssw_score_mat, int32_t min_control_alignment_score,
-                                    int32_t control_alignment_mask_len);
+extern int try_alignment_to_control(struct ControlFilterInfo *control_info,
+                                    const char *sequence_read);
+extern int initialize_control_aligner(struct ControlFilterInfo *ctlinfo);
+extern void free_control_aligner(struct ControlFilterInfo *ctlinfo);
 
 /* my_strstr.c */
 extern char *my_strnstr(const char *s, const char *find, size_t len);

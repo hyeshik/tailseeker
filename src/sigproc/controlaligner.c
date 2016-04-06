@@ -54,7 +54,7 @@ static const int8_t DNABASE2NUM[128] = {
 };
 
 
-void
+static void
 initialize_ssw_score_matrix(int8_t *score_mat, int8_t match_score, int8_t mismatch_score)
 {
     int l, m, k;
@@ -71,7 +71,7 @@ initialize_ssw_score_matrix(int8_t *score_mat, int8_t match_score, int8_t mismat
 }
 
 
-ssize_t
+static ssize_t
 load_control_sequence(int8_t **control_seq)
 {
     int8_t *ctlseq, *pctlseq;
@@ -108,11 +108,8 @@ load_control_sequence(int8_t **control_seq)
 
 
 int
-try_alignment_to_control(const char *sequence_read, const int8_t *control_seq,
-                         ssize_t control_seq_length,
-                         struct ControlFilterInfo *control_info,
-                         int8_t *ssw_score_mat, int32_t min_control_alignment_score,
-                         int32_t control_alignment_mask_len)
+try_alignment_to_control(struct ControlFilterInfo *control_info,
+                         const char *sequence_read)
 {
     s_profile *alnprof;
     s_align *alnresult;
@@ -128,18 +125,19 @@ try_alignment_to_control(const char *sequence_read, const int8_t *control_seq,
     for (i = 0, j = control_info->first_cycle; i < control_info->read_length; i++, j++)
         read_seq[i] = DNABASE2NUM[(int)sequence_read[j]];
 
-    alnprof = ssw_init(read_seq, control_info->read_length, ssw_score_mat, 5, 0);
+    alnprof = ssw_init(read_seq, control_info->read_length, control_info->ssw_score_mat, 5, 0);
     if (alnprof == NULL) {
         perror("try_alignment_to_control");
         return -1;
     }
 
-    alnresult = ssw_align(alnprof, control_seq, control_seq_length,
+    alnresult = ssw_align(alnprof, control_info->control_seq,
+                          control_info->control_seq_length,
                           CONTROL_ALIGN_GAP_OPEN_SCORE,
                           CONTROL_ALIGN_GAP_EXTENSION_SCORE, 2,
-                          min_control_alignment_score,
-                          0, control_alignment_mask_len);
-    r = (alnresult != NULL && alnresult->score1 >= min_control_alignment_score);
+                          control_info->min_control_alignment_score,
+                          0, control_info->control_alignment_mask_len);
+    r = (alnresult != NULL && alnresult->score1 >= control_info->min_control_alignment_score);
 
     if (alnresult != NULL)
         align_destroy(alnresult);
@@ -147,4 +145,38 @@ try_alignment_to_control(const char *sequence_read, const int8_t *control_seq,
     init_destroy(alnprof);
 
     return r;
+}
+
+
+int
+initialize_control_aligner(struct ControlFilterInfo *ctlinfo)
+{
+    ctlinfo->control_seq = NULL;
+    ctlinfo->control_seq_length = -1;
+    ctlinfo->control_alignment_mask_len = ctlinfo->min_control_alignment_score = -1;
+
+    if (ctlinfo->name[0] != '\0') {
+        initialize_ssw_score_matrix(ctlinfo->ssw_score_mat,
+                                    CONTROL_ALIGN_MATCH_SCORE,
+                                    CONTROL_ALIGN_MISMATCH_SCORE);
+
+        ctlinfo->control_seq_length = load_control_sequence(&ctlinfo->control_seq);
+        if (ctlinfo->control_seq_length < 0)
+            return -1;
+
+        ctlinfo->min_control_alignment_score =
+                ctlinfo->read_length * CONTROL_ALIGN_MINIMUM_SCORE;
+        ctlinfo->control_alignment_mask_len = ctlinfo->read_length / 2;
+    }
+
+    return 0;
+}
+
+void
+free_control_aligner(struct ControlFilterInfo *ctlinfo)
+{
+    if (ctlinfo->control_seq != NULL) {
+        free(ctlinfo->control_seq);
+        ctlinfo->control_seq = NULL;
+    }
 }
