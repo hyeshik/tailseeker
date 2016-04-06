@@ -269,7 +269,7 @@ write_measurements_to_streams(struct TailseekerConfig *cfg,
     size_t entryname_len;
 
     entryname[MAX_ENTRYNAME_LEN] = '\0';
-    snprintf(entryname, MAX_ENTRYNAME_LEN, "%s%04d:%08u:%04d:%03d:",
+    snprintf(entryname, MAX_ENTRYNAME_LEN, "%s%04d:%08u:%04x:%03d:",
              cfg->laneid, cfg->tile, (unsigned int)clusterno,
              procflags, polya_len);
     entryname_len = strlen(entryname);
