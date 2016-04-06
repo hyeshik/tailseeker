@@ -214,80 +214,13 @@ fetch_intensity(struct IntensitySet *signalout, struct CIFData **intensities,
 }
 
 
-void
-format_intensity(char *inten, struct CIFData **intensities,
-                 int ncycles, uint32_t clusterno, int scalefactor)
-{
-    /* This function consumes CPU time than most of the other parts in this program.
-     * It is optimized with some black magics. */
-    uint32_t i;
-    int16_t value_a, value_c, value_g, value_t;
-
-#define INTENSITY_CODING_BASE       33
-#define INTENSITY_CODING_RADIX      91
-#define INTENSITY_CODING_WIDTH      8192
-#define INTENSITY_BOTTOM_SHIFT      255
-
-#define FORMAT_INTENSITY(valueexpr)                                             \
-    for (i = 0; i < ncycles; i++) {                                             \
-        int16_t *valueset;                                                      \
-        valueset = intensities[i]->intensity[clusterno].value;                  \
-                                                                                \
-        value_a = (valueset[0] + INTENSITY_BOTTOM_SHIFT);                       \
-        value_c = (valueset[1] + INTENSITY_BOTTOM_SHIFT);                       \
-        value_g = (valueset[2] + INTENSITY_BOTTOM_SHIFT);                       \
-        value_t = (valueset[3] + INTENSITY_BOTTOM_SHIFT);                       \
-                                                                                \
-        value_a = value_a < 0 ? 0 : (value_a valueexpr);                        \
-        value_c = value_c < 0 ? 0 : (value_c valueexpr);                        \
-        value_g = value_g < 0 ? 0 : (value_g valueexpr);                        \
-        value_t = value_t < 0 ? 0 : (value_t valueexpr);                        \
-                                                                                \
-        if (value_a >= INTENSITY_CODING_WIDTH)                                  \
-            value_a = INTENSITY_CODING_WIDTH - 1;                               \
-        if (value_c >= INTENSITY_CODING_WIDTH)                                  \
-            value_c = INTENSITY_CODING_WIDTH - 1;                               \
-        if (value_g >= INTENSITY_CODING_WIDTH)                                  \
-            value_g = INTENSITY_CODING_WIDTH - 1;                               \
-        if (value_t >= INTENSITY_CODING_WIDTH)                                  \
-            value_t = INTENSITY_CODING_WIDTH - 1;                               \
-                                                                                \
-        inten[0] = (value_a / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
-        inten[1] = (value_a % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
-        inten[2] = (value_c / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
-        inten[3] = (value_c % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
-        inten[4] = (value_g / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
-        inten[5] = (value_g % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
-        inten[6] = (value_t / INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
-        inten[7] = (value_t % INTENSITY_CODING_RADIX) + INTENSITY_CODING_BASE;  \
-        inten += 8;                                                             \
-    }
-
-    switch (scalefactor) { /* fast paths for usual scales. */
-    case 0:
-        FORMAT_INTENSITY(+ 0)
-        break;
-    case 1:
-        FORMAT_INTENSITY(>> 1)
-        break;
-    case 2:
-        FORMAT_INTENSITY(>> 2)
-        break;
-    default:
-        FORMAT_INTENSITY(>> scalefactor)
-        break;
-    }
-
-    *inten = 0;
-}
-
-
 struct CIFReader **
-open_cif_readers(const char *msgprefix, const char *datadir, int lane, int tile, int ncycles)
+open_cif_readers(const char *msgprefix, const char *datadir, int lane, int tile,
+                 int firstcycle, int ncycles)
 {
-    int cycleno;
     char path[PATH_MAX];
     struct CIFReader **readers;
+    int i;
 
     readers = malloc(sizeof(struct CIFReader *) * ncycles);
     if (readers == NULL) {
@@ -295,16 +228,20 @@ open_cif_readers(const char *msgprefix, const char *datadir, int lane, int tile,
         return NULL;
     }
 
-    printf("%sUsing cluster intensities from %s.\n", msgprefix, datadir);
+    printf("%sUsing cluster intensities for cycle %d-%d from %s.\n", msgprefix,
+            firstcycle + 1, firstcycle + ncycles, datadir);
 
-    for (cycleno = 0; cycleno < ncycles; cycleno++) {
-        snprintf(path, PATH_MAX, "%s/L%03d/C%d.1/s_%d_%04d.cif", datadir, lane, cycleno+1,
+    for (i = 0; i < ncycles; i++) {
+        int cycleno;
+
+        cycleno = firstcycle + i + 1;
+        snprintf(path, PATH_MAX, "%s/L%03d/C%d.1/s_%d_%04d.cif", datadir, lane, cycleno,
                  lane, tile);
 
-        readers[cycleno] = open_cif_file(path);
-        if (readers[cycleno] == NULL) {
-            while (--cycleno >= 0)
-                close_cif_file(readers[cycleno]);
+        readers[i] = open_cif_file(path);
+        if (readers[i] == NULL) {
+            while (--i >= 0)
+                close_cif_file(readers[i]);
             return NULL;
         }
     }
@@ -315,8 +252,8 @@ open_cif_readers(const char *msgprefix, const char *datadir, int lane, int tile,
 void
 close_cif_readers(struct CIFReader **readers, int ncycles)
 {
-    int cycleno;
+    int i;
 
-    for (cycleno = 0; cycleno < ncycles; cycleno++)
-        close_cif_file(readers[cycleno]);
+    for (i = 0; i < ncycles; i++)
+        close_cif_file(readers[i]);
 }

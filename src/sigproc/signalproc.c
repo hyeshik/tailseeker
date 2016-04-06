@@ -425,7 +425,7 @@ measure_polya_length(struct TailseekerConfig *cfg,
     {
         struct IntensitySet spot_intensities[ruler_params->balancer_length];
 
-        fetch_intensity(spot_intensities, intensities, cfg->threep_start,
+        fetch_intensity(spot_intensities, intensities, 0,
                         ruler_params->balancer_length, clusterno);
 
         if (check_balancer(signal_range_low, signal_range_bandwidth,
@@ -446,7 +446,8 @@ measure_polya_length(struct TailseekerConfig *cfg,
         struct IntensitySet spot_intensities[insert_len];
         int polya_len_from_sig;
 
-        fetch_intensity(spot_intensities, intensities, delimiter_end,
+        fetch_intensity(spot_intensities, intensities,
+                        delimiter_end - cfg->threep_start,
                         insert_len, clusterno);
 
         polya_len_from_sig = process_polya_signal(spot_intensities,

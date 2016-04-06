@@ -295,7 +295,6 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
     uint32_t cycleno, clusterno;
     uint32_t clustersinblock;
     char sequence_formatted[cfg->total_cycles+1], quality_formatted[cfg->total_cycles+1];
-    char intensity_formatted[cfg->total_cycles*8+1];
     struct SampleInfo *noncontrol_samples;
     int mismatches;
 
@@ -331,9 +330,13 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
     }
 
     clustersinblock = intensities[0]->nclusters;
+    for (cycleno = 0; cycleno < cfg->threep_length; cycleno++)
+        if (clustersinblock != intensities[cycleno]->nclusters) {
+            fprintf(stderr, "Inconsistent number of clusters in cycle %d.\n", cycleno);
+            return -1;
+        }
     for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++)
-        if (clustersinblock != intensities[cycleno]->nclusters ||
-                clustersinblock != basecalls[cycleno]->nclusters) {
+        if (clustersinblock != basecalls[cycleno]->nclusters) {
             fprintf(stderr, "Inconsistent number of clusters in cycle %d.\n", cycleno);
             return -1;
         }
@@ -346,7 +349,6 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
         int polya_len, terminal_mods=-1;
 
         format_basecalls(sequence_formatted, quality_formatted, basecalls, cfg->total_cycles, clusterno);
-        format_intensity(intensity_formatted, intensities, cfg->total_cycles, clusterno, 0);
 
         bc = assign_barcode(sequence_formatted + cfg->index_start, cfg->index_length,
                             noncontrol_samples, &mismatches);

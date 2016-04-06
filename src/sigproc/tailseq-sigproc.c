@@ -118,7 +118,7 @@ initialize_cif_bcl_buffers(struct TailseekerConfig *cfg,
     struct BCLData **bcldata;
     int i;
 
-    cifdata = malloc(sizeof(struct CIFData *) * cfg->total_cycles);
+    cifdata = malloc(sizeof(struct CIFData *) * cfg->threep_length);
     if (cifdata == NULL) {
         perror("initialize_cif_bcl_buffers");
         return -1;
@@ -131,14 +131,16 @@ initialize_cif_bcl_buffers(struct TailseekerConfig *cfg,
         return -1;
     }
 
-    memset(cifdata, 0, sizeof(struct CIFData *) * cfg->total_cycles);
+    memset(cifdata, 0, sizeof(struct CIFData *) * cfg->threep_length);
     memset(bcldata, 0, sizeof(struct BCLData *) * cfg->total_cycles);
 
-    for (i = 0; i < cfg->total_cycles; i++) {
+    for (i = 0; i < cfg->threep_length; i++) {
         cifdata[i] = new_cif_data(cfg->read_buffer_entry_count);
         if (cifdata[i] == NULL)
             goto onError;
+    }
 
+    for (i = 0; i < cfg->total_cycles; i++) {
         bcldata[i] = new_bcl_data(cfg->read_buffer_entry_count);
         if (bcldata[i] == NULL)
             goto onError;
@@ -152,12 +154,13 @@ initialize_cif_bcl_buffers(struct TailseekerConfig *cfg,
   onError:
     perror("initialize_cif_bcl_buffers");
 
-    for (i = 0; i < cfg->total_cycles; i++) {
+    for (i = 0; i < cfg->threep_length; i++)
         if (cifdata[i] != NULL)
             free_cif_data(cifdata[i]);
+
+    for (i = 0; i < cfg->total_cycles; i++)
         if (bcldata[i] != NULL)
             free_bcl_data(bcldata[i]);
-    }
 
     free(bcldata);
     free(cifdata);
@@ -180,15 +183,15 @@ load_intensities_and_basecalls(struct TailseekerConfig *cfg,
                                    blocksize) == -1)
             return -1;
 
-    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++) {
+    for (cycleno = 0; cycleno < cfg->threep_length; cycleno++)
         if (load_cif_data(cifreader[cycleno], intensities[cycleno], blocksize) == -1)
             return -1;
 
+    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++)
         if (bclreader[cycleno] == BCLREADER_OVERRIDDEN)
             /* do nothing */;
         else if (load_bcl_data(bclreader[cycleno], basecalls[cycleno], blocksize) == -1)
             return -1;
-    }
 
     return 0;
 }
@@ -223,7 +226,7 @@ process(struct TailseekerConfig *cfg)
         return -1;
 
     cifreader = open_cif_readers(msgprefix, cfg->datadir, cfg->lane, cfg->tile,
-                                 cfg->total_cycles);
+                                 cfg->threep_start, cfg->threep_length);
     if (cifreader == NULL)
         goto onError;
 
@@ -259,16 +262,16 @@ process(struct TailseekerConfig *cfg)
     }
 
     printf("%sClearing\n", msgprefix);
-    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++) {
+    for (cycleno = 0; cycleno < cfg->threep_length; cycleno++)
         free_cif_data(intensities[cycleno]);
+    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++)
         free_bcl_data(basecalls[cycleno]);
-    }
 
     free(intensities);
     free(basecalls);
 
     close_bcl_readers(bclreader, cfg->total_cycles);
-    close_cif_readers(cifreader, cfg->total_cycles);
+    close_cif_readers(cifreader, cfg->threep_length);
     if (close_alternative_calls_bundle(cfg->altcalls, 1) < 0)
         goto onError;
 
@@ -282,18 +285,18 @@ process(struct TailseekerConfig *cfg)
     close_alternative_calls_bundle(cfg->altcalls, 0);
 
     if (cifreader != NULL)
-        close_cif_readers(cifreader, cfg->total_cycles);
+        close_cif_readers(cifreader, cfg->threep_length);
 
     if (bclreader != NULL)
         close_bcl_readers(bclreader, cfg->total_cycles);
 
-    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++) {
+    for (cycleno = 0; cycleno < cfg->threep_length; cycleno++)
         if (intensities != NULL && intensities[cycleno] != NULL)
             free_cif_data(intensities[cycleno]);
 
+    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++)
         if (basecalls != NULL && basecalls[cycleno] != NULL)
             free_bcl_data(basecalls[cycleno]);
-    }
 
     free(intensities);
     free(basecalls);
@@ -336,7 +339,8 @@ usage(const char *prog)
 {
     printf("\
 tailseq-sigproc 3.0\
-\n - collects intensities and base calls from Illumina sequencing for TAIL-seq\
+\n - Processes Illumina .cif and .bcl files to produce poly(A) lengths and\
+\n   additional 3' end modifications.\
 \n\
 \nUsage: %s {config.ini}\
 \n\
