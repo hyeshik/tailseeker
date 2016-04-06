@@ -105,7 +105,7 @@ decrosstalk_intensity(float *out, const struct IntensitySet *original,
 
 
 static int
-check_balance_minimum(const char *seq, const struct PolyARulerParameters *params)
+check_balance_minimum(const char *seq, const struct BalancerParameters *params)
 {
     short found[256];
     char *base;
@@ -113,7 +113,7 @@ check_balance_minimum(const char *seq, const struct PolyARulerParameters *params
 
     memset(found, 0, sizeof(short) * 256);
 
-    for (i = params->balancer_start; i < params->balancer_end; i++) {
+    for (i = params->start; i < params->end; i++) {
 #ifdef DEBUG_SIGNAL_PROCESSING
         printf("%c", seq[i]);
 #endif
@@ -121,7 +121,7 @@ check_balance_minimum(const char *seq, const struct PolyARulerParameters *params
     }
 
     for (base = "ACGT"; *base != '\0'; base++)
-        if (found[(int)*base] < params->balancer_minimum_occurrence)
+        if (found[(int)*base] < params->minimum_occurrence)
             return -1;
 
     return 0;
@@ -131,10 +131,11 @@ check_balance_minimum(const char *seq, const struct PolyARulerParameters *params
 static int
 probe_signal_ranges(float *signal_range_low, float *signal_range_bandwidth,
                     const struct IntensitySet *intensities,
-                    const struct PolyARulerParameters *params)
+                    const float *colormatrix,
+                    const struct BalancerParameters *bparams)
 {
-    int npos=params->balancer_num_positive_samples;
-    int nneg=params->balancer_num_negative_samples;
+    int npos=bparams->num_positive_samples;
+    int nneg=bparams->num_negative_samples;
     float upper_bounds[NUM_CHANNELS][npos];
     float lower_bounds[NUM_CHANNELS][nneg];
     int channel, rank, cycle;
@@ -146,13 +147,13 @@ probe_signal_ranges(float *signal_range_low, float *signal_range_bandwidth,
             lower_bounds[channel][rank] = INFINITY;
     }
 
-    for (cycle = params->balancer_start; cycle < params->balancer_end; cycle++) {
+    for (cycle = bparams->start; cycle < bparams->end; cycle++) {
         float signals[NUM_CHANNELS];
 
-        decrosstalk_intensity(signals, &intensities[cycle], params->colormatrix);
+        decrosstalk_intensity(signals, &intensities[cycle], colormatrix);
 
 #ifdef DEBUG_SIGNAL_PROCESSING
-        printf(" DXTKsignal %d - %.2f %.2f %.2f %.2f\n", cycle - params->balancer_start,
+        printf(" DXTKsignal %d - %.2f %.2f %.2f %.2f\n", cycle - bparams->start,
                     signals[0], signals[1], signals[2], signals[3]);
 #endif
 
@@ -199,9 +200,9 @@ probe_signal_ranges(float *signal_range_low, float *signal_range_bandwidth,
 
 static int
 check_balancer(float *signal_range_low, float *signal_range_bandwidth,
-               struct IntensitySet *intensities, const char *seq,
-               struct PolyARulerParameters *params,
-               int *flags)
+               struct IntensitySet *intensities,
+               const float *colormatrix, const char *seq,
+               struct BalancerParameters *params, int *flags)
 {
 #ifdef DEBUG_SIGNAL_PROCESSING
     printf(" BALSEQ = ");
@@ -218,7 +219,7 @@ check_balancer(float *signal_range_low, float *signal_range_bandwidth,
 #endif
 
     if (probe_signal_ranges(signal_range_low, signal_range_bandwidth,
-                            intensities, params) < 0) {
+                            intensities, colormatrix, params) < 0) {
         *flags |= PAFLAG_BALANCER_SIGNAL_BAD;
         return -1;
     }
@@ -398,13 +399,13 @@ measure_polya_length(struct TailseekerConfig *cfg,
                      int delimiter_end, int *procflags,
                      int *terminal_mods)
 {
-    struct PolyARulerParameters *ruler_params;
+    struct BalancerParameters *balancer_params;
     float signal_range_bandwidth[NUM_CHANNELS];
     float signal_range_low[NUM_CHANNELS];
     int polya_start, polya_end, polya_len;
     uint32_t polya_ret;
 
-    ruler_params = &cfg->rulerparams;
+    balancer_params = &cfg->balancerparams;
 
     /* Locate the starting position of poly(A) tail if available */
     polya_ret = find_polya(sequence_formatted + delimiter_end,
@@ -425,15 +426,15 @@ measure_polya_length(struct TailseekerConfig *cfg,
      * low-quality spots with poly(A)+ tags against poly(A)- tags.
      */
     {
-        struct IntensitySet spot_intensities[ruler_params->balancer_length];
+        struct IntensitySet spot_intensities[balancer_params->length];
 
         fetch_intensity(spot_intensities, intensities, 0,
-                        ruler_params->balancer_length, clusterno);
+                        balancer_params->length, clusterno);
 
         if (check_balancer(signal_range_low, signal_range_bandwidth,
-                           spot_intensities,
+                           spot_intensities, cfg->rulerparams.colormatrix,
                            sequence_formatted + cfg->threep_start,
-                           ruler_params, procflags) < 0)
+                           &cfg->balancerparams, procflags) < 0)
             return -1;
     }
 
@@ -454,7 +455,7 @@ measure_polya_length(struct TailseekerConfig *cfg,
 
         polya_len_from_sig = process_polya_signal(spot_intensities,
                 insert_len, signal_range_low, signal_range_bandwidth,
-                ruler_params, procflags);
+                &cfg->rulerparams, procflags);
 #ifdef DEBUG_SIGNAL_PROCESSING
         printf(" --> pA (%d)\n", polya_len_from_sig);
 #endif

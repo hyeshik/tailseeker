@@ -89,11 +89,11 @@ feed_options_entry(struct TailseekerConfig *cfg,
             return -1;
         }
     }
-    else if (MATCH("keep-low-quality-umi")) {
+    else if (MATCH("keep-low-quality-balancer")) {
         if (strcasecmp(value, "yes") == 0 || strcmp(value, "1") == 0)
-            cfg->keep_low_quality_umi = 1;
+            cfg->keep_low_quality_balancer = 1;
         else if (strcasecmp(value, "no") == 0 || strcmp(value, "0") == 0)
-            cfg->keep_low_quality_umi = 0;
+            cfg->keep_low_quality_balancer = 0;
         else {
             fprintf(stderr, "\"%s\" must be either yes or no.\n", name);
             return -1;
@@ -188,6 +188,33 @@ feed_control_entry(struct TailseekerConfig *cfg,
 
 
 static int
+feed_balancer_entry(struct TailseekerConfig *cfg,
+                    const char *name, const char *value)
+{
+    if (MATCH("start"))
+        cfg->balancerparams.start = atoi(value) - 1;
+    else if (MATCH("length"))
+        cfg->balancerparams.length = atoi(value);
+    else if (MATCH("minimum-occurrence"))
+        cfg->balancerparams.minimum_occurrence = atoi(value);
+    else if (MATCH("num-positive-samples"))
+        cfg->balancerparams.num_positive_samples = atoi(value);
+    else if (MATCH("num-negative-samples"))
+        cfg->balancerparams.num_negative_samples = atoi(value);
+    else if (MATCH("minimum-quality"))
+        cfg->balancerparams.min_quality = atoi(value);
+    else if (MATCH("minimum-qcpass-percent"))
+        cfg->balancerparams.min_fraction_passes = atof(value) * 0.01;
+    else {
+        fprintf(stderr, "Unknown key \"%s\" in [balancer].\n", name);
+        return -1;
+    }
+
+    return 0;
+}
+
+
+static int
 feed_polyA_finder_entry(struct TailseekerConfig *cfg,
                         const char *name, const char *value)
 {
@@ -220,17 +247,7 @@ static int
 feed_polyA_ruler_entry(struct TailseekerConfig *cfg,
                        const char *name, const char *value)
 {
-    if (MATCH("balancer-start"))
-        cfg->rulerparams.balancer_start = atoi(value) - 1;
-    else if (MATCH("balancer-length"))
-        cfg->rulerparams.balancer_length = atoi(value);
-    else if (MATCH("balancer-minimum-occurrence"))
-        cfg->rulerparams.balancer_minimum_occurrence = atoi(value);
-    else if (MATCH("balancer-num-positive-samples"))
-        cfg->rulerparams.balancer_num_positive_samples = atoi(value);
-    else if (MATCH("balancer-num-negative-samples"))
-        cfg->rulerparams.balancer_num_negative_samples = atoi(value);
-    else if (MATCH("dark-cycles-threshold"))
+    if (MATCH("dark-cycles-threshold"))
         cfg->rulerparams.dark_cycles_threshold = (float)atof(value);
     else if (MATCH("maximum-dark-cycles"))
         cfg->rulerparams.max_dark_cycles = atoi(value);
@@ -301,10 +318,6 @@ feed_sample_umi_entry(struct SampleInfo *sample, const char *name,
         umi->start = atoi(value) - 1;
     else if (STARTSWITH("umi-length:"))
         umi->length = atoi(value);
-    else if (STARTSWITH("umi-minimum-quality:"))
-        umi->min_quality = atoi(value);
-    else if (STARTSWITH("umi-minimum-qcpass-percent:"))
-        umi->min_fraction_passes = atof(value) * 0.01;
     else {
         fprintf(stderr, "Unknown key \"%s\" in sample %s.\n", name, sample->name);
         return -1;
@@ -382,6 +395,8 @@ feed_entry(void *user,
         return feed_altcalls_entry(cfg, name, value);
     else if (MATCH("control"))
         return feed_control_entry(cfg, name, value);
+    else if (MATCH("balancer"))
+        return feed_balancer_entry(cfg, name, value);
     else if (MATCH("polyA_finder"))
         return feed_polyA_finder_entry(cfg, name, value);
     else if (MATCH("polyA_ruler"))
@@ -407,11 +422,19 @@ set_default_configuration(struct TailseekerConfig *cfg)
         cfg->fivep_start = cfg->fivep_length = -1;
 
     cfg->keep_no_delimiter = 0;
-    cfg->keep_low_quality_umi = 0;
+    cfg->keep_low_quality_balancer = 0;
     cfg->threads = 1;
     cfg->index_length = 6;
 
     cfg->read_buffer_size = 536870912; /* 500 MiB */
+
+    cfg->balancerparams.start = 0;
+    cfg->balancerparams.end = 20;
+    cfg->balancerparams.minimum_occurrence = 2;
+    cfg->balancerparams.num_positive_samples = 2;
+    cfg->balancerparams.num_negative_samples = 4;
+    cfg->balancerparams.min_quality = 25;
+    cfg->balancerparams.min_fraction_passes = .70f;
 
     cfg->finderparams.max_terminal_modifications = 10;
     cfg->finderparams.min_polya_length = 5;
@@ -421,11 +444,6 @@ set_default_configuration(struct TailseekerConfig *cfg)
         cfg->finderparams.weights[(int)'G'] = -10;
     cfg->finderparams.weights[(int)'N'] = -5;
 
-    cfg->rulerparams.balancer_start = 0;
-    cfg->rulerparams.balancer_end = 20;
-    cfg->rulerparams.balancer_minimum_occurrence = 2;
-    cfg->rulerparams.balancer_num_positive_samples = 2;
-    cfg->rulerparams.balancer_num_negative_samples = 4;
     cfg->rulerparams.dark_cycles_threshold = 10;
     cfg->rulerparams.max_dark_cycles = 5;
     cfg->rulerparams.polya_score_threshold = .1;
@@ -440,8 +458,10 @@ compute_derived_values(struct TailseekerConfig *cfg)
 {
     struct SampleInfo *sample;
 
-    cfg->rulerparams.balancer_end = cfg->rulerparams.balancer_start +
-                                    cfg->rulerparams.balancer_length;
+    cfg->balancerparams.min_bases_passes = cfg->balancerparams.length *
+                                           cfg->balancerparams.min_fraction_passes;
+    cfg->balancerparams.end = cfg->balancerparams.start +
+                              cfg->balancerparams.length;
 
     /* Fix UMI-related values */
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
@@ -460,7 +480,6 @@ compute_derived_values(struct TailseekerConfig *cfg)
             umi = &sample->umi_ranges[i];
             if (umi->length > 0) {
                 umi->end = umi->start + umi->length;
-                umi->min_bases_passes = umi->length * umi->min_fraction_passes;
                 total_length += umi->length;
             }
         }

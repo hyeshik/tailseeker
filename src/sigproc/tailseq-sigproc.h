@@ -42,7 +42,7 @@
 #define PAFLAG_DARKCYCLE_EXISTS             16
 #define PAFLAG_DELIMITER_NOT_FOUND          32
 #define PAFLAG_DELIMITER_HAS_MISMATCH       64
-#define PAFLAG_UMI_CALL_QUALITY_BAD         128
+#define PAFLAG_BALANCER_CALL_QUALITY_BAD    128
 #define PAFLAG_BALANCER_BIASED              258
 #define PAFLAG_BALANCER_SIGNAL_BAD          512
 #define PAFLAG_DARKCYCLE_OVER_THRESHOLD     1024
@@ -90,9 +90,6 @@ struct UMIInterval {
     int start;
     int end;
     int length;
-    int min_quality;
-    float min_fraction_passes;
-    int min_bases_passes;
 };
 
 struct SampleInfo;
@@ -160,6 +157,18 @@ struct ControlFilterInfo {
 #define CONTROL_ALIGN_GAP_EXTENSION_SCORE   1
 #define CONTROL_ALIGN_MINIMUM_SCORE         0.65
 
+struct BalancerParameters {
+    int start;
+    int end;
+    int length;
+    int min_quality;
+    float min_fraction_passes;
+    int min_bases_passes;
+    int minimum_occurrence;
+    int num_positive_samples;
+    int num_negative_samples;
+};
+
 struct PolyAFinderParameters {
     int weights[256];
     size_t max_terminal_modifications;
@@ -169,13 +178,6 @@ struct PolyAFinderParameters {
 
 #define T_INTENSITY_SCORE_BINS              200
 struct PolyARulerParameters {
-    int balancer_start;
-    int balancer_end;
-    int balancer_length;
-    int balancer_minimum_occurrence;
-    int balancer_num_positive_samples;
-    int balancer_num_negative_samples;
-
     float colormatrix[NUM_CHANNELS * NUM_CHANNELS];
 
     float dark_cycles_threshold;
@@ -199,7 +201,7 @@ struct TailseekerConfig {
 
     /* section options */
     int keep_no_delimiter;
-    int keep_low_quality_umi;
+    int keep_low_quality_balancer;
     int threads;
     size_t read_buffer_size;
     int read_buffer_entry_count;
@@ -215,6 +217,9 @@ struct TailseekerConfig {
 
     /* section control */
     struct ControlFilterInfo controlinfo;
+
+    /* section balancer */
+    struct BalancerParameters balancerparams;
 
     /* section polyA_finder */
     struct PolyAFinderParameters finderparams;

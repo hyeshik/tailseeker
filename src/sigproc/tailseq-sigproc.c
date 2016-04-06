@@ -318,15 +318,16 @@ write_demultiplexing_statistics(const char *output, struct SampleInfo *samples)
 
     fprintf(fp, "name,index,max_index_mm,delim,delim_pos,max_delim_mm,"
                 "cln_no_index_mm,cln_1_index_mm,cln_2+_index_mm,"
-                "cln_fp_mm,cln_no_delim\n");
+                "cln_fp_mm,cln_qc_fail,cln_no_delim\n");
 
     for (; samples != NULL; samples = samples->next)
-        fprintf(fp, "%s,%s,%d,%s,%d,%d,%d,%d,%d,%d,%d\n",
+        fprintf(fp, "%s,%s,%d,%s,%d,%d,%d,%d,%d,%d,%d,%d\n",
                 samples->name, samples->index, samples->maximum_index_mismatches,
                 samples->delimiter, samples->delimiter_pos,
                 samples->maximum_delimiter_mismatches, samples->clusters_mm0,
                 samples->clusters_mm1, samples->clusters_mm2plus,
-                samples->clusters_fpmismatch, samples->clusters_nodelim);
+                samples->clusters_fpmismatch, samples->clusters_qcfailed,
+                samples->clusters_nodelim);
 
     fclose(fp);
 

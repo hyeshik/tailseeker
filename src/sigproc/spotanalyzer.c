@@ -125,30 +125,28 @@ count_fingerprint_mismatches(const char *seq, int pos, struct SampleInfo *barcod
 }
 
 static int
-check_umi_basecall_quality(struct TailseekerConfig *cfg, struct SampleInfo *sample,
-                           const char *phredscore, int *procflags)
+check_balancer_basecall_quality(struct TailseekerConfig *cfg,
+                                struct SampleInfo *sample,
+                                const char *phredscore, int *procflags)
 {
 #define PHRED_BASE  33
-    int i;
+    struct BalancerParameters *bparams;
+    int qualsum, j;
 
-    for (i = 0; i < sample->umi_ranges_count; i++) {
-        struct UMIInterval *umi;
-        int qualsum, j;
+    bparams = &cfg->balancerparams;
 
-        umi = &sample->umi_ranges[i];
-        if (umi->min_fraction_passes > .00001f) {
-            qualsum = 0;
+    if (bparams->min_bases_passes > 0) {
+        qualsum = 0;
 
-            for (j = umi->start; j < umi->end; j++)
-                qualsum += ((phredscore[j] - PHRED_BASE) >= umi->min_quality);
+        for (j = bparams->start; j < bparams->end; j++)
+            qualsum += ((phredscore[j] - PHRED_BASE) >= bparams->min_quality);
 
-            if (qualsum < umi->length * umi->min_bases_passes) {
-                *procflags |= PAFLAG_UMI_CALL_QUALITY_BAD;
-                if (!cfg->keep_low_quality_umi)
-                    return -1;
+        if (qualsum < bparams->min_bases_passes) {
+            *procflags |= PAFLAG_BALANCER_CALL_QUALITY_BAD;
+            sample->clusters_qcfailed++;
 
-                break;
-            }
+            if (!cfg->keep_low_quality_balancer)
+                return -1;
         }
     }
 
@@ -427,13 +425,13 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
             }
         }
 
-        /* Check basecalling quality scores in the UMI region in 3'-side read.
+        /* Check basecalling quality scores in the balancer in 3'-side read.
          * This will represent how good the signal quality is. Using any
          * among other regions leads to a biased sampling against long poly(A)
          * tails. */
         if (bc->umi_ranges_count > 0 &&
-                check_umi_basecall_quality(cfg, bc, quality_formatted,
-                                           &procflags) < 0)
+                check_balancer_basecall_quality(cfg, bc, quality_formatted,
+                                                &procflags) < 0)
             continue;
 
         if (bc->delimiter_length <= 0)
