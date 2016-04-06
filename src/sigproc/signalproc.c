@@ -417,6 +417,8 @@ measure_polya_length(struct TailseekerConfig *cfg,
 
     if (polya_start > 0)
         *procflags |= PAFLAG_HAVE_3P_MODIFICATION;
+    if (polya_len == 0)
+        *procflags |= PAFLAG_NO_POLYA_DETECTED;
 
     /* Check balancer region for all spots including non-poly(A)
      * ones. This can be used to suppress the biased filtering of
