@@ -124,6 +124,37 @@ count_fingerprint_mismatches(const char *seq, int pos, struct SampleInfo *barcod
     return mismatches;
 }
 
+static int
+check_umi_basecall_quality(struct TailseekerConfig *cfg, struct SampleInfo *sample,
+                           const char *phredscore, int *procflags)
+{
+#define PHRED_BASE  33
+    int i;
+
+    for (i = 0; i < sample->umi_ranges_count; i++) {
+        struct UMIInterval *umi;
+        int qualsum, j;
+
+        umi = &sample->umi_ranges[i];
+        if (umi->min_fraction_passes > .00001f) {
+            qualsum = 0;
+
+            for (j = umi->start; j < umi->end; j++)
+                qualsum += ((phredscore[j] - PHRED_BASE) >= umi->min_quality);
+
+            if (qualsum < umi->length * umi->min_bases_passes) {
+                *procflags |= PAFLAG_UMI_CALL_QUALITY_BAD;
+                if (!cfg->keep_low_quality_umi)
+                    return -1;
+
+                break;
+            }
+        }
+    }
+
+    return 0;
+}
+
 
 static ssize_t
 write_fastq_entry(BGZF *file, const char *entryname, size_t entryname_len,
@@ -348,7 +379,8 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
         int delimiter_end, procflags=0;
         int polya_len, terminal_mods=-1;
 
-        format_basecalls(sequence_formatted, quality_formatted, basecalls, cfg->total_cycles, clusterno);
+        format_basecalls(sequence_formatted, quality_formatted, basecalls,
+                         cfg->total_cycles, clusterno);
 
         bc = assign_barcode(sequence_formatted + cfg->index_start, cfg->index_length,
                             noncontrol_samples, &mismatches);
@@ -394,6 +426,15 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                 continue;
             }
         }
+
+        /* Check basecalling quality scores in the UMI region in 3'-side read.
+         * This will represent how good the signal quality is. Using any
+         * among other regions leads to a biased sampling against long poly(A)
+         * tails. */
+        if (bc->umi_ranges_count > 0 &&
+                check_umi_basecall_quality(cfg, bc, quality_formatted,
+                                           &procflags) < 0)
+            continue;
 
         if (bc->delimiter_length <= 0)
             polya_len = delimiter_end = -1;

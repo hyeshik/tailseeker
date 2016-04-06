@@ -256,4 +256,6 @@ close_cif_readers(struct CIFReader **readers, int ncycles)
 
     for (i = 0; i < ncycles; i++)
         close_cif_file(readers[i]);
+
+    free(readers);
 }

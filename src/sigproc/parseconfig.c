@@ -89,6 +89,16 @@ feed_options_entry(struct TailseekerConfig *cfg,
             return -1;
         }
     }
+    else if (MATCH("keep-low-quality-umi")) {
+        if (strcasecmp(value, "yes") == 0 || strcmp(value, "1") == 0)
+            cfg->keep_low_quality_umi = 1;
+        else if (strcasecmp(value, "no") == 0 || strcmp(value, "0") == 0)
+            cfg->keep_low_quality_umi = 0;
+        else {
+            fprintf(stderr, "\"%s\" must be either yes or no.\n", name);
+            return -1;
+        }
+    }
     else if (MATCH("threads"))
         cfg->threads = atoi(value);
     else if (MATCH("read-buffer-size"))
@@ -397,6 +407,7 @@ set_default_configuration(struct TailseekerConfig *cfg)
         cfg->fivep_start = cfg->fivep_length = -1;
 
     cfg->keep_no_delimiter = 0;
+    cfg->keep_low_quality_umi = 0;
     cfg->threads = 1;
     cfg->index_length = 6;
 
@@ -449,6 +460,7 @@ compute_derived_values(struct TailseekerConfig *cfg)
             umi = &sample->umi_ranges[i];
             if (umi->length > 0) {
                 umi->end = umi->start + umi->length;
+                umi->min_bases_passes = umi->length * umi->min_fraction_passes;
                 total_length += umi->length;
             }
         }
@@ -466,6 +478,7 @@ compute_derived_values(struct TailseekerConfig *cfg)
 
         control->index = malloc(cfg->index_length + 1);
         memset(control->index, 'X', cfg->index_length);
+        control->index[cfg->index_length] = '\0';
 
         control->delimiter = strdup("");
         control->delimiter_pos = -1;
@@ -488,6 +501,7 @@ compute_derived_values(struct TailseekerConfig *cfg)
 
         fallback->index = malloc(cfg->index_length + 1);
         memset(fallback->index, 'X', cfg->index_length);
+        fallback->index[cfg->index_length] = '\0';
 
         fallback->delimiter = strdup("");
         fallback->delimiter_pos = -1;
@@ -562,6 +576,7 @@ free_config(struct TailseekerConfig *cfg)
     free_if_not_null(cfg->taginfo_output);
     free_if_not_null(cfg->stats_output);
     free_if_not_null(cfg->length_dists_output);
+    free_if_not_null(cfg->threep_colormatrix_filename);
 
     while (cfg->samples != NULL) {
         struct SampleInfo *bk;
@@ -573,6 +588,7 @@ free_config(struct TailseekerConfig *cfg)
         free_if_not_null(cfg->samples->index);
         free_if_not_null(cfg->samples->delimiter);
         free_if_not_null(cfg->samples->fingerprint);
+        free_if_not_null(cfg->samples->umi_ranges);
         bk = cfg->samples->next;
         free(cfg->samples);
         cfg->samples = bk;
@@ -581,6 +597,7 @@ free_config(struct TailseekerConfig *cfg)
     while (cfg->altcalls != NULL) {
         struct AlternativeCallInfo *ac;
 
+        free(cfg->altcalls->filename);
         ac = cfg->altcalls->next;
         free(cfg->altcalls);
         cfg->altcalls = ac;

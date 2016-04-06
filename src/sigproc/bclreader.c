@@ -226,4 +226,6 @@ close_bcl_readers(struct BCLReader **readers, int ncycles)
 
     for (cycleno = 0; cycleno < ncycles; cycleno++)
         close_bcl_file(readers[cycleno]);
+
+    free(readers);
 }

@@ -308,7 +308,7 @@ process(struct TailseekerConfig *cfg)
 
 
 static int
-write_demultiplexing_statistics(const char *output, struct SampleInfo *barcodes)
+write_demultiplexing_statistics(const char *output, struct SampleInfo *samples)
 {
     FILE *fp;
 
@@ -320,13 +320,13 @@ write_demultiplexing_statistics(const char *output, struct SampleInfo *barcodes)
                 "cln_no_index_mm,cln_1_index_mm,cln_2+_index_mm,"
                 "cln_fp_mm,cln_no_delim\n");
 
-    for (; barcodes != NULL; barcodes = barcodes->next)
+    for (; samples != NULL; samples = samples->next)
         fprintf(fp, "%s,%s,%d,%s,%d,%d,%d,%d,%d,%d,%d\n",
-                barcodes->name, barcodes->index, barcodes->maximum_index_mismatches,
-                barcodes->delimiter, barcodes->delimiter_pos,
-                barcodes->maximum_delimiter_mismatches, barcodes->clusters_mm0,
-                barcodes->clusters_mm1, barcodes->clusters_mm2plus,
-                barcodes->clusters_fpmismatch, barcodes->clusters_nodelim);
+                samples->name, samples->index, samples->maximum_index_mismatches,
+                samples->delimiter, samples->delimiter_pos,
+                samples->maximum_delimiter_mismatches, samples->clusters_mm0,
+                samples->clusters_mm1, samples->clusters_mm2plus,
+                samples->clusters_fpmismatch, samples->clusters_nodelim);
 
     fclose(fp);
 

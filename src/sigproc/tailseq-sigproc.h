@@ -92,6 +92,7 @@ struct UMIInterval {
     int length;
     int min_quality;
     float min_fraction_passes;
+    int min_bases_passes;
 };
 
 struct SampleInfo;
@@ -198,6 +199,7 @@ struct TailseekerConfig {
 
     /* section options */
     int keep_no_delimiter;
+    int keep_low_quality_umi;
     int threads;
     size_t read_buffer_size;
     int read_buffer_entry_count;
