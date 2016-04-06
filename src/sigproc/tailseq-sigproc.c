@@ -2,17 +2,17 @@
  * tailseq-sigproc.c
  *
  * Copyright (c) 2015 Hyeshik Chang
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -33,21 +33,54 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
+#include "htslib/bgzf.h"
 #include "tailseq-sigproc.h"
 
 
 static int
-spawn_writers(const char *writercmd, struct SampleInfo *barcodes)
+open_writers(struct TailseekerConfig *cfg)
 {
-    for (; barcodes != NULL; barcodes = barcodes->next) {
-        char cmd[BUFSIZ];
+    struct SampleInfo *sample;
 
-        snprintf(cmd, BUFSIZ-1, writercmd, barcodes->name);
-        barcodes->stream = popen(cmd, "w");
-        if (barcodes->stream == NULL) {
-            perror("spawn_writers");
-            fprintf(stderr, "Failed to run a writer subprocess: %s\n", cmd);
+    for (sample = cfg->samples; sample != NULL; sample = sample->next) {
+        char *filename, *fastqfile_format;
+
+        fastqfile_format = replace_placeholder(cfg->fastq_output, "{name}",
+                                               sample->name);
+
+        filename = replace_placeholder(fastqfile_format, "{read}", "R5");
+        sample->stream_fastq_5 = bgzf_open(filename, "w");
+        if (sample->stream_fastq_5 == NULL) {
+            perror("open_writers");
+            fprintf(stderr, "Failed to write to %s\n", filename);
+            free(filename);
             return -1;
+        }
+        free(filename);
+
+        filename = replace_placeholder(fastqfile_format, "{read}", "R3");
+        sample->stream_fastq_3 = bgzf_open(filename, "w");
+        if (sample->stream_fastq_3 == NULL) {
+            perror("open_writers");
+            fprintf(stderr, "Failed to write to %s\n", filename);
+            free(filename);
+            return -1;
+        }
+        free(filename);
+
+        free(fastqfile_format);
+
+        if (cfg->taginfo_output != NULL) {
+            filename = replace_placeholder(cfg->taginfo_output,
+                                           "{name}", sample->name);
+            sample->stream_taginfo = bgzf_open(filename, "w");
+            if (sample->stream_taginfo == NULL) {
+                perror("open_writers");
+                fprintf(stderr, "Failed to write to %s\n", filename);
+                free(filename);
+                return -1;
+            }
+            free(filename);
         }
     }
 
@@ -56,46 +89,57 @@ spawn_writers(const char *writercmd, struct SampleInfo *barcodes)
 
 
 static void
-terminate_writers(struct SampleInfo *barcodes)
+close_writers(struct SampleInfo *sample)
 {
-    for (; barcodes != NULL; barcodes = barcodes->next)
-        if (barcodes->stream != NULL) {
-            pclose(barcodes->stream);
-            barcodes->stream = NULL;
+    for (; sample != NULL; sample = sample->next) {
+        if (sample->stream_fastq_5 != NULL) {
+            bgzf_close(sample->stream_fastq_5);
+            sample->stream_fastq_5 = NULL;
         }
+
+        if (sample->stream_fastq_3 != NULL) {
+            bgzf_close(sample->stream_fastq_3);
+            sample->stream_fastq_3 = NULL;
+        }
+
+        if (sample->stream_taginfo != NULL) {
+            bgzf_close(sample->stream_taginfo);
+            sample->stream_taginfo = NULL;
+        }
+    }
 }
 
 
 static int
-initialize_cif_bcl_buffers(int ncycles, int blocksize, struct CIFData ***intensities,
-                           struct BCLData ***basecalls)
+initialize_cif_bcl_buffers(struct TailseekerConfig *cfg,
+                           struct CIFData ***intensities, struct BCLData ***basecalls)
 {
     struct CIFData **cifdata;
     struct BCLData **bcldata;
     int i;
 
-    cifdata = malloc(sizeof(struct CIFData *) * ncycles);
+    cifdata = malloc(sizeof(struct CIFData *) * cfg->total_cycles);
     if (cifdata == NULL) {
         perror("initialize_cif_bcl_buffers");
         return -1;
     }
 
-    bcldata = malloc(sizeof(struct BCLData *) * ncycles);
+    bcldata = malloc(sizeof(struct BCLData *) * cfg->total_cycles);
     if (bcldata == NULL) {
         free(cifdata);
         perror("initialize_cif_bcl_buffers");
         return -1;
     }
 
-    memset(cifdata, 0, sizeof(struct CIFData *) * ncycles);
-    memset(bcldata, 0, sizeof(struct BCLData *) * ncycles);
+    memset(cifdata, 0, sizeof(struct CIFData *) * cfg->total_cycles);
+    memset(bcldata, 0, sizeof(struct BCLData *) * cfg->total_cycles);
 
-    for (i = 0; i < ncycles; i++) {
-        cifdata[i] = new_cif_data(blocksize);
+    for (i = 0; i < cfg->total_cycles; i++) {
+        cifdata[i] = new_cif_data(cfg->read_buffer_entry_count);
         if (cifdata[i] == NULL)
             goto onError;
 
-        bcldata[i] = new_bcl_data(blocksize);
+        bcldata[i] = new_bcl_data(cfg->read_buffer_entry_count);
         if (bcldata[i] == NULL)
             goto onError;
     }
@@ -108,7 +152,7 @@ initialize_cif_bcl_buffers(int ncycles, int blocksize, struct CIFData ***intensi
   onError:
     perror("initialize_cif_bcl_buffers");
 
-    for (i = 0; i < ncycles; i++) {
+    for (i = 0; i < cfg->total_cycles; i++) {
         if (cifdata[i] != NULL)
             free_cif_data(cifdata[i]);
         if (bcldata[i] != NULL)
@@ -123,19 +167,20 @@ initialize_cif_bcl_buffers(int ncycles, int blocksize, struct CIFData ***intensi
 
 
 static int
-load_intensities_and_basecalls(struct CIFReader **cifreader, struct BCLReader **bclreader,
-                               struct AlternativeCallInfo *altcalls, int ncycles,
-                               int blocksize, struct CIFData **intensities,
-                               struct BCLData **basecalls)
+load_intensities_and_basecalls(struct TailseekerConfig *cfg,
+                               struct CIFReader **cifreader, struct BCLReader **bclreader,
+                               int blocksize,
+                               struct CIFData **intensities, struct BCLData **basecalls)
 {
+    struct AlternativeCallInfo *altcalls;
     int cycleno;
 
-    for (; altcalls != NULL; altcalls = altcalls->next)
+    for (altcalls = cfg->altcalls; altcalls != NULL; altcalls = altcalls->next)
         if (load_alternative_calls(altcalls->reader, basecalls + altcalls->first_cycle,
                                    blocksize) == -1)
             return -1;
 
-    for (cycleno = 0; cycleno < ncycles; cycleno++) {
+    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++) {
         if (load_cif_data(cifreader[cycleno], intensities[cycleno], blocksize) == -1)
             return -1;
 
@@ -159,15 +204,12 @@ process(struct TailseekerConfig *cfg)
     uint32_t clusters_to_go, blockno, nclusters, totalblocks;
     int cycleno, clusters_to_read, blocksize;
     char msgprefix[BUFSIZ];
-    const char *writercmd="/usr/local/bin/bgzip -c > scratch/demux-sqi/%s_a1101.sqi.gz";
-    /* XXX change this writer command */
 
     blocksize = cfg->read_buffer_entry_count;
 
     snprintf(msgprefix, BUFSIZ, "[%s%d] ", cfg->laneid, cfg->tile);
 
-    printf("%sOpening writer subprocesses\n", msgprefix);
-    if (spawn_writers(writercmd, cfg->samples) == -1)
+    if (open_writers(cfg) == -1)
         return -1;
 
     printf("%sOpening input sources\n", msgprefix);
@@ -190,8 +232,7 @@ process(struct TailseekerConfig *cfg)
     if (bclreader == NULL)
         goto onError;
 
-    if (initialize_cif_bcl_buffers(cfg->total_cycles, blocksize,
-                                   &intensities, &basecalls) == -1)
+    if (initialize_cif_bcl_buffers(cfg, &intensities, &basecalls) == -1)
         return -1;
 
     clusters_to_go = nclusters = cifreader[0]->nclusters;
@@ -205,8 +246,7 @@ process(struct TailseekerConfig *cfg)
                                                      totalblocks);
         printf("%sLoading CIF and BCL files\n", msgprefix);
 
-        if (load_intensities_and_basecalls(cifreader, bclreader, cfg->altcalls,
-                                           cfg->total_cycles,
+        if (load_intensities_and_basecalls(cfg, cifreader, bclreader,
                                            clusters_to_read, intensities, basecalls) == -1)
             goto onError;
 
@@ -232,7 +272,7 @@ process(struct TailseekerConfig *cfg)
     if (close_alternative_calls_bundle(cfg->altcalls, 1) < 0)
         goto onError;
 
-    terminate_writers(cfg->samples);
+    close_writers(cfg->samples);
 
     printf("[%s%d] Finished.\n", cfg->laneid, cfg->tile);
 
@@ -258,7 +298,7 @@ process(struct TailseekerConfig *cfg)
     free(intensities);
     free(basecalls);
 
-    terminate_writers(cfg->samples);
+    close_writers(cfg->samples);
 
     return -1;
 }
@@ -324,7 +364,7 @@ main(int argc, char *argv[])
         return -1;
 
     r = process(cfg);
-    
+
     if (r == 0 && cfg->stats_output != NULL)
         r = write_demultiplexing_statistics(cfg->stats_output, cfg->samples);
 

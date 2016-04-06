@@ -395,7 +395,8 @@ int
 measure_polya_length(struct TailseekerConfig *cfg,
                      struct CIFData **intensities,
                      const char *sequence_formatted, uint32_t clusterno,
-                     int delimiter_end, int *procflags)
+                     int delimiter_end, int *procflags,
+                     int *terminal_mods)
 {
     struct PolyARulerParameters *ruler_params;
     float signal_range_bandwidth[NUM_CHANNELS];
@@ -412,6 +413,7 @@ measure_polya_length(struct TailseekerConfig *cfg,
     polya_start = polya_ret >> 16;
     polya_end = polya_ret & 0xffff;
     polya_len = polya_end - polya_start;
+    *terminal_mods = polya_start;
 
     if (polya_start > 0)
         *procflags |= PAFLAG_HAVE_3P_MODIFICATION;

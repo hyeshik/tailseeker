@@ -192,7 +192,7 @@ open_bcl_readers(const char *msgprefix, const char *datadir, int lane, int tile,
             if (bcllaststart >= 0) {
                 printf("%sUsing BCL base calls for cycle %d-%d.\n", msgprefix,
                         bcllaststart+1, cycleno);
-                bcllaststart = -1; 
+                bcllaststart = -1;
             }
 
             continue;

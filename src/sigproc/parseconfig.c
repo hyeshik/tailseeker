@@ -2,17 +2,17 @@
  * parseconfig.c
  *
  * Copyright (c) 2016 Hyeshik Chang
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -52,6 +52,10 @@ feed_source_entry(struct TailseekerConfig *cfg,
         cfg->tile = atoi(value);
     else if (MATCH("total-cycles"))
         cfg->total_cycles = atoi(value);
+    else if (MATCH("fivep-start"))
+        cfg->fivep_start = atoi(value) - 1;
+    else if (MATCH("fivep-length"))
+        cfg->fivep_length = atoi(value);
     else if (MATCH("index-start"))
         cfg->index_start = atoi(value) - 1;
     else if (MATCH("index-length"))
@@ -104,6 +108,8 @@ feed_output_entry(struct TailseekerConfig *cfg,
 {
     if (MATCH("fastq"))
         cfg->fastq_output = strdup(value);
+    else if (MATCH("taginfo"))
+        cfg->taginfo_output = strdup(value);
     else if (MATCH("stats"))
         cfg->stats_output = strdup(value);
     else if (MATCH("length-dists"))
@@ -387,7 +393,8 @@ static void
 set_default_configuration(struct TailseekerConfig *cfg)
 {
     cfg->lane = cfg->tile = cfg->total_cycles = cfg->index_start =
-        cfg->threep_start = cfg->threep_length = -1;
+        cfg->threep_start = cfg->threep_length =
+        cfg->fivep_start = cfg->fivep_length = -1;
 
     cfg->keep_no_delimiter = 0;
     cfg->threads = 1;
@@ -552,14 +559,15 @@ free_config(struct TailseekerConfig *cfg)
     free_if_not_null(cfg->laneid);
 
     free_if_not_null(cfg->fastq_output);
+    free_if_not_null(cfg->taginfo_output);
     free_if_not_null(cfg->stats_output);
     free_if_not_null(cfg->length_dists_output);
 
     while (cfg->samples != NULL) {
         struct SampleInfo *bk;
 
-        if (cfg->samples->stream != NULL)
-            pclose(cfg->samples->stream);
+        if (cfg->samples->stream_fastq_5 != NULL)
+            abort();
 
         free_if_not_null(cfg->samples->name);
         free_if_not_null(cfg->samples->index);
@@ -579,5 +587,27 @@ free_config(struct TailseekerConfig *cfg)
     }
 
     free(cfg);
+}
+
+
+char *
+replace_placeholder(const char *format, const char *old, const char *new)
+{
+    size_t newsize;
+    char *found, *formatted, *wptr;
+
+    found = strstr(format, old);
+    if (found == NULL)
+        return strdup(old);
+
+    newsize = strlen(format) - strlen(old) + strlen(new);
+    formatted = wptr = malloc(newsize + 1);
+    strncpy(formatted, format, found - format);
+    wptr += (found - format);
+    strcpy(wptr, new);
+    wptr += strlen(new);
+    strcpy(wptr, found + strlen(old));
+
+    return formatted;
 }
 

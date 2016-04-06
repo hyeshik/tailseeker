@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <zlib.h>
+#include "htslib/bgzf.h"
 
 
 #define NUM_CHANNELS        4
@@ -83,7 +84,6 @@ struct CIFData {
     struct IntensitySet intensity[1];
 };
 
-struct UMIInterval;
 struct UMIInterval {
     int start;
     int end;
@@ -113,7 +113,10 @@ struct SampleInfo {
     int umi_ranges_count;
     int umi_total_length;
 
-    FILE *stream;
+    BGZF *stream_fastq_5;
+    BGZF *stream_fastq_3;
+    BGZF *stream_taginfo;
+
     uint32_t clusters_mm0;
     uint32_t clusters_mm1;
     uint32_t clusters_mm2plus;
@@ -186,6 +189,7 @@ struct TailseekerConfig {
     /* section source */
     char *datadir, *laneid;
     int lane, tile, total_cycles;
+    int fivep_start, fivep_length;
     int index_start, index_length;
     int threep_start, threep_length;
     char *threep_colormatrix_filename;
@@ -198,6 +202,7 @@ struct TailseekerConfig {
 
     /* section output */
     char *fastq_output;
+    char *taginfo_output;
     char *stats_output;
     char *length_dists_output;
 
@@ -281,7 +286,8 @@ extern uint32_t find_polya(const char *seq, size_t seqlen,
 extern int load_color_matrix(float *mtx, const char *filename);
 extern int measure_polya_length(struct TailseekerConfig *cfg,
                 struct CIFData **intensities, const char *sequence_formatted,
-                uint32_t clusterno, int delimiter_end, int *procflags);
+                uint32_t clusterno, int delimiter_end, int *procflags,
+                int *terminal_mods);
 extern void precalc_score_tables(struct PolyARulerParameters *params,
                                  float t_score_k, float t_score_center);
 
@@ -295,5 +301,7 @@ extern int inverse_4x4_matrix(const float *m, float *out);
 /* parseconfig.c */
 extern struct TailseekerConfig *parse_config(const char *filename);
 extern void free_config(struct TailseekerConfig *cfg);
+extern char *replace_placeholder(const char *format, const char *old,
+                                 const char *new);
 
 #endif

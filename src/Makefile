@@ -1,8 +1,11 @@
-CC=	gcc
-#CFLAGS=	-O0 -Wall -Werror -pg -ggdb
-CFLAGS=	-O3 -Wall -Werror -DNDEBUG
-LIBS=	-lz -lm
+CC?=	gcc
+#CFLAGS=	-O0 -Wall -Werror -pg -ggdb ${HTSLIB_CFLAGS}
+CFLAGS=	-O3 -Wall -Werror -DNDEBUG ${HTSLIB_CFLAGS}
+LIBS=	-lz -lm ${HTSLIB_LIBS}
 bindir=	../bin
+
+HTSLIB_CFLAGS:=	$(shell pkg-config --cflags htslib)
+HTSLIB_LIBS:=	$(shell pkg-config --libs htslib)
 
 PROG=	${bindir}/sqi2fq ${bindir}/tailseq-sigproc
 

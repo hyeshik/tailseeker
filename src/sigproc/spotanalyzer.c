@@ -125,6 +125,169 @@ count_fingerprint_mismatches(const char *seq, int pos, struct SampleInfo *barcod
 }
 
 
+static ssize_t
+write_fastq_entry(BGZF *file, const char *entryname, size_t entryname_len,
+                  const char *seq, const char *qual, int start, int length)
+{
+    char writebuf[BUFSIZ];
+    char *buf;
+
+    buf = writebuf;
+
+    /* line 1 */
+    *buf++ = '@';
+    memcpy(buf, entryname, entryname_len);
+    buf += entryname_len;
+    *buf++ = '\n';
+
+    /* line 2 */
+    memcpy(buf, seq + start, length);
+    buf += length;
+    *buf++ = '\n';
+
+    /* line 3 */
+    *buf++ = '+';
+    memcpy(buf, entryname, entryname_len);
+    buf += entryname_len;
+    *buf++ = '\n';
+
+    /* line 4 */
+    memcpy(buf, qual + start, length);
+    buf += length;
+    *buf++ = '\n';
+
+    return bgzf_write(file, writebuf, (size_t)(buf - writebuf));
+}
+
+
+static void
+get_modification_sequence(char *dest, const char *seq, int delimiter_end,
+                          int terminal_mods)
+{
+    if (terminal_mods >= 1) {
+        const char *seqptr;
+        int i;
+
+        seqptr = seq + delimiter_end + terminal_mods - 1;
+        for (i = 0; i < terminal_mods; i++, seqptr--)
+            switch (*seqptr) {
+            case 'A': *dest++ = 'T'; break;
+            case 'C': *dest++ = 'G'; break;
+            case 'G': *dest++ = 'C'; break;
+            case 'T': *dest++ = 'A'; break;
+            default:  *dest++ = 'N'; break;
+            }
+    }
+
+    *dest = '\0';
+}
+
+
+static int
+write_taginfo_entry(BGZF *file, struct TailseekerConfig *cfg,
+                    struct SampleInfo *sample, uint32_t clusterno,
+                    const char *sequence, int delimiter_end,
+                    int procflags, int polya_len, int terminal_mods)
+{
+    char writebuf[BUFSIZ];
+    char *buf;
+    int i;
+
+    buf = writebuf;
+
+    sprintf(buf, "%s%04d\t%u\t%d\t%d\t",
+             cfg->laneid, cfg->tile, (unsigned int)clusterno,
+             procflags, polya_len);
+    buf += strlen(buf);
+
+    if (terminal_mods > 0) {
+        get_modification_sequence(buf, sequence, delimiter_end,
+                                  terminal_mods);
+        buf += terminal_mods;
+    }
+    *buf++ = '\t';
+
+    if (BUFSIZ < (int)(buf - writebuf) + sample->umi_total_length) {
+        fprintf(stderr, "Tag information buffer is too short.\n");
+        return -1;
+    }
+
+    for (i = 0; i < sample->umi_ranges_count; i++) {
+        struct UMIInterval *umi;
+
+        umi = &sample->umi_ranges[i];
+        memcpy(buf, sequence + umi->start, umi->length);
+        buf += umi->length;
+    }
+
+    *buf++ = '\n';
+    *buf = '\0';
+
+    return bgzf_write(file, writebuf, (size_t)(buf - writebuf));
+}
+
+
+static int
+write_measurements_to_streams(struct TailseekerConfig *cfg,
+                              struct SampleInfo *sample, uint32_t clusterno,
+                              const char *sequence_formatted,
+                              const char *quality_formatted,
+                              int procflags, int delimiter_end, int polya_len,
+                              int terminal_mods)
+{
+#define MAX_ENTRYNAME_LEN   256
+    char entryname[MAX_ENTRYNAME_LEN+1];
+    size_t entryname_len;
+
+    entryname[MAX_ENTRYNAME_LEN] = '\0';
+    snprintf(entryname, MAX_ENTRYNAME_LEN, "%s%04d:%08u:%03d:%03d:",
+             cfg->laneid, cfg->tile, (unsigned int)clusterno,
+             procflags, polya_len);
+    entryname_len = strlen(entryname);
+
+    if (terminal_mods > 0) {
+        get_modification_sequence(entryname + entryname_len,
+                                  sequence_formatted, delimiter_end,
+                                  terminal_mods);
+        entryname_len += terminal_mods;
+    }
+
+    if (sample->stream_fastq_5 != NULL &&
+        write_fastq_entry(sample->stream_fastq_5, entryname,
+                          entryname_len,
+                          sequence_formatted, quality_formatted,
+                          cfg->fivep_start, cfg->fivep_length) < 0)
+        return -1;
+
+    if (sample->stream_fastq_3 != NULL) {
+        int start, length;
+
+        if (delimiter_end >= 0) {
+            start = delimiter_end;
+            length = cfg->threep_start + cfg->threep_length - delimiter_end;
+        }
+        else {
+            start = cfg->threep_start;
+            length = cfg->threep_length;
+        }
+
+        if (write_fastq_entry(sample->stream_fastq_3, entryname,
+                              entryname_len,
+                              sequence_formatted, quality_formatted,
+                              start, length) < 0)
+            return -1;
+    }
+
+    if (sample->stream_taginfo != NULL &&
+        write_taginfo_entry(sample->stream_taginfo, cfg, sample,
+                            clusterno, sequence_formatted, delimiter_end,
+                            procflags, polya_len, terminal_mods) < 0)
+        return -1;
+
+    return 0;
+}
+
+
 int
 process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
               struct CIFData **intensities, struct BCLData **basecalls)
@@ -180,7 +343,7 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
     for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
         struct SampleInfo *bc;
         int delimiter_end, procflags=0;
-        int polya_len;
+        int polya_len, terminal_mods=-1;
 
         format_basecalls(sequence_formatted, quality_formatted, basecalls, cfg->total_cycles, clusterno);
         format_intensity(intensity_formatted, intensities, cfg->total_cycles, clusterno, 0);
@@ -245,34 +408,19 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
             else
                 polya_len = measure_polya_length(cfg, intensities,
                                 sequence_formatted, clusterno,
-                                delimiter_end, &procflags);
+                                delimiter_end, &procflags,
+                                &terminal_mods);
         }
 
-        if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%d\t%d\t",
-                    cfg->laneid, cfg->tile, firstclusterno + clusterno,
-                    procflags, delimiter_end, polya_len) < 0) {
-            perror("demultiplex_and_write");
-
-            if (control_seq != NULL)
-                free(control_seq);
-            return -1;
-        }
-        {
-            int i;
-            for (i = 0; i < 30; i++)
-                fprintf(bc->stream, "%c", sequence_formatted[delimiter_end + i]);
-            fprintf(bc->stream, "\n");
-        }
-/*
-        if (fprintf(bc->stream, "%s%04d\t%d\t%d\t%s\t%s\t%s\n", laneid, tile,
-                    firstclusterno + clusterno, delimiter_end, sequence_formatted,
-                    quality_formatted, intensity_formatted) < 0) {
-            perror("demultiplex_and_write");
+        if (write_measurements_to_streams(cfg, bc, firstclusterno + clusterno,
+                sequence_formatted, quality_formatted,
+                procflags, delimiter_end, polya_len, terminal_mods) < 0) {
+            perror("process_spots");
 
             if (control_seq != NULL)
                 free(control_seq);
             return -1;
-        }*/
+        }
     }
 
     if (control_seq != NULL)
