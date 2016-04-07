@@ -1,7 +1,7 @@
 CC?=	gcc
 #CFLAGS=	-O0 -Wall -Werror -pg -ggdb ${HTSLIB_CFLAGS}
 CFLAGS=	-O3 -Wall -Werror -DNDEBUG ${HTSLIB_CFLAGS}
-LIBS=	-lz -lm ${HTSLIB_LIBS}
+LIBS=	-lz -lm -lpthread ${HTSLIB_LIBS}
 bindir=	../bin
 
 HTSLIB_CFLAGS:=	$(shell pkg-config --cflags htslib)

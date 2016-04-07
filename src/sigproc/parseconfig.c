@@ -457,6 +457,8 @@ static void
 compute_derived_values(struct TailseekerConfig *cfg)
 {
     struct SampleInfo *sample;
+    int longest_umi_length=0;
+    int nsamples;
 
     cfg->balancerparams.min_bases_passes = cfg->balancerparams.length *
                                            cfg->balancerparams.min_fraction_passes;
@@ -485,6 +487,8 @@ compute_derived_values(struct TailseekerConfig *cfg)
         }
 
         sample->umi_total_length = total_length;
+        if (sample->umi_total_length > longest_umi_length)
+            longest_umi_length = sample->umi_total_length;
     }
 
     /* Add fake samples for PhiX control. */
@@ -532,18 +536,52 @@ compute_derived_values(struct TailseekerConfig *cfg)
         cfg->samples = fallback;
     }
 
+    /* Compute pre-calculated table for T intensity scores. */
+    precalc_score_tables(&cfg->rulerparams, cfg->t_intensity_k, cfg->t_intensity_center);
+
+    /* Initialize stats locks */
+    nsamples = 0;
+    for (sample = cfg->samples; sample != NULL; sample = sample->next) {
+        sample->numindex = nsamples++;
+        pthread_mutex_init(&sample->statslock, NULL);
+    }
+    cfg->num_samples = nsamples;
+
+    /* Compute maximum write buffer sizes per output entry */
+#define FASTQ_HEADER_FIXED_PART_LEN     24
+    cfg->max_bufsize_fastq_5 = nsamples * (
+            MAX_LANEID_LEN * 2 +
+            FASTQ_HEADER_FIXED_PART_LEN * 2 +
+            cfg->finderparams.max_terminal_modifications * 2 +
+            cfg->fivep_length * 2 +
+            4 /* eol characters */);
+    cfg->max_bufsize_fastq_3 = nsamples * (
+            MAX_LANEID_LEN * 2 +
+            FASTQ_HEADER_FIXED_PART_LEN * 2 +
+            cfg->finderparams.max_terminal_modifications * 2 +
+            cfg->threep_length * 2 +
+            4 /* eol characters */);
+    cfg->max_bufsize_taginfo = nsamples * (
+            MAX_LANEID_LEN +
+            6 /* tabs and eol */ + 20 /* other fields */ +
+            cfg->finderparams.max_terminal_modifications +
+            longest_umi_length);
+
     /* Compute number of entries in a read buffer from the byte size. */
     {
         int memory_footprint_per_entry;
+        size_t write_buffer_memory_footprint;
 
         memory_footprint_per_entry = 2 * cfg->total_cycles + /* 2 bytes for BCL */
                                      8 * cfg->threep_length; /* 8 bytes for CIF */
 
-        cfg->read_buffer_entry_count = cfg->read_buffer_size / memory_footprint_per_entry;
-    }
+        write_buffer_memory_footprint = cfg->threads * NUM_CLUSTERS_PER_JOB *
+                        (cfg->max_bufsize_fastq_5 + cfg->max_bufsize_fastq_3 +
+                         cfg->max_bufsize_taginfo);
 
-    /* Compute pre-calculated table for T intensity scores. */
-    precalc_score_tables(&cfg->rulerparams, cfg->t_intensity_k, cfg->t_intensity_center);
+        cfg->read_buffer_entry_count = (cfg->read_buffer_size - write_buffer_memory_footprint)
+                                       / memory_footprint_per_entry;
+    }
 }
 
 
@@ -597,11 +635,15 @@ free_config(struct TailseekerConfig *cfg)
     free_if_not_null(cfg->length_dists_output);
     free_if_not_null(cfg->threep_colormatrix_filename);
 
+    free_if_not_null(cfg->controlinfo.control_seq);
+
     while (cfg->samples != NULL) {
         struct SampleInfo *bk;
 
         if (cfg->samples->stream_fastq_5 != NULL)
             abort();
+
+        pthread_mutex_destroy(&cfg->samples->statslock);
 
         free_if_not_null(cfg->samples->name);
         free_if_not_null(cfg->samples->index);

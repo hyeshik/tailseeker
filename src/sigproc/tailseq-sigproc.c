@@ -197,12 +197,182 @@ load_intensities_and_basecalls(struct TailseekerConfig *cfg,
 }
 
 
+static struct ParallelJobPool *
+prepare_split_jobs(struct SampleInfo *samples, uint32_t nclusters, int clusters_per_job)
+{
+    struct ParallelJobPool *pool;
+    size_t poolmemsize;
+    int njobs, i;
+
+    njobs = (nclusters + clusters_per_job - 1) / clusters_per_job;
+    poolmemsize = sizeof(struct ParallelJobPool) + sizeof(struct ParallelJob) * njobs;
+    pool = malloc(poolmemsize);
+    if (pool == NULL)
+        return NULL;
+
+    pool->job_next = pool->jobs_done = 0;
+    pool->jobs_total = njobs;
+    pthread_mutex_init(&pool->poollock, NULL);
+
+    for (i = 0; i < njobs; i++) {
+        pool->jobs[i].jobid = i;
+        pool->jobs[i].start = i * clusters_per_job;
+        pool->jobs[i].end = (i + 1) * clusters_per_job;
+        if (pool->jobs[i].end > nclusters)
+            pool->jobs[i].end = nclusters;
+    }
+
+    for (; samples != NULL; samples = samples->next) {
+        samples->wsync_fastq_5.jobs_written = 0;
+        samples->wsync_fastq_3.jobs_written = 0;
+        samples->wsync_taginfo.jobs_written = 0;
+
+        pthread_cond_init(&samples->wsync_fastq_5.wakeup, NULL);
+        pthread_cond_init(&samples->wsync_fastq_3.wakeup, NULL);
+        pthread_cond_init(&samples->wsync_taginfo.wakeup, NULL);
+
+        pthread_mutex_init(&samples->wsync_fastq_5.lock, NULL);
+        pthread_mutex_init(&samples->wsync_fastq_3.lock, NULL);
+        pthread_mutex_init(&samples->wsync_taginfo.lock, NULL);
+    }
+
+    return pool;
+}
+
+
+static void
+free_parallel_jobs(struct ParallelJobPool *pool, struct SampleInfo *samples)
+{
+    pthread_mutex_destroy(&pool->poollock);
+    free(pool);
+
+    for (; samples != NULL; samples = samples->next) {
+        pthread_cond_destroy(&samples->wsync_fastq_5.wakeup);
+        pthread_cond_destroy(&samples->wsync_fastq_3.wakeup);
+        pthread_cond_destroy(&samples->wsync_taginfo.wakeup);
+
+        pthread_mutex_destroy(&samples->wsync_fastq_5.lock);
+        pthread_mutex_destroy(&samples->wsync_fastq_3.lock);
+        pthread_mutex_destroy(&samples->wsync_taginfo.lock);
+    }
+}
+
+
+static int
+run_spot_processing(struct ParallelJobPool *pool)
+{
+    struct WriteBuffer *wbuf, *wbuf0;
+    size_t memsize, wbufsize;
+    char *buf, *buf0;
+    int i, r=0;
+
+    memsize = (pool->bufsize_fastq_5 + pool->bufsize_fastq_3 + pool->bufsize_taginfo) *
+              pool->cfg->num_samples;
+    buf = buf0 = malloc(memsize);
+    if (buf == NULL)
+        return -1;
+
+    wbufsize = sizeof(struct WriteBuffer) * pool->cfg->num_samples;
+    wbuf = malloc(wbufsize);
+    if (wbuf == NULL) {
+        free(buf);
+        return -1;
+    }
+
+    wbuf0 = malloc(wbufsize);
+    if (wbuf0 == NULL) {
+        free(buf);
+        free(wbuf);
+        return -1;
+    }
+
+    for (i = 0; i < pool->cfg->num_samples; i++) {
+        wbuf0[i].buf_fastq_5 = buf;
+        buf += pool->bufsize_fastq_5;
+        wbuf0[i].buf_fastq_3 = buf;
+        buf += pool->bufsize_fastq_3;
+        wbuf0[i].buf_taginfo = buf;
+        buf += pool->bufsize_taginfo;
+    }
+
+    while (1) {
+        struct ParallelJob *job;
+
+        { /* Select a job to run. */
+            pthread_mutex_lock(&pool->poollock);
+
+            if (pool->job_next >= pool->jobs_total) {
+                pthread_mutex_unlock(&pool->poollock);
+                break;
+            }
+            job = &pool->jobs[pool->job_next++];
+
+            pthread_mutex_unlock(&pool->poollock);
+        }
+
+        memcpy(wbuf, wbuf0, wbufsize);
+
+        r = process_spots(pool->cfg, pool->firstclusterno, pool->intensities,
+                          pool->basecalls, wbuf0, wbuf, job->jobid, job->start,
+                          job->end);
+        if (r < 0)
+            break; /* XXX handle the error more correctly. */
+
+        pthread_mutex_lock(&pool->poollock);
+        pool->jobs_done++;
+        pthread_mutex_unlock(&pool->poollock);
+    }
+
+    free(wbuf0);
+    free(wbuf);
+    free(buf0);
+
+    return r;
+}
+
+
 static int
 distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities,
                       struct BCLData **basecalls, uint32_t firstclusterno)
 {
-    if (process_spots(cfg, firstclusterno, intensities, basecalls) < 0)
+    uint32_t cycleno, clustersinblock;
+    struct ParallelJobPool *pool;
+    pthread_t threads[cfg->threads];
+    int i;
+
+    clustersinblock = intensities[0]->nclusters;
+
+    for (cycleno = 0; cycleno < cfg->threep_length; cycleno++)
+        if (clustersinblock != intensities[cycleno]->nclusters) {
+            fprintf(stderr, "Inconsistent number of clusters in CIF cycle %d.\n",
+                    cfg->threep_length + cycleno + 1);
+            return -1;
+        }
+    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++)
+        if (clustersinblock != basecalls[cycleno]->nclusters) {
+            fprintf(stderr, "Inconsistent number of clusters in cycle %d.\n", cycleno + 1);
+            return -1;
+        }
+
+    pool = prepare_split_jobs(cfg->samples, clustersinblock, NUM_CLUSTERS_PER_JOB);
+    if (pool == NULL)
         return -1;
+
+    pool->cfg = cfg;
+    pool->intensities = intensities;
+    pool->basecalls = basecalls;
+    pool->firstclusterno = firstclusterno;
+    pool->bufsize_fastq_5 = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_fastq_5;
+    pool->bufsize_fastq_3 = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_fastq_3;
+    pool->bufsize_taginfo = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_taginfo;
+
+    for (i = 0; i < cfg->threads; i++)
+        pthread_create(&threads[i], NULL, (void *)run_spot_processing, (void *)pool);
+
+    for (i = 0; i < cfg->threads; i++)
+        pthread_join(threads[i], NULL);
+
+    free_parallel_jobs(pool, cfg->samples);
 
     return 0;
 }

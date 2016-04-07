@@ -2,17 +2,17 @@
  * spotanalyzer.c
  *
  * Copyright (c) 2015 Hyeshik Chang
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -124,6 +124,7 @@ count_fingerprint_mismatches(const char *seq, int pos, struct SampleInfo *barcod
     return mismatches;
 }
 
+
 static int
 check_balancer_basecall_quality(struct TailseekerConfig *cfg,
                                 struct SampleInfo *sample,
@@ -143,7 +144,10 @@ check_balancer_basecall_quality(struct TailseekerConfig *cfg,
 
         if (qualsum < bparams->min_bases_passes) {
             *procflags |= PAFLAG_BALANCER_CALL_QUALITY_BAD;
+
+            pthread_mutex_lock(&sample->statslock);
             sample->clusters_qcfailed++;
+            pthread_mutex_unlock(&sample->statslock);
 
             if (!cfg->keep_low_quality_balancer)
                 return -1;
@@ -155,13 +159,13 @@ check_balancer_basecall_quality(struct TailseekerConfig *cfg,
 
 
 static ssize_t
-write_fastq_entry(BGZF *file, const char *entryname, size_t entryname_len,
+write_fastq_entry(char **pbuffer, const char *entryname, size_t entryname_len,
                   const char *seq, const char *qual, int start, int length)
 {
-    char writebuf[BUFSIZ];
+    ssize_t written;
     char *buf;
 
-    buf = writebuf;
+    buf = *pbuffer;
 
     /* line 1 */
     *buf++ = '@';
@@ -185,7 +189,10 @@ write_fastq_entry(BGZF *file, const char *entryname, size_t entryname_len,
     buf += length;
     *buf++ = '\n';
 
-    return bgzf_write(file, writebuf, (size_t)(buf - writebuf));
+    written = buf - *pbuffer;
+    *pbuffer = buf;
+
+    return written;
 }
 
 
@@ -213,16 +220,16 @@ get_modification_sequence(char *dest, const char *seq, int delimiter_end,
 
 
 static int
-write_taginfo_entry(BGZF *file, struct TailseekerConfig *cfg,
+write_taginfo_entry(char **pbuffer, struct TailseekerConfig *cfg,
                     struct SampleInfo *sample, uint32_t clusterno,
                     const char *sequence, int delimiter_end,
                     int procflags, int polya_len, int terminal_mods)
 {
-    char writebuf[BUFSIZ];
+    ssize_t written;
     char *buf;
     int i;
 
-    buf = writebuf;
+    buf = *pbuffer;
 
     sprintf(buf, "%s%04d\t%u\t%d\t%d\t",
              cfg->laneid, cfg->tile, (unsigned int)clusterno,
@@ -236,11 +243,6 @@ write_taginfo_entry(BGZF *file, struct TailseekerConfig *cfg,
     }
     *buf++ = '\t';
 
-    if (BUFSIZ < (int)(buf - writebuf) + sample->umi_total_length) {
-        fprintf(stderr, "Tag information buffer is too short.\n");
-        return -1;
-    }
-
     for (i = 0; i < sample->umi_ranges_count; i++) {
         struct UMIInterval *umi;
 
@@ -250,14 +252,17 @@ write_taginfo_entry(BGZF *file, struct TailseekerConfig *cfg,
     }
 
     *buf++ = '\n';
-    *buf = '\0';
 
-    return bgzf_write(file, writebuf, (size_t)(buf - writebuf));
+    written = buf - *pbuffer;
+    *pbuffer = buf;
+
+    return written;
 }
 
 
 static int
 write_measurements_to_streams(struct TailseekerConfig *cfg,
+                              struct WriteBuffer *wbuf,
                               struct SampleInfo *sample, uint32_t clusterno,
                               const char *sequence_formatted,
                               const char *quality_formatted,
@@ -267,12 +272,16 @@ write_measurements_to_streams(struct TailseekerConfig *cfg,
 #define MAX_ENTRYNAME_LEN   256
     char entryname[MAX_ENTRYNAME_LEN+1];
     size_t entryname_len;
+    struct WriteBuffer *wb;
+
+    wb = &wbuf[sample->numindex];
 
     entryname[MAX_ENTRYNAME_LEN] = '\0';
     snprintf(entryname, MAX_ENTRYNAME_LEN, "%s%04d:%08u:%04x:%03d:",
              cfg->laneid, cfg->tile, (unsigned int)clusterno,
              procflags, polya_len);
     entryname_len = strlen(entryname);
+#undef MAX_ENTRYNAME_LEN
 
     if (terminal_mods > 0) {
         get_modification_sequence(entryname + entryname_len,
@@ -282,7 +291,7 @@ write_measurements_to_streams(struct TailseekerConfig *cfg,
     }
 
     if (sample->stream_fastq_5 != NULL &&
-        write_fastq_entry(sample->stream_fastq_5, entryname,
+        write_fastq_entry(&wb->buf_fastq_5, entryname,
                           entryname_len,
                           sequence_formatted, quality_formatted,
                           cfg->fivep_start, cfg->fivep_length) < 0)
@@ -300,7 +309,7 @@ write_measurements_to_streams(struct TailseekerConfig *cfg,
             length = cfg->threep_length;
         }
 
-        if (write_fastq_entry(sample->stream_fastq_3, entryname,
+        if (write_fastq_entry(&wb->buf_fastq_3, entryname,
                               entryname_len,
                               sequence_formatted, quality_formatted,
                               start, length) < 0)
@@ -308,7 +317,7 @@ write_measurements_to_streams(struct TailseekerConfig *cfg,
     }
 
     if (sample->stream_taginfo != NULL &&
-        write_taginfo_entry(sample->stream_taginfo, cfg, sample,
+        write_taginfo_entry(&wb->buf_taginfo, cfg, sample,
                             clusterno, sequence_formatted, delimiter_end,
                             procflags, polya_len, terminal_mods) < 0)
         return -1;
@@ -317,12 +326,43 @@ write_measurements_to_streams(struct TailseekerConfig *cfg,
 }
 
 
+static ssize_t
+sync_write_out_buffer(BGZF *stream, const char *content, size_t size,
+                      struct WriteHandleSync *sync, int jobid)
+{
+    ssize_t written;
+
+    while (1) {
+        pthread_mutex_lock(&sync->lock);
+        if (sync->jobs_written >= jobid) {
+            pthread_mutex_unlock(&sync->lock);
+            break;
+        }
+
+        pthread_cond_wait(&sync->wakeup, &sync->lock);
+        pthread_mutex_unlock(&sync->lock);
+    }
+
+    written = bgzf_write(stream, content, size);
+    if (written < 0)
+        return -1;
+
+    pthread_mutex_lock(&sync->lock);
+    sync->jobs_written++;
+    pthread_cond_broadcast(&sync->wakeup);
+    pthread_mutex_unlock(&sync->lock);
+
+    return written;
+}
+
+
 int
 process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
-              struct CIFData **intensities, struct BCLData **basecalls)
+              struct CIFData **intensities, struct BCLData **basecalls,
+              struct WriteBuffer *wbuf0, struct WriteBuffer *wbuf,
+              int jobid, uint32_t cln_start, uint32_t cln_end)
 {
-    uint32_t cycleno, clusterno;
-    uint32_t clustersinblock;
+    uint32_t clusterno;
     char sequence_formatted[cfg->total_cycles+1], quality_formatted[cfg->total_cycles+1];
     struct SampleInfo *noncontrol_samples;
     int mismatches;
@@ -334,21 +374,9 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
          noncontrol_samples = noncontrol_samples->next)
         /* do nothing */;
 
-    clustersinblock = intensities[0]->nclusters;
-    for (cycleno = 0; cycleno < cfg->threep_length; cycleno++)
-        if (clustersinblock != intensities[cycleno]->nclusters) {
-            fprintf(stderr, "Inconsistent number of clusters in cycle %d.\n", cycleno);
-            return -1;
-        }
-    for (cycleno = 0; cycleno < cfg->total_cycles; cycleno++)
-        if (clustersinblock != basecalls[cycleno]->nclusters) {
-            fprintf(stderr, "Inconsistent number of clusters in cycle %d.\n", cycleno);
-            return -1;
-        }
-
     mismatches = 0;
 
-    for (clusterno = 0; clusterno < clustersinblock; clusterno++) {
+    for (clusterno = cln_start; clusterno < cln_end; clusterno++) {
         struct SampleInfo *bc;
         int delimiter_end, procflags=0;
         int polya_len, terminal_mods=-1;
@@ -376,6 +404,7 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                     return -1;
             }
 
+        pthread_mutex_lock(&bc->statslock);
         if (mismatches <= 0) /* no mismatches or falling back to PhiX/Unknown. */
             bc->clusters_mm0++;
         else {
@@ -386,13 +415,16 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
             else
                 bc->clusters_mm2plus++;
         }
+        pthread_mutex_unlock(&bc->statslock);
 
         /* Check fingerprint sequences with defined allowed mismatches. */
         if (bc->fingerprint_length > 0) {
             mismatches = count_fingerprint_mismatches(sequence_formatted,
                                                       cfg->threep_start, bc);
             if (mismatches > bc->maximum_fingerprint_mismatches) {
+                pthread_mutex_lock(&bc->statslock);
                 bc->clusters_fpmismatch++;
+                pthread_mutex_unlock(&bc->statslock);
                 continue;
             }
         }
@@ -412,7 +444,9 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
             delimiter_end = find_delimiter_end_position(sequence_formatted,
                                                         bc, &procflags);
             if (delimiter_end < 0) {
+                pthread_mutex_lock(&bc->statslock);
                 bc->clusters_nodelim++;
+                pthread_mutex_unlock(&bc->statslock);
                 if (!cfg->keep_no_delimiter)
                     continue;
 
@@ -425,8 +459,8 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                                 &terminal_mods);
         }
 
-        if (write_measurements_to_streams(cfg, bc, firstclusterno + clusterno,
-                sequence_formatted, quality_formatted,
+        if (write_measurements_to_streams(cfg, wbuf, bc,
+                firstclusterno + clusterno, sequence_formatted, quality_formatted,
                 procflags, delimiter_end, polya_len, terminal_mods) < 0) {
             perror("process_spots");
 
@@ -434,6 +468,32 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
         }
     }
 
+    {
+        struct SampleInfo *sample;
+
+        for (sample = cfg->samples; sample != NULL; sample = sample->next) {
+            if (sync_write_out_buffer(sample->stream_fastq_5,
+                                      wbuf0[sample->numindex].buf_fastq_5,
+                                      (size_t)(wbuf[sample->numindex].buf_fastq_5 -
+                                               wbuf0[sample->numindex].buf_fastq_5),
+                                      &sample->wsync_fastq_5, jobid) < 0)
+                return -1;
+
+            if (sync_write_out_buffer(sample->stream_fastq_3,
+                                      wbuf0[sample->numindex].buf_fastq_3,
+                                      (size_t)(wbuf[sample->numindex].buf_fastq_3 -
+                                               wbuf0[sample->numindex].buf_fastq_3),
+                                      &sample->wsync_fastq_3, jobid) < 0)
+                return -1;
+
+            if (sync_write_out_buffer(sample->stream_taginfo,
+                                      wbuf0[sample->numindex].buf_taginfo,
+                                      (size_t)(wbuf[sample->numindex].buf_taginfo -
+                                               wbuf0[sample->numindex].buf_taginfo),
+                                      &sample->wsync_taginfo, jobid) < 0)
+                return -1;
+        }
+    }
+
     return 0;
 }
-

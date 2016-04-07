@@ -2,17 +2,17 @@
  * tailseq-sigproc.h
  *
  * Copyright (c) 2015 Hyeshik Chang
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <zlib.h>
+#include <pthread.h>
 #include "htslib/bgzf.h"
 
 
@@ -92,10 +93,17 @@ struct UMIInterval {
     int length;
 };
 
+struct WriteHandleSync {
+    int jobs_written;
+    pthread_mutex_t lock;
+    pthread_cond_t wakeup;
+};
+
 struct SampleInfo;
 struct SampleInfo {
     char *name;
     char *index;
+    int numindex;
 
     char *delimiter;
     int delimiter_pos;
@@ -117,6 +125,11 @@ struct SampleInfo {
     BGZF *stream_fastq_3;
     BGZF *stream_taginfo;
 
+    struct WriteHandleSync wsync_fastq_5;
+    struct WriteHandleSync wsync_fastq_3;
+    struct WriteHandleSync wsync_taginfo;
+
+    pthread_mutex_t statslock;
     uint32_t clusters_mm0;
     uint32_t clusters_mm1;
     uint32_t clusters_mm2plus;
@@ -196,6 +209,8 @@ struct PolyARulerParameters {
     float downhill_extension_weight;
 };
 
+#define MAX_LANEID_LEN  32  /* including a zero terminator */
+
 struct TailseekerConfig {
     /* section source */
     char *datadir, *laneid;
@@ -236,6 +251,46 @@ struct TailseekerConfig {
 
     /* section sample: */
     struct SampleInfo *samples;
+    int num_samples;
+
+    /* calculated values */
+    size_t max_bufsize_fastq_5;
+    size_t max_bufsize_fastq_3;
+    size_t max_bufsize_taginfo;
+};
+
+
+#define NUM_CLUSTERS_PER_JOB    512
+
+struct ParallelJob {
+    uint32_t jobid;
+    uint32_t start;
+    uint32_t end;
+    uint32_t __pad;
+};
+
+struct WriteBuffer {
+    char *buf_fastq_5;
+    char *buf_fastq_3;
+    char *buf_taginfo;
+};
+
+struct ParallelJobPool {
+    int job_next;
+    int jobs_done;
+    int jobs_total;
+    pthread_mutex_t poollock;
+
+    struct TailseekerConfig *cfg;
+    struct CIFData **intensities;
+    struct BCLData **basecalls;
+    uint32_t firstclusterno;
+
+    size_t bufsize_fastq_5;
+    size_t bufsize_fastq_3;
+    size_t bufsize_taginfo;
+
+    struct ParallelJob jobs[1];
 };
 
 
@@ -302,7 +357,9 @@ extern void precalc_score_tables(struct PolyARulerParameters *params,
 
 /* spotanalyzer.c */
 extern int process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
-                         struct CIFData **intensities, struct BCLData **basecalls);
+                         struct CIFData **intensities, struct BCLData **basecalls,
+                         struct WriteBuffer *wbuf0, struct WriteBuffer *wbuf,
+                         int jobid, uint32_t cln_start, uint32_t cln_end);
 
 /* misc.c */
 extern int inverse_4x4_matrix(const float *m, float *out);
