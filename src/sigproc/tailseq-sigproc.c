@@ -530,8 +530,12 @@ write_demultiplexing_statistics(const char *output, struct SampleInfo *samples)
     FILE *fp;
 
     fp = fopen(output, "w");
-    if (fp == NULL)
+    if (fp == NULL) {
+        perror("write_demultiplexing_statistics");
+        fprintf(stderr, "Failed to write the demultiplexing statistics: %s\n",
+                output);
         return -1;
+    }
 
     fprintf(fp, "name,index,max_index_mm,delim,delim_pos,max_delim_mm,"
                 "cln_no_index_mm,cln_1_index_mm,cln_2+_index_mm,"
