@@ -9,21 +9,21 @@ HTSLIB_LIBS:=	$(shell pkg-config --libs htslib)
 
 PROG=	${bindir}/tailseq-sigproc
 
-SIGPROC_OBJECTS=	\
-	sigproc/altcalls.o \
-	sigproc/bclreader.o \
-	sigproc/cifreader.o \
-	sigproc/controlaligner.o \
-	sigproc/findpolya.o \
-	sigproc/parseconfig.o \
-	sigproc/phix_control.o \
-	sigproc/signalproc.o \
-	sigproc/spotanalyzer.o \
-	sigproc/tailseq-sigproc.o \
-	sigproc/contrib/ini.o \
-	sigproc/contrib/misc.o \
-	sigproc/contrib/my_strstr.o \
-	sigproc/contrib/ssw.o
+SIGPROC_OBJECTS= \
+	altcalls.o \
+	bclreader.o \
+	cifreader.o \
+	controlaligner.o \
+	findpolya.o \
+	parseconfig.o \
+	phix_control.o \
+	signalproc.o \
+	spotanalyzer.o \
+	tailseq-sigproc.o \
+	contrib/ini.o \
+	contrib/misc.o \
+	contrib/my_strstr.o \
+	contrib/ssw.o
 
 .SUFFIXES:.c .o
 
