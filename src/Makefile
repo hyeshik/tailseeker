@@ -7,7 +7,7 @@ bindir=	../bin
 HTSLIB_CFLAGS:=	$(shell pkg-config --cflags htslib)
 HTSLIB_LIBS:=	$(shell pkg-config --libs htslib)
 
-PROG=	${bindir}/sqi2fq ${bindir}/tailseq-sigproc
+PROG=	${bindir}/tailseq-sigproc
 
 SIGPROC_OBJECTS=	\
 	sigproc/altcalls.o \
@@ -25,15 +25,12 @@ SIGPROC_OBJECTS=	\
 	sigproc/contrib/my_strstr.o \
 	sigproc/contrib/ssw.o
 
-SQI2FQ_OBJECTS=	\
-	sqi2fq/sqi2fq.o
-
 .SUFFIXES:.c .o
 
 .c.o:
 	${CC} -c ${CFLAGS} ${DFLAGS} ${INCLUDES} $< -o $@
 
-all: ${bindir}/sqi2fq ${bindir}/tailseq-sigproc
+all: ${bindir}/tailseq-sigproc
 #	python setup.py install --user
 #	python test.py
 
@@ -42,10 +39,6 @@ clean:
 
 distclean: clean
 	rm -f ${PROG}
-
-${bindir}/sqi2fq: ${SQI2FQ_OBJECTS}
-	mkdir -p ${bindir}
-	${CC} ${CFLAGS} -o $@ $<
 
 ${bindir}/tailseq-sigproc: ${SIGPROC_OBJECTS}
 	${CC} ${CFLAGS} -o $@ ${SIGPROC_OBJECTS} ${LIBS}
