@@ -359,6 +359,62 @@ process_polya_signal(struct IntensitySet *intensities, int ncycles,
 }
 
 
+static int
+dump_polya_score(struct IntensitySet *intensities, int ncycles,
+                 const float *signal_range_low,
+                 const float *signal_range_bandwidth,
+                 struct PolyARulerParameters *params,
+                 float *scores)
+{
+    int cycle, chan, ndarkcycles;
+
+    ndarkcycles = 0;
+
+    for (cycle = 0; cycle < ncycles; cycle++) {
+        float signals[NUM_CHANNELS];
+        float normsignals[NUM_CHANNELS];
+        float signal_sum;
+        float entropy_score, t_intensity_score;
+
+        decrosstalk_intensity(signals, &intensities[cycle],
+                              params->colormatrix);
+
+        /* Skip assigning scores if spot is dark. */
+        signal_sum = 0.f;
+        for (chan = 0; chan < NUM_CHANNELS; chan++)
+            if (signals[chan] > 0.f)
+                signal_sum += signals[chan];
+
+        if (signal_sum < params->dark_cycles_threshold) {
+            ndarkcycles++;
+            continue;
+        }
+
+        /* Adjust signals to fit in the spot dynamic range */
+        normalize_signals(normsignals, signals, signal_range_low,
+                          signal_range_bandwidth);
+
+        entropy_score = params->maximum_entropy -
+                        shannon_entropy(normsignals);
+#if NUM_CHANNELS == 4
+#define CHANNEL_T   3
+        t_intensity_score = params->t_intensity_score[
+                (int)(normsignals[CHANNEL_T] * T_INTENSITY_SCORE_BINS)];
+#undef CHANNEL_T
+#else
+#error Unsupported signal channel count.
+#endif
+
+        scores[cycle] = entropy_score * t_intensity_score;
+    }
+
+    if (ndarkcycles >= params->max_dark_cycles)
+        return -1;
+
+    return 0;
+}
+
+
 int
 load_color_matrix(float *mtx, const char *filename)
 {
@@ -397,7 +453,7 @@ measure_polya_length(struct TailseekerConfig *cfg,
                      struct CIFData **intensities,
                      const char *sequence_formatted, uint32_t clusterno,
                      int delimiter_end, int *procflags,
-                     int *terminal_mods)
+                     int *terminal_mods, int threep_eff_len)
 {
     struct BalancerParameters *balancer_params;
     float signal_range_bandwidth[NUM_CHANNELS];
@@ -445,7 +501,7 @@ measure_polya_length(struct TailseekerConfig *cfg,
 
     /* Process the signals */
     if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
-        size_t insert_len=cfg->threep_start + cfg->threep_length - delimiter_end;
+        size_t insert_len=cfg->threep_start + threep_eff_len - delimiter_end;
         struct IntensitySet spot_intensities[insert_len];
         int polya_len_from_sig;
 
@@ -468,4 +524,85 @@ measure_polya_length(struct TailseekerConfig *cfg,
     }
 
     return polya_len;
+}
+
+
+int
+dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
+                       struct CIFData **intensities, const char *sequence_formatted,
+                       uint32_t clusterno, int delimiter_end)
+/* This function is only used for debugging and optimizing parameters to new platforms,
+ * occasionally. Keep the processing algorithm synchronized with `measure_polya_length`.
+ */
+{
+    struct BalancerParameters *balancer_params;
+    float signal_range_bandwidth[NUM_CHANNELS];
+    float signal_range_low[NUM_CHANNELS];
+    int polya_start, polya_end, polya_len, threep_eff_len;
+    uint32_t polya_ret;
+
+    balancer_params = &cfg->balancerparams;
+
+    /* Locate the starting position of poly(A) tail if available */
+    polya_ret = find_polya(sequence_formatted + delimiter_end,
+                           cfg->threep_start + cfg->threep_length -
+                           delimiter_end, &cfg->finderparams);
+    polya_start = polya_ret >> 16;
+    polya_end = polya_ret & 0xffff;
+    polya_len = polya_end - polya_start;
+
+    /* Check balancer region for all spots including non-poly(A)
+     * ones. This can be used to suppress the biased filtering of
+     * low-quality spots with poly(A)+ tags against poly(A)- tags.
+     */
+    {
+        struct IntensitySet spot_intensities[balancer_params->length];
+        int dummyflags=0;
+
+        fetch_intensity(spot_intensities, intensities, 0,
+                        balancer_params->length, clusterno);
+
+        if (check_balancer(signal_range_low, signal_range_bandwidth,
+                           spot_intensities, cfg->rulerparams.colormatrix,
+                           sequence_formatted + cfg->threep_start,
+                           &cfg->balancerparams, &dummyflags) < 0)
+            return 0;
+    }
+
+    threep_eff_len = bc->limit_threep_processing;
+
+    /* Process the signals */
+    if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
+        size_t insert_len=cfg->threep_start + threep_eff_len - delimiter_end;
+        struct IntensitySet spot_intensities[insert_len];
+        float scores[insert_len];
+        ssize_t padding;
+        #define ZEROPAD_BLOCK   20
+        static const float zeropad[ZEROPAD_BLOCK]={};
+
+        fetch_intensity(spot_intensities, intensities, delimiter_end - cfg->threep_start,
+                        insert_len, clusterno);
+
+        if (dump_polya_score(spot_intensities, insert_len, signal_range_low,
+                             signal_range_bandwidth, &cfg->rulerparams, scores) < 0)
+            return 0;
+
+        pthread_mutex_lock(&bc->statslock);
+        if (bgzf_write(bc->stream_signal_dump, scores, sizeof(scores)) < 0) {
+            pthread_mutex_unlock(&bc->statslock);
+            return -1;
+        }
+
+        padding = threep_eff_len - insert_len;
+        for (; padding > 0; padding -= ZEROPAD_BLOCK) {
+            if (bgzf_write(bc->stream_signal_dump, zeropad,
+                    sizeof(float) * (padding < ZEROPAD_BLOCK ? padding : ZEROPAD_BLOCK)) < 0) {
+                pthread_mutex_unlock(&bc->statslock);
+                return -1;
+            }
+        }
+        pthread_mutex_unlock(&bc->statslock);
+    }
+
+    return 0;
 }

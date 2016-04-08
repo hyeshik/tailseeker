@@ -261,7 +261,7 @@ write_taginfo_entry(char **pbuffer, struct TailseekerConfig *cfg,
 
 
 static int
-write_measurements_to_streams(struct TailseekerConfig *cfg,
+write_measurements_to_buffers(struct TailseekerConfig *cfg,
                               struct WriteBuffer *wbuf,
                               struct SampleInfo *sample, uint32_t clusterno,
                               const char *sequence_formatted,
@@ -460,14 +460,22 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                 polya_len = measure_polya_length(cfg, intensities,
                                 sequence_formatted, clusterno,
                                 delimiter_end, &procflags,
-                                &terminal_mods);
+                                &terminal_mods,
+                                bc->limit_threep_processing);
         }
 
-        if (write_measurements_to_streams(cfg, wbuf, bc,
+        if (write_measurements_to_buffers(cfg, wbuf, bc,
                 firstclusterno + clusterno, sequence_formatted, quality_formatted,
                 procflags, delimiter_end, polya_len, terminal_mods) < 0) {
             perror("process_spots");
 
+            return -1;
+        }
+
+        if (bc->stream_signal_dump != NULL &&
+                dump_processed_signals(cfg, bc, intensities, sequence_formatted,
+                                       clusterno, delimiter_end) < 0) {
+            perror("process_spots");
             return -1;
         }
     }

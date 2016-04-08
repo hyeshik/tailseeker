@@ -124,6 +124,8 @@ feed_output_entry(struct TailseekerConfig *cfg,
         cfg->stats_output = strdup(value);
     else if (MATCH("length-dists"))
         cfg->length_dists_output = strdup(value);
+    else if (MATCH("signal-dump"))
+        cfg->signal_dump_output = strdup(value);
     else {
         fprintf(stderr, "Unknown key \"%s\" in [output].\n", name);
         return -1;
@@ -366,6 +368,18 @@ feed_sample_entry(struct TailseekerConfig *cfg, const char *samplename,
         sample->fingerprint_pos = atoi(value) - 1;
     else if (MATCH("maximum-fingerprint-mismatch"))
         sample->maximum_fingerprint_mismatches = atoi(value);
+    else if (MATCH("dump-processed-signals")) {
+        if (strcasecmp(value, "yes") == 0 || strcmp(value, "1") == 0)
+            sample->dump_processed_signals = 1;
+        else if (strcasecmp(value, "no") == 0 || strcmp(value, "0") == 0)
+            sample->dump_processed_signals = 0;
+        else {
+            fprintf(stderr, "\"%s\" must be either yes or no.\n", name);
+            return -1;
+        }
+    }
+    else if (MATCH("limit-threep-processing"))
+        sample->limit_threep_processing = atoi(value);
     else if (STARTSWITH("umi-"))
         return feed_sample_umi_entry(sample, name, value);
     else {
@@ -544,6 +558,9 @@ compute_derived_values(struct TailseekerConfig *cfg)
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
         sample->numindex = nsamples++;
         pthread_mutex_init(&sample->statslock, NULL);
+
+        if (sample->limit_threep_processing <= 0)
+            sample->limit_threep_processing = cfg->threep_length;
     }
     cfg->num_samples = nsamples;
 
@@ -633,6 +650,7 @@ free_config(struct TailseekerConfig *cfg)
     free_if_not_null(cfg->taginfo_output);
     free_if_not_null(cfg->stats_output);
     free_if_not_null(cfg->length_dists_output);
+    free_if_not_null(cfg->signal_dump_output);
     free_if_not_null(cfg->threep_colormatrix_filename);
 
     free_if_not_null(cfg->controlinfo.control_seq);

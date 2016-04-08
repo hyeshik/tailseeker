@@ -82,6 +82,19 @@ open_writers(struct TailseekerConfig *cfg)
             }
             free(filename);
         }
+
+        if (cfg->signal_dump_output != NULL && sample->dump_processed_signals) {
+            filename = replace_placeholder(cfg->signal_dump_output,
+                                           "{name}", sample->name);
+            sample->stream_signal_dump = bgzf_open(filename, "w");
+            if (sample->stream_signal_dump == NULL) {
+                perror("open_writers");
+                fprintf(stderr, "Failed to write to %s\n", filename);
+                free(filename);
+                return -1;
+            }
+            free(filename);
+        }
     }
 
     return 0;
@@ -105,6 +118,11 @@ close_writers(struct SampleInfo *sample)
         if (sample->stream_taginfo != NULL) {
             bgzf_close(sample->stream_taginfo);
             sample->stream_taginfo = NULL;
+        }
+
+        if (sample->stream_signal_dump != NULL) {
+            bgzf_close(sample->stream_signal_dump);
+            sample->stream_signal_dump = NULL;
         }
     }
 }

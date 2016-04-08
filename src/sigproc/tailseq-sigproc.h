@@ -121,9 +121,13 @@ struct SampleInfo {
     int umi_ranges_count;
     int umi_total_length;
 
-    BGZF *stream_fastq_5;
+    int limit_threep_processing;
+    int dump_processed_signals;
+
+    BGZF *stream_fastq_5;       /* use wsync_* locking for theses three */
     BGZF *stream_fastq_3;
     BGZF *stream_taginfo;
+    BGZF *stream_signal_dump;   /* use statslock */
 
     struct WriteHandleSync wsync_fastq_5;
     struct WriteHandleSync wsync_fastq_3;
@@ -232,6 +236,7 @@ struct TailseekerConfig {
     char *taginfo_output;
     char *stats_output;
     char *length_dists_output;
+    char *signal_dump_output;
 
     /* section alternative_calls */
     struct AlternativeCallInfo *altcalls;
@@ -366,9 +371,12 @@ extern int load_color_matrix(float *mtx, const char *filename);
 extern int measure_polya_length(struct TailseekerConfig *cfg,
                 struct CIFData **intensities, const char *sequence_formatted,
                 uint32_t clusterno, int delimiter_end, int *procflags,
-                int *terminal_mods);
+                int *terminal_mods, int threep_effective_length);
 extern void precalc_score_tables(struct PolyARulerParameters *params,
                                  float t_score_k, float t_score_center);
+extern int dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
+                struct CIFData **intensities, const char *sequence_formatted,
+                uint32_t clusterno, int delimiter_end);
 
 /* spotanalyzer.c */
 extern int process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
