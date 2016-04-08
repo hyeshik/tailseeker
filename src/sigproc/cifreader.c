@@ -141,7 +141,7 @@ load_cif_data(struct CIFReader *cif, struct CIFData *data, uint32_t nclusters)
     }
 
     if (cif->readbuf == NULL) {
-        cif->readbuf = calloc(sizeof(int16_t), toread);
+        cif->readbuf = calloc(toread, sizeof(int16_t));
         if (cif->readbuf == NULL) {
             perror("load_cif_data");
             return -1;

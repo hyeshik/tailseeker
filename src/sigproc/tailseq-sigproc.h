@@ -279,6 +279,7 @@ struct ParallelJobPool {
     int job_next;
     int jobs_done;
     int jobs_total;
+    int error_occurred;
     pthread_mutex_t poollock;
 
     struct TailseekerConfig *cfg;

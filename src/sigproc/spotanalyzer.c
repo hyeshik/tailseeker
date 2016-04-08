@@ -343,9 +343,13 @@ sync_write_out_buffer(BGZF *stream, const char *content, size_t size,
         pthread_mutex_unlock(&sync->lock);
     }
 
-    written = bgzf_write(stream, content, size);
-    if (written < 0)
-        return -1;
+    if (size > 0) {
+        written = bgzf_write(stream, content, size);
+        if (written < 0)
+            return -1;
+    }
+    else
+        written = 0;
 
     pthread_mutex_lock(&sync->lock);
     sync->jobs_written++;

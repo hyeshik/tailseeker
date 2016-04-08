@@ -291,7 +291,7 @@ feed_sample_umi_entry(struct SampleInfo *sample, const char *name,
     /* Allocate or extend the UMI spaces */
     if (sample->umi_ranges_count < umino) {
         if (sample->umi_ranges == NULL) {
-            sample->umi_ranges = calloc(sizeof(struct UMIInterval), umino);
+            sample->umi_ranges = calloc(umino, sizeof(struct UMIInterval));
             if (sample->umi_ranges == NULL) {
                 perror("feed_sample_umi_entry");
                 return -1;

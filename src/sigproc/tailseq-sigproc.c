@@ -270,20 +270,20 @@ run_spot_processing(struct ParallelJobPool *pool)
               pool->cfg->num_samples;
     buf = buf0 = malloc(memsize);
     if (buf == NULL)
-        return -1;
+        goto onError;
 
     wbufsize = sizeof(struct WriteBuffer) * pool->cfg->num_samples;
     wbuf = malloc(wbufsize);
     if (wbuf == NULL) {
         free(buf);
-        return -1;
+        goto onError;
     }
 
     wbuf0 = malloc(wbufsize);
     if (wbuf0 == NULL) {
         free(buf);
         free(wbuf);
-        return -1;
+        goto onError;
     }
 
     for (i = 0; i < pool->cfg->num_samples; i++) {
@@ -301,7 +301,7 @@ run_spot_processing(struct ParallelJobPool *pool)
         { /* Select a job to run. */
             pthread_mutex_lock(&pool->poollock);
 
-            if (pool->job_next >= pool->jobs_total) {
+            if (pool->error_occurred > 0 || pool->job_next >= pool->jobs_total) {
                 pthread_mutex_unlock(&pool->poollock);
                 break;
             }
@@ -316,7 +316,7 @@ run_spot_processing(struct ParallelJobPool *pool)
                           pool->basecalls, wbuf0, wbuf, job->jobid, job->start,
                           job->end);
         if (r < 0)
-            break; /* XXX handle the error more correctly. */
+            break;
 
         pthread_mutex_lock(&pool->poollock);
         pool->jobs_done++;
@@ -327,7 +327,18 @@ run_spot_processing(struct ParallelJobPool *pool)
     free(wbuf);
     free(buf0);
 
-    return r;
+    if (r >= 0) {
+        pthread_exit((void *)0);
+        return 0;
+    }
+
+onError:
+    pthread_mutex_lock(&pool->poollock);
+    pool->error_occurred++;
+    pthread_mutex_unlock(&pool->poollock);
+
+    pthread_exit((void *)1);
+    return -1;
 }
 
 
@@ -338,7 +349,7 @@ distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities
     uint32_t cycleno, clustersinblock;
     struct ParallelJobPool *pool;
     pthread_t threads[cfg->threads];
-    int i;
+    int i, r;
 
     clustersinblock = intensities[0]->nclusters;
 
@@ -358,6 +369,7 @@ distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities
     if (pool == NULL)
         return -1;
 
+    pool->error_occurred = 0;
     pool->cfg = cfg;
     pool->intensities = intensities;
     pool->basecalls = basecalls;
@@ -372,9 +384,11 @@ distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities
     for (i = 0; i < cfg->threads; i++)
         pthread_join(threads[i], NULL);
 
+    r = (pool->error_occurred > 0) * -1;
+
     free_parallel_jobs(pool, cfg->samples);
 
-    return 0;
+    return r;
 }
 
 
