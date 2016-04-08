@@ -357,7 +357,7 @@ feed_sample_entry(struct TailseekerConfig *cfg, const char *samplename,
     else if (MATCH("delimiter-seq"))
         sample->delimiter = strdup(value);
     else if (MATCH("delimiter-start"))
-        sample->delimiter_pos = atoi(value);
+        sample->delimiter_pos = atoi(value) - 1;
     else if (MATCH("maximum-delimiter-mismatch"))
         sample->maximum_delimiter_mismatches = atoi(value);
     else if (MATCH("fingerprint-seq"))
