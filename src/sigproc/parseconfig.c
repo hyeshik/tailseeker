@@ -363,7 +363,7 @@ feed_sample_entry(struct TailseekerConfig *cfg, const char *samplename,
     else if (MATCH("fingerprint-seq"))
         sample->fingerprint = strdup(value);
     else if (MATCH("fingerprint-start"))
-        sample->fingerprint_pos = atoi(value);
+        sample->fingerprint_pos = atoi(value) - 1;
     else if (MATCH("maximum-fingerprint-mismatch"))
         sample->maximum_fingerprint_mismatches = atoi(value);
     else if (STARTSWITH("umi-"))

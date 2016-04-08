@@ -424,7 +424,7 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
         /* Check fingerprint sequences with defined allowed mismatches. */
         if (bc->fingerprint_length > 0) {
             mismatches = count_fingerprint_mismatches(sequence_formatted,
-                                                      cfg->threep_start, bc);
+                                                      bc->fingerprint_pos, bc);
             if (mismatches > bc->maximum_fingerprint_mismatches) {
                 pthread_mutex_lock(&bc->statslock);
                 bc->clusters_fpmismatch++;
