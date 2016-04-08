@@ -295,6 +295,20 @@ struct ParallelJobPool {
 };
 
 
+/* Endian conversion routines */
+#if defined(__FreeBSD__)
+  #include <sys/endian.h>
+#elif defined(__APPLE__)
+  #include <libkern/OSByteOrder.h>
+  #define le32toh(x) OSSwapLittleToHostInt32(x)
+  #define le16toh(x) OSSwapLittleToHostInt16(x)
+#elif defined(__linux__) || defined(__CYGWIN__)
+  #include <endian.h>
+#else
+  #error Not supported platform.
+#endif
+
+
 /* bclreader.c */
 extern struct BCLReader *open_bcl_file(const char *filename);
 extern void close_bcl_file(struct BCLReader *bcl);

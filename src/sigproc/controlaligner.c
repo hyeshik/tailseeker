@@ -33,7 +33,6 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include <endian.h>
 #include <zlib.h>
 #include "tailseq-sigproc.h"
 #include "contrib/ssw.h"

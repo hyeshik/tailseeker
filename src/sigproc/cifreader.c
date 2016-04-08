@@ -31,7 +31,6 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include <endian.h>
 #include "tailseq-sigproc.h"
 
 
