@@ -302,6 +302,13 @@ process_polya_signal(struct IntensitySet *intensities, int ncycles,
         /* Adjust signals to fit in the spot dynamic range */
         normalize_signals(normsignals, signals, signal_range_low,
                           signal_range_bandwidth);
+        if (isnan(normsignals[0])) {
+            /* Normalized signals can be NaNs altogether if intensities of
+             * all channels are zero or negative after normalization.
+             * It is treated as a dark cycle in this case. */
+            ndarkcycles++;
+            continue;
+        }
 
         entropy_score = params->maximum_entropy -
                         shannon_entropy(normsignals);
