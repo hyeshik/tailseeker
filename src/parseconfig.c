@@ -50,7 +50,22 @@ feed_source_entry(struct TailseekerConfig *cfg,
         cfg->lane = atoi(value);
     else if (MATCH("tile"))
         cfg->tile = atoi(value);
-    else if (MATCH("total-cycles"))
+    else if (MATCH("threep-colormatrix"))
+        cfg->threep_colormatrix_filename = strdup(value);
+    else {
+        fprintf(stderr, "Unknown key \"%s\" in [source].\n", name);
+        return -1;
+    }
+
+    return 0;
+}
+
+
+static int
+feed_read_format_entry(struct TailseekerConfig *cfg,
+                       const char *name, const char *value)
+{
+    if (MATCH("total-cycles"))
         cfg->total_cycles = atoi(value);
     else if (MATCH("fivep-start"))
         cfg->fivep_start = atoi(value) - 1;
@@ -64,10 +79,10 @@ feed_source_entry(struct TailseekerConfig *cfg,
         cfg->threep_start = atoi(value) - 1;
     else if (MATCH("threep-length"))
         cfg->threep_length = atoi(value);
-    else if (MATCH("threep-colormatrix"))
-        cfg->threep_colormatrix_filename = strdup(value);
+    else if (MATCH("threep-output-length"))
+        cfg->threep_output_length = atoi(value);
     else {
-        fprintf(stderr, "Unknown key \"%s\" in [source].\n", name);
+        fprintf(stderr, "Unknown key \"%s\" in [read_format].\n", name);
         return -1;
     }
 
@@ -401,6 +416,8 @@ feed_entry(void *user,
 #define MATCH(s) strcasecmp(section, s) == 0
     if (MATCH("source"))
         return feed_source_entry(cfg, name, value);
+    else if (MATCH("read_format"))
+        return feed_read_format_entry(cfg, name, value);
     else if (MATCH("options"))
         return feed_options_entry(cfg, name, value);
     else if (MATCH("output"))
@@ -434,6 +451,7 @@ set_default_configuration(struct TailseekerConfig *cfg)
     cfg->lane = cfg->tile = cfg->total_cycles = cfg->index_start =
         cfg->threep_start = cfg->threep_length =
         cfg->fivep_start = cfg->fivep_length = -1;
+    cfg->threep_output_length = 100;
 
     cfg->keep_no_delimiter = 0;
     cfg->keep_low_quality_balancer = 0;
@@ -565,6 +583,9 @@ compute_derived_values(struct TailseekerConfig *cfg)
     cfg->num_samples = nsamples;
 
     /* Compute maximum write buffer sizes per output entry */
+    if (cfg->threep_output_length > cfg->threep_length)
+        cfg->threep_output_length = cfg->threep_length;
+
 #define FASTQ_HEADER_FIXED_PART_LEN     24
     cfg->max_bufsize_fastq_5 = nsamples * (
             MAX_LANEID_LEN * 2 +
@@ -576,7 +597,7 @@ compute_derived_values(struct TailseekerConfig *cfg)
             MAX_LANEID_LEN * 2 +
             FASTQ_HEADER_FIXED_PART_LEN * 2 +
             cfg->finderparams.max_terminal_modifications * 2 +
-            cfg->threep_length * 2 +
+            cfg->threep_output_length * 2 +
             4 /* eol characters */);
     cfg->max_bufsize_taginfo = nsamples * (
             MAX_LANEID_LEN +

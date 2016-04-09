@@ -135,7 +135,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 
-## `strstr` implementation from the FreeBSD libc (`src/sigproc/contrib/my_strstr.c`)
+## `strstr` implementation from the FreeBSD libc (`src/contrib/my_strstr.c`)
 
 Copyright (c) 1990, 1993
      The Regents of the University of California.  All rights reserved.
@@ -168,7 +168,7 @@ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 
 
-## SIMD Smith-Waterman alignment library (`src/sigproc/contrib/ssw.c` and `src/sigproc/contrib/ssw.h`)
+## SIMD Smith-Waterman alignment library (`src/contrib/ssw.c` and `src/contrib/ssw.h`)
 
 Copyright (c) 2012-2015 Boston College
 
@@ -192,7 +192,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 
 
-## INIH configuration file parser (`src/sigproc/contrib/ini.c` and `src/sigproc/contrib/ini.h`)
+## INIH configuration file parser (`src/contrib/ini.c` and `src/contrib/ini.h`)
 
 Copyright (c) 2009, Ben Hoyt
 All rights reserved.

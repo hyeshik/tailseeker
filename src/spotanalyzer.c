@@ -309,6 +309,9 @@ write_measurements_to_buffers(struct TailseekerConfig *cfg,
             length = cfg->threep_length;
         }
 
+        if (length > cfg->threep_output_length)
+            length = cfg->threep_output_length;
+
         if (write_fastq_entry(&wb->buf_fastq_3, entryname,
                               entryname_len,
                               sequence_formatted, quality_formatted,

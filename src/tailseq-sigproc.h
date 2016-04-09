@@ -218,11 +218,15 @@ struct PolyARulerParameters {
 struct TailseekerConfig {
     /* section source */
     char *datadir, *laneid;
-    int lane, tile, total_cycles;
+    int lane, tile;
+    char *threep_colormatrix_filename;
+
+    /* section read_format */
+    int total_cycles;
     int fivep_start, fivep_length;
     int index_start, index_length;
     int threep_start, threep_length;
-    char *threep_colormatrix_filename;
+    int threep_output_length;
 
     /* section options */
     int keep_no_delimiter;
