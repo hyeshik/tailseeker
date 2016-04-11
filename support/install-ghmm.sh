@@ -535,6 +535,32 @@ diff -ruN ghmm-0.9-rc3.orig/ghmmwrapper/setup.py ghmm-0.9-rc3/ghmmwrapper/setup.
                                 libraries = ['ghmm', 'm', 'pthread', 'xml2', 'z'],
                                 extra_compile_args = ["-O2", "-pipe", "-Wall"], # -g might help debugging
                                 depends = ['wrapper_alphabet.i', 'wrapper_cmodel.i', 'wrapper_cseq.i',
+--- ghmm-0.9-rc3.orig/ghmmwrapper/class_change.py	(original)
++++ ghmm-0.9-rc3/ghmmwrapper/class_change.py	(refactored)
+@@ -42,8 +42,8 @@
+         self.classes = classes
+     
+     def __call__(self,seq,k,t):
+-        print "*** ",seq,k,t
+-        print "data: ",self.classes
++        print("*** ",seq,k,t)
++        print("data: ",self.classes)
+         return 0
+         
+ 
+@@ -73,10 +73,10 @@
+ 
+      # the time step t
+      if t < 6:
+-         print "t < 6 -> class 0"
++         print("t < 6 -> class 0")
+          return 0
+      else:    
+-         print "t > 6 -> class 1"
++         print("t > 6 -> class 1")
+          return 1
+ 
+      # some cumulative function over the sequence
 END
 
 
@@ -548,7 +574,8 @@ ranlib ghmmwrapper/libghmm.a
 
 cd ghmmwrapper
 
-"$PYTHON" setup.py install $DISTUTILS_ARGS || (echo "<*> Failed to build and install the extension."; exit 1)
+"$PYTHON" setup.py build || (echo "<*> Failed to build the extension."; exit 1)
+"$PYTHON" setup.py install $DISTUTILS_ARGS || (echo "<*> Failed to install the extension."; exit 1)
 
 echo ""
 echo "<*> Finished installing the GHMM package to your $PYTHON."
