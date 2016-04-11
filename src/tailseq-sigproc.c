@@ -94,6 +94,16 @@ open_writers(struct TailseekerConfig *cfg)
                 return -1;
             }
             free(filename);
+
+            /* Write header for signal dumps*/
+            uint32_t sigdumpheader[2];
+            sigdumpheader[0] = sample->limit_threep_processing;
+            sigdumpheader[1] = sizeof(float);
+            if (bgzf_write(sample->stream_signal_dump, (void *)sigdumpheader,
+                           sizeof(sigdumpheader)) < 0) {
+                perror("open_writers");
+                return -1;
+            }
         }
     }
 
