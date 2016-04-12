@@ -251,6 +251,8 @@ feed_polyA_finder_entry(struct TailseekerConfig *cfg,
         cfg->finderparams.max_terminal_modifications = atoi(value);
     else if (MATCH("signal-analysis-trigger"))
         cfg->finderparams.sigproc_trigger_polya_length = atoi(value);
+    else if (MATCH("naive-count-trigger"))
+        cfg->finderparams.naive_ruler_trigger_polya_length = atoi(value);
     else {
         fprintf(stderr, "Unknown key \"%s\" in [polyA_finder].\n", name);
         return -1;
@@ -471,6 +473,7 @@ set_default_configuration(struct TailseekerConfig *cfg)
     cfg->finderparams.max_terminal_modifications = 10;
     cfg->finderparams.min_polya_length = 5;
     cfg->finderparams.sigproc_trigger_polya_length = 10;
+    cfg->finderparams.naive_ruler_trigger_polya_length = 60;
     cfg->finderparams.weights[(int)'T'] = 1;
     cfg->finderparams.weights[(int)'A'] = cfg->finderparams.weights[(int)'C'] =
         cfg->finderparams.weights[(int)'G'] = -10;

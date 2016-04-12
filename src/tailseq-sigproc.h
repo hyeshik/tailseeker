@@ -38,16 +38,17 @@
 
 #define PAFLAG_HAVE_3P_MODIFICATION         1
 #define PAFLAG_MEASURED_FROM_FLUORESCENCE   2
-#define PAFLAG_DELIMITER_IS_SHIFTED         4
-#define PAFLAG_BARCODE_HAS_MISMATCHES       8
-#define PAFLAG_DARKCYCLE_EXISTS             16
-#define PAFLAG_DELIMITER_NOT_FOUND          32
-#define PAFLAG_DELIMITER_HAS_MISMATCH       64
-#define PAFLAG_BALANCER_CALL_QUALITY_BAD    128
-#define PAFLAG_BALANCER_BIASED              258
-#define PAFLAG_BALANCER_SIGNAL_BAD          512
-#define PAFLAG_DARKCYCLE_OVER_THRESHOLD     1024
-#define PAFLAG_NO_POLYA_DETECTED            2048
+#define PAFLAG_MEASURED_USING_NAIVE_RULER   4
+#define PAFLAG_DELIMITER_IS_SHIFTED         8
+#define PAFLAG_BARCODE_HAS_MISMATCHES       16
+#define PAFLAG_DARKCYCLE_EXISTS             32
+#define PAFLAG_DELIMITER_NOT_FOUND          64
+#define PAFLAG_DELIMITER_HAS_MISMATCH       128
+#define PAFLAG_BALANCER_CALL_QUALITY_BAD    256
+#define PAFLAG_BALANCER_BIASED              512
+#define PAFLAG_BALANCER_SIGNAL_BAD          1024
+#define PAFLAG_DARKCYCLE_OVER_THRESHOLD     2048
+#define PAFLAG_NO_POLYA_DETECTED            4096
 
 
 #define BCLREADER_OVERRIDDEN    ((struct BCLReader *)1)
@@ -197,6 +198,7 @@ struct PolyAFinderParameters {
     size_t max_terminal_modifications;
     size_t min_polya_length;
     size_t sigproc_trigger_polya_length;
+    size_t naive_ruler_trigger_polya_length;
 };
 
 #define T_INTENSITY_SCORE_BINS              200

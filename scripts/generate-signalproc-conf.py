@@ -138,6 +138,7 @@ weight-N = {conf[weights][N]}
 minimum-polya-length = {conf[minimum_polya_length]}
 maximum-modifications = {conf[maximum_modifications]}
 signal-analysis-trigger = {conf[signal_analysis_trigger]}
+naive-count-trigger = {conf[naive_count_trigger]}
 """.format(conf=params.conf['polyA_finder']), file=outf)
 
 

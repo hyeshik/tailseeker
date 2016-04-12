@@ -33,6 +33,7 @@
 #include <limits.h>
 #include <assert.h>
 #include <math.h>
+#include <ctype.h>
 #include "tailseq-sigproc.h"
 
 //#define DEBUG_SIGNAL_PROCESSING
@@ -400,6 +401,13 @@ dump_polya_score(struct IntensitySet *intensities, int ncycles,
         /* Adjust signals to fit in the spot dynamic range */
         normalize_signals(normsignals, signals, signal_range_low,
                           signal_range_bandwidth);
+        if (isnan(normsignals[0])) {
+            /* Normalized signals can be NaNs altogether if intensities of
+             * all channels are zero or negative after normalization.
+             * It is treated as a dark cycle in this case. */
+            ndarkcycles++;
+            continue;
+        }
 
         entropy_score = params->maximum_entropy -
                         shannon_entropy(normsignals);
@@ -527,6 +535,39 @@ measure_polya_length(struct TailseekerConfig *cfg,
                 cfg->finderparams.sigproc_trigger_polya_length) {
             *procflags |= PAFLAG_MEASURED_FROM_FLUORESCENCE;
             return polya_len_from_sig;
+        }
+        else if (polya_len < cfg->finderparams.naive_ruler_trigger_polya_length)
+            return polya_len;
+        else {
+            /* For ~0.1% long poly(A) tails, fluorescence signal processing
+             * gives shorter length than the signal proc trigger. As the
+             * dynamic programming-based poly(A) finder gives irrelevantly
+             * longer estimation for long poly(A) tails, we use simpler
+             * naive ruler.
+             */
+            const char *ptailend, *ptaildrag, *readend;
+            int polya_len_naive, numT;
+#define T_COUNTING_WINDOW 2
+
+            ptailend = sequence_formatted + delimiter_end + polya_start;
+            readend = sequence_formatted + delimiter_end + insert_len;
+
+            ptailend += cfg->finderparams.naive_ruler_trigger_polya_length;
+            polya_len_naive = cfg->finderparams.naive_ruler_trigger_polya_length;
+            ptaildrag = ptailend - T_COUNTING_WINDOW;
+            numT = T_COUNTING_WINDOW;
+
+            while (ptailend < readend &&
+                   (numT + (*ptailend == 'T') >= T_COUNTING_WINDOW)) {
+                numT += (*ptailend == 'T') - (*ptaildrag == 'T');
+                polya_len_naive += (*ptailend == 'T');
+
+                ptailend++;
+                ptaildrag++;
+            }
+
+            *procflags |= PAFLAG_MEASURED_USING_NAIVE_RULER;
+            return polya_len_naive;
         }
     }
 
