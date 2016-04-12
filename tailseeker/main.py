@@ -176,7 +176,6 @@ def determine_inputs_demultiplex_signals(wildcards, as_dict=False):
 
     return inputs if as_dict else list(inputs.values())
 
-TARGETS.extend(expand('scratch/sigproc-conf/{tile}.ini', tile=TILES))
 rule process_signals:
     input: determine_inputs_demultiplex_signals
     output:
@@ -195,5 +194,15 @@ rule process_signals:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/generate-signalproc-conf.py')
         shell('{BINDIR}/tailseq-sigproc {output.sigproc_conf}')
 
+
+TARGETS.extend(expand('scratch/taginfo-sorted/{sample}.txt.gz', sample=EXP_SAMPLES))
+rule merge_and_sort_taginfo:
+    input: expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
+    output: 'scratch/taginfo-sorted/{sample}.txt.gz'
+    threads: 12
+    shell: 'cat {input} | {BGZIP_CMD} -cd -@ {threads} | \
+            env BGZIP_OPT="-@ {threads}" sort -t "\t" -k6,6 -k1,1 -k2,2n \
+                --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
+            {BGZIP_CMD} -@ {threads} -c > {output}'
 
 # ex: syntax=snakemake
