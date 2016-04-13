@@ -195,13 +195,16 @@ rule process_signals:
         shell('{BINDIR}/tailseq-sigproc {output.sigproc_conf}')
 
 
-TARGETS.extend(expand('scratch/taginfo-sorted/{sample}.txt.gz', sample=EXP_SAMPLES))
-rule merge_and_sort_taginfo:
+TARGETS.extend(expand('scratch/taginfo-dedup/{sample}.txt.gz', sample=EXP_SAMPLES))
+rule merge_and_deduplicate_taginfo:
     input: expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
-    output: 'scratch/taginfo-sorted/{sample}.txt.gz'
+    output: 'scratch/taginfo-dedup/{sample}.txt.gz'
     threads: 12
     shell: 'cat {input} | {BGZIP_CMD} -cd -@ {threads} | \
             env BGZIP_OPT="-@ {threads}" sort -t "\t" -k6,6 -k1,1 -k2,2n \
+                --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
+            {BINDIR}/tailseq-dedup | \
+            env BGZIP_OPT="-@ {threads}" sort -t "\t" -k1,1 -k2,2n \
                 --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
             {BGZIP_CMD} -@ {threads} -c > {output}'
 
