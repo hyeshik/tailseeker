@@ -131,8 +131,8 @@ static int
 feed_output_entry(struct TailseekerConfig *cfg,
                   const char *name, const char *value)
 {
-    if (MATCH("fastq"))
-        cfg->fastq_output = strdup(value);
+    if (MATCH("seqqual"))
+        cfg->seqqual_output = strdup(value);
     else if (MATCH("taginfo"))
         cfg->taginfo_output = strdup(value);
     else if (MATCH("stats"))
@@ -591,19 +591,12 @@ compute_derived_values(struct TailseekerConfig *cfg)
     if (cfg->threep_output_length > cfg->threep_length)
         cfg->threep_output_length = cfg->threep_length;
 
-#define FASTQ_HEADER_FIXED_PART_LEN     24
-    cfg->max_bufsize_fastq_5 = nsamples * (
-            MAX_LANEID_LEN * 2 +
-            FASTQ_HEADER_FIXED_PART_LEN * 2 +
-            cfg->finderparams.max_terminal_modifications * 2 +
+#define MAX_CLUSTERID_LEN               10
+    cfg->max_bufsize_seqqual = nsamples * (
+            MAX_LANEID_LEN + MAX_CLUSTERID_LEN +
             cfg->fivep_length * 2 +
-            4 /* eol characters */);
-    cfg->max_bufsize_fastq_3 = nsamples * (
-            MAX_LANEID_LEN * 2 +
-            FASTQ_HEADER_FIXED_PART_LEN * 2 +
-            cfg->finderparams.max_terminal_modifications * 2 +
             cfg->threep_output_length * 2 +
-            4 /* eol characters */);
+            7 /* field separators */);
     cfg->max_bufsize_taginfo = nsamples * (
             MAX_LANEID_LEN +
             6 /* tabs and eol */ + 20 /* other fields */ +
@@ -619,8 +612,7 @@ compute_derived_values(struct TailseekerConfig *cfg)
                                      8 * cfg->threep_length; /* 8 bytes for CIF */
 
         write_buffer_memory_footprint = cfg->threads * NUM_CLUSTERS_PER_JOB *
-                        (cfg->max_bufsize_fastq_5 + cfg->max_bufsize_fastq_3 +
-                         cfg->max_bufsize_taginfo);
+                        (cfg->max_bufsize_seqqual + cfg->max_bufsize_taginfo);
 
         cfg->read_buffer_entry_count = (cfg->read_buffer_size - write_buffer_memory_footprint)
                                        / memory_footprint_per_entry;
@@ -672,7 +664,7 @@ free_config(struct TailseekerConfig *cfg)
     free_if_not_null(cfg->datadir);
     free_if_not_null(cfg->laneid);
 
-    free_if_not_null(cfg->fastq_output);
+    free_if_not_null(cfg->seqqual_output);
     free_if_not_null(cfg->taginfo_output);
     free_if_not_null(cfg->stats_output);
     free_if_not_null(cfg->length_dists_output);
@@ -684,7 +676,7 @@ free_config(struct TailseekerConfig *cfg)
     while (cfg->samples != NULL) {
         struct SampleInfo *bk;
 
-        if (cfg->samples->stream_fastq_5 != NULL)
+        if (cfg->samples->stream_seqqual != NULL)
             abort();
 
         pthread_mutex_destroy(&cfg->samples->statslock);

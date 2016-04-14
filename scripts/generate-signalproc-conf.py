@@ -82,14 +82,14 @@ read-buffer-size = {pf[maximum_buffer_size]}
 def generate_output_section(outf):
     print("""\
 [output]
-fastq = scratch/fastq/{{name}}_{tile}_{{read}}.fastq.gz
+seqqual = scratch/seqqual/{{name}}_{tile}.txt.gz
 taginfo = scratch/taginfo/{{name}}_{tile}.txt.gz
 stats = scratch/stats/signal-proc-{tile}.csv
 length-dists = scratch/stats/length-dist-{tile}.csv
 signal-dump = scratch/sigdumps/signaldump-{{name}}-{tile}.dmp.gz
 """.format(tile=wildcards.tile), file=outf)
 
-    for subdir in 'scratch/fastq scratch/taginfo scratch/stats scratch/sigdumps'.split():
+    for subdir in 'scratch/seqqual scratch/taginfo scratch/stats scratch/sigdumps'.split():
         if not os.path.isdir(subdir):
             os.makedirs(subdir)
 

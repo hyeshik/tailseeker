@@ -43,32 +43,22 @@ open_writers(struct TailseekerConfig *cfg)
     struct SampleInfo *sample;
 
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
-        char *filename, *fastqfile_format;
+        char *filename;
 
-        fastqfile_format = replace_placeholder(cfg->fastq_output, "{name}",
-                                               sample->name);
+        filename = replace_placeholder(cfg->seqqual_output, "{name}",
+                                       sample->name);
+        if (filename == NULL)
+            return -1;
 
-        filename = replace_placeholder(fastqfile_format, "{read}", "R5");
-        sample->stream_fastq_5 = bgzf_open(filename, "w");
-        if (sample->stream_fastq_5 == NULL) {
+        sample->stream_seqqual = bgzf_open(filename, "w");
+        if (sample->stream_seqqual == NULL) {
             perror("open_writers");
             fprintf(stderr, "Failed to write to %s\n", filename);
             free(filename);
             return -1;
         }
-        free(filename);
 
-        filename = replace_placeholder(fastqfile_format, "{read}", "R3");
-        sample->stream_fastq_3 = bgzf_open(filename, "w");
-        if (sample->stream_fastq_3 == NULL) {
-            perror("open_writers");
-            fprintf(stderr, "Failed to write to %s\n", filename);
-            free(filename);
-            return -1;
-        }
         free(filename);
-
-        free(fastqfile_format);
 
         if (cfg->taginfo_output != NULL) {
             filename = replace_placeholder(cfg->taginfo_output,
@@ -115,14 +105,9 @@ static void
 close_writers(struct SampleInfo *sample)
 {
     for (; sample != NULL; sample = sample->next) {
-        if (sample->stream_fastq_5 != NULL) {
-            bgzf_close(sample->stream_fastq_5);
-            sample->stream_fastq_5 = NULL;
-        }
-
-        if (sample->stream_fastq_3 != NULL) {
-            bgzf_close(sample->stream_fastq_3);
-            sample->stream_fastq_3 = NULL;
+        if (sample->stream_seqqual != NULL) {
+            bgzf_close(sample->stream_seqqual);
+            sample->stream_seqqual = NULL;
         }
 
         if (sample->stream_taginfo != NULL) {
@@ -251,16 +236,13 @@ prepare_split_jobs(struct SampleInfo *samples, uint32_t nclusters, int clusters_
     }
 
     for (; samples != NULL; samples = samples->next) {
-        samples->wsync_fastq_5.jobs_written = 0;
-        samples->wsync_fastq_3.jobs_written = 0;
+        samples->wsync_seqqual.jobs_written = 0;
         samples->wsync_taginfo.jobs_written = 0;
 
-        pthread_cond_init(&samples->wsync_fastq_5.wakeup, NULL);
-        pthread_cond_init(&samples->wsync_fastq_3.wakeup, NULL);
+        pthread_cond_init(&samples->wsync_seqqual.wakeup, NULL);
         pthread_cond_init(&samples->wsync_taginfo.wakeup, NULL);
 
-        pthread_mutex_init(&samples->wsync_fastq_5.lock, NULL);
-        pthread_mutex_init(&samples->wsync_fastq_3.lock, NULL);
+        pthread_mutex_init(&samples->wsync_seqqual.lock, NULL);
         pthread_mutex_init(&samples->wsync_taginfo.lock, NULL);
     }
 
@@ -275,12 +257,10 @@ free_parallel_jobs(struct ParallelJobPool *pool, struct SampleInfo *samples)
     free(pool);
 
     for (; samples != NULL; samples = samples->next) {
-        pthread_cond_destroy(&samples->wsync_fastq_5.wakeup);
-        pthread_cond_destroy(&samples->wsync_fastq_3.wakeup);
+        pthread_cond_destroy(&samples->wsync_seqqual.wakeup);
         pthread_cond_destroy(&samples->wsync_taginfo.wakeup);
 
-        pthread_mutex_destroy(&samples->wsync_fastq_5.lock);
-        pthread_mutex_destroy(&samples->wsync_fastq_3.lock);
+        pthread_mutex_destroy(&samples->wsync_seqqual.lock);
         pthread_mutex_destroy(&samples->wsync_taginfo.lock);
     }
 }
@@ -294,7 +274,7 @@ run_spot_processing(struct ParallelJobPool *pool)
     char *buf, *buf0;
     int i, r=0;
 
-    memsize = (pool->bufsize_fastq_5 + pool->bufsize_fastq_3 + pool->bufsize_taginfo) *
+    memsize = (pool->bufsize_seqqual + pool->bufsize_taginfo) *
               pool->cfg->num_samples;
     buf = buf0 = malloc(memsize);
     if (buf == NULL)
@@ -315,10 +295,8 @@ run_spot_processing(struct ParallelJobPool *pool)
     }
 
     for (i = 0; i < pool->cfg->num_samples; i++) {
-        wbuf0[i].buf_fastq_5 = buf;
-        buf += pool->bufsize_fastq_5;
-        wbuf0[i].buf_fastq_3 = buf;
-        buf += pool->bufsize_fastq_3;
+        wbuf0[i].buf_seqqual = buf;
+        buf += pool->bufsize_seqqual;
         wbuf0[i].buf_taginfo = buf;
         buf += pool->bufsize_taginfo;
     }
@@ -402,8 +380,7 @@ distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities
     pool->intensities = intensities;
     pool->basecalls = basecalls;
     pool->firstclusterno = firstclusterno;
-    pool->bufsize_fastq_5 = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_fastq_5;
-    pool->bufsize_fastq_3 = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_fastq_3;
+    pool->bufsize_seqqual = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_seqqual;
     pool->bufsize_taginfo = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_taginfo;
 
     for (i = 0; i < cfg->threads; i++)

@@ -111,13 +111,11 @@ struct SampleInfo {
     int limit_threep_processing;
     int dump_processed_signals;
 
-    BGZF *stream_fastq_5;       /* use wsync_* locking for theses three */
-    BGZF *stream_fastq_3;
+    BGZF *stream_seqqual;       /* use wsync_* locking for theses two */
     BGZF *stream_taginfo;
     BGZF *stream_signal_dump;   /* use statslock */
 
-    struct WriteHandleSync wsync_fastq_5;
-    struct WriteHandleSync wsync_fastq_3;
+    struct WriteHandleSync wsync_seqqual;
     struct WriteHandleSync wsync_taginfo;
 
     pthread_mutex_t statslock;
@@ -224,7 +222,7 @@ struct TailseekerConfig {
     int read_buffer_entry_count;
 
     /* section output */
-    char *fastq_output;
+    char *seqqual_output;
     char *taginfo_output;
     char *stats_output;
     char *length_dists_output;
@@ -251,8 +249,7 @@ struct TailseekerConfig {
     int num_samples;
 
     /* calculated values */
-    size_t max_bufsize_fastq_5;
-    size_t max_bufsize_fastq_3;
+    size_t max_bufsize_seqqual;
     size_t max_bufsize_taginfo;
 };
 
@@ -267,8 +264,7 @@ struct ParallelJob {
 };
 
 struct WriteBuffer {
-    char *buf_fastq_5;
-    char *buf_fastq_3;
+    char *buf_seqqual;
     char *buf_taginfo;
 };
 
@@ -284,8 +280,7 @@ struct ParallelJobPool {
     struct BCLData **basecalls;
     uint32_t firstclusterno;
 
-    size_t bufsize_fastq_5;
-    size_t bufsize_fastq_3;
+    size_t bufsize_seqqual;
     size_t bufsize_taginfo;
 
     struct ParallelJob jobs[1];

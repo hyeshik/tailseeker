@@ -159,34 +159,37 @@ check_balancer_basecall_quality(struct TailseekerConfig *cfg,
 
 
 static ssize_t
-write_fastq_entry(char **pbuffer, const char *entryname, size_t entryname_len,
-                  const char *seq, const char *qual, int start, int length)
+write_seqqual_entry(char **pbuffer, struct TailseekerConfig *cfg, uint32_t clusterno,
+                    const char *seq, const char *qual,
+                    int start_5p, int length_5p, int start_3p, int length_3p)
 {
     ssize_t written;
     char *buf;
 
     buf = *pbuffer;
 
-    /* line 1 */
-    *buf++ = '@';
-    memcpy(buf, entryname, entryname_len);
-    buf += entryname_len;
-    *buf++ = '\n';
+    /* lane id and clusterno */
+    written = sprintf(buf, "%s%04d\t%u\t", cfg->laneid, cfg->tile, (unsigned int)clusterno);
+    buf += written;
 
-    /* line 2 */
-    memcpy(buf, seq + start, length);
-    buf += length;
-    *buf++ = '\n';
+    /* 5'-side read sequence */
+    memcpy(buf, seq + start_5p, length_5p);
+    buf += length_5p;
+    *buf++ = '\t';
 
-    /* line 3 */
-    *buf++ = '+';
-    memcpy(buf, entryname, entryname_len);
-    buf += entryname_len;
-    *buf++ = '\n';
+    /* 5'-side read quality */
+    memcpy(buf, qual + start_5p, length_5p);
+    buf += length_5p;
+    *buf++ = '\t';
 
-    /* line 4 */
-    memcpy(buf, qual + start, length);
-    buf += length;
+    /* 3'-side read sequence */
+    memcpy(buf, seq + start_3p, length_3p);
+    buf += length_3p;
+    *buf++ = '\t';
+
+    /* 3'-side read quality */
+    memcpy(buf, qual + start_3p, length_3p);
+    buf += length_3p;
     *buf++ = '\n';
 
     written = buf - *pbuffer;
@@ -269,53 +272,29 @@ write_measurements_to_buffers(struct TailseekerConfig *cfg,
                               int procflags, int delimiter_end, int polya_len,
                               int terminal_mods)
 {
-#define MAX_ENTRYNAME_LEN   256
-    char entryname[MAX_ENTRYNAME_LEN+1];
-    size_t entryname_len;
     struct WriteBuffer *wb;
 
     wb = &wbuf[sample->numindex];
 
-    entryname[MAX_ENTRYNAME_LEN] = '\0';
-    snprintf(entryname, MAX_ENTRYNAME_LEN, "%s%04d:%08u:%04x:%03d:",
-             cfg->laneid, cfg->tile, (unsigned int)clusterno,
-             procflags, polya_len);
-    entryname_len = strlen(entryname);
-#undef MAX_ENTRYNAME_LEN
-
-    if (terminal_mods > 0) {
-        get_modification_sequence(entryname + entryname_len,
-                                  sequence_formatted, delimiter_end,
-                                  terminal_mods);
-        entryname_len += terminal_mods;
-    }
-
-    if (sample->stream_fastq_5 != NULL &&
-        write_fastq_entry(&wb->buf_fastq_5, entryname,
-                          entryname_len,
-                          sequence_formatted, quality_formatted,
-                          cfg->fivep_start, cfg->fivep_length) < 0)
-        return -1;
-
-    if (sample->stream_fastq_3 != NULL) {
-        int start, length;
+    if (sample->stream_seqqual != NULL) {
+        int start_3p, length_3p;
 
         if (delimiter_end >= 0) {
-            start = delimiter_end;
-            length = cfg->threep_start + cfg->threep_length - delimiter_end;
+            start_3p = delimiter_end;
+            length_3p = cfg->threep_start + cfg->threep_length - delimiter_end;
         }
         else {
-            start = cfg->threep_start;
-            length = cfg->threep_length;
+            start_3p = cfg->threep_start;
+            length_3p = cfg->threep_length;
         }
 
-        if (length > cfg->threep_output_length)
-            length = cfg->threep_output_length;
+        if (length_3p > cfg->threep_output_length)
+            length_3p = cfg->threep_output_length;
 
-        if (write_fastq_entry(&wb->buf_fastq_3, entryname,
-                              entryname_len,
-                              sequence_formatted, quality_formatted,
-                              start, length) < 0)
+        if (write_seqqual_entry(&wb->buf_seqqual, cfg, clusterno,
+                                sequence_formatted, quality_formatted,
+                                cfg->fivep_start, cfg->fivep_length,
+                                start_3p, length_3p) < 0)
             return -1;
     }
 
@@ -487,18 +466,11 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
         struct SampleInfo *sample;
 
         for (sample = cfg->samples; sample != NULL; sample = sample->next) {
-            if (sync_write_out_buffer(sample->stream_fastq_5,
-                                      wbuf0[sample->numindex].buf_fastq_5,
-                                      (size_t)(wbuf[sample->numindex].buf_fastq_5 -
-                                               wbuf0[sample->numindex].buf_fastq_5),
-                                      &sample->wsync_fastq_5, jobid) < 0)
-                return -1;
-
-            if (sync_write_out_buffer(sample->stream_fastq_3,
-                                      wbuf0[sample->numindex].buf_fastq_3,
-                                      (size_t)(wbuf[sample->numindex].buf_fastq_3 -
-                                               wbuf0[sample->numindex].buf_fastq_3),
-                                      &sample->wsync_fastq_3, jobid) < 0)
+            if (sync_write_out_buffer(sample->stream_seqqual,
+                                      wbuf0[sample->numindex].buf_seqqual,
+                                      (size_t)(wbuf[sample->numindex].buf_seqqual -
+                                               wbuf0[sample->numindex].buf_seqqual),
+                                      &sample->wsync_seqqual, jobid) < 0)
                 return -1;
 
             if (sync_write_out_buffer(sample->stream_taginfo,
