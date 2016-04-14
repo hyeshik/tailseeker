@@ -199,7 +199,8 @@ struct PolyARulerParameters {
     float downhill_extension_weight;
 };
 
-#define MAX_LANEID_LEN  32  /* including a zero terminator */
+#define MAX_LANEID_LEN      32  /* including a zero terminator */
+#define MAX_CLUSTERID_LEN   10
 
 struct TailseekerConfig {
     /* section source */

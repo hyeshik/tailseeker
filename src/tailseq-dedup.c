@@ -231,6 +231,9 @@ parse_line(struct TagInfo *taginfo)
     taginfo->modifications[length] = '\0';
     taginfo->modification_len = length;
 
+    /* Trim the UMI from the input buffer as we'll append a new column to the lines. */
+    *pos = '\0';
+
     /* Locate UMI sequence and copy */
     start = pos + 1;
     pos = strchr(start, '\n');
@@ -241,9 +244,6 @@ parse_line(struct TagInfo *taginfo)
         memcpy(taginfo->umi, start, length);
     taginfo->umi[length] = '\0';
     taginfo->umi_len = length;
-
-    /* Trim the linefeed character as we'll append a new column to the lines. */
-    *pos = '\0';
 
     return 0;
 }
@@ -287,10 +287,10 @@ process_tag_duplicates(struct TagInfoQueue *queue)
             struct TagInfo *rep;
 
             rep = &queue->el[nearest_ptr];
-            printf("%s\t%d\t%d\t%d\t%s\t%s\t%d\n",
+            printf("%s\t%d\t%d\t%d\t%s\t%d\n",
                 rep->tilename, rep->clusterno, rep->flags,
                 rep->polyA_len >= 0 ? (int)roundf(mean_polyA_len) : -1,
-                rep->modifications, rep->umi, queue->num_duplicates);
+                rep->modifications, queue->num_duplicates);
         }
     }
 

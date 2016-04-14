@@ -591,12 +591,11 @@ compute_derived_values(struct TailseekerConfig *cfg)
     if (cfg->threep_output_length > cfg->threep_length)
         cfg->threep_output_length = cfg->threep_length;
 
-#define MAX_CLUSTERID_LEN               10
     cfg->max_bufsize_seqqual = nsamples * (
-            MAX_LANEID_LEN + MAX_CLUSTERID_LEN +
+            MAX_CLUSTERID_LEN +
             cfg->fivep_length * 2 +
             cfg->threep_output_length * 2 +
-            7 /* field separators */);
+            6 /* field separators */);
     cfg->max_bufsize_taginfo = nsamples * (
             MAX_LANEID_LEN +
             6 /* tabs and eol */ + 20 /* other fields */ +

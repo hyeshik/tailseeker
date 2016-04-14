@@ -159,7 +159,7 @@ check_balancer_basecall_quality(struct TailseekerConfig *cfg,
 
 
 static ssize_t
-write_seqqual_entry(char **pbuffer, struct TailseekerConfig *cfg, uint32_t clusterno,
+write_seqqual_entry(char **pbuffer, uint32_t clusterno,
                     const char *seq, const char *qual,
                     int start_5p, int length_5p, int start_3p, int length_3p)
 {
@@ -168,8 +168,8 @@ write_seqqual_entry(char **pbuffer, struct TailseekerConfig *cfg, uint32_t clust
 
     buf = *pbuffer;
 
-    /* lane id and clusterno */
-    written = sprintf(buf, "%s%04d\t%u\t", cfg->laneid, cfg->tile, (unsigned int)clusterno);
+    /* clusterno */
+    written = sprintf(buf, "%u\t", (unsigned int)clusterno);
     buf += written;
 
     /* 5'-side read sequence */
@@ -291,7 +291,7 @@ write_measurements_to_buffers(struct TailseekerConfig *cfg,
         if (length_3p > cfg->threep_output_length)
             length_3p = cfg->threep_output_length;
 
-        if (write_seqqual_entry(&wb->buf_seqqual, cfg, clusterno,
+        if (write_seqqual_entry(&wb->buf_seqqual, clusterno,
                                 sequence_formatted, quality_formatted,
                                 cfg->fivep_start, cfg->fivep_length,
                                 start_3p, length_3p) < 0)
