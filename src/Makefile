@@ -3,12 +3,14 @@ CC?=		gcc
 CFLAGS=		-O3 -Wall -Werror -DNDEBUG ${HTSLIB_CFLAGS}
 SIGPROC_LIBS=	-lz -lm -lpthread ${HTSLIB_LIBS}
 DEDUP_LIBS=	-lm
+WRITEFASTQ_LIBS=-lm -lz ${HTSLIB_LIBS}
 bindir=		../bin
 
 HTSLIB_CFLAGS:=	$(shell pkg-config --cflags htslib)
 HTSLIB_LIBS:=	$(shell pkg-config --libs htslib)
 
-PROG=	${bindir}/tailseq-sigproc
+PROG=	${bindir}/tailseq-sigproc ${bindir}/tailseq-dedup \
+	${bindir}/tailseq-writefastq
 
 SIGPROC_OBJECTS= \
 	altcalls.o \
@@ -21,6 +23,7 @@ SIGPROC_OBJECTS= \
 	signalproc.o \
 	spotanalyzer.o \
 	tailseq-sigproc.o \
+	utils.o \
 	contrib/ini.o \
 	contrib/misc.o \
 	contrib/my_strstr.o \
@@ -29,17 +32,19 @@ SIGPROC_OBJECTS= \
 DEDUP_OBJECTS= \
 	tailseq-dedup.o
 
+WRITEFASTQ_OBJECTS= \
+	utils.o \
+	tailseq-writefastq.o
+
 .SUFFIXES:.c .o
 
 .c.o:
 	${CC} -c ${CFLAGS} ${INCLUDES} $< -o $@
 
-all: ${bindir}/tailseq-sigproc ${bindir}/tailseq-dedup
-#	python setup.py install --user
-#	python test.py
+all: ${PROG}
 
 clean:
-	rm -f ${SIGPROC_OBJECTS} ${DEDUP_OBJECTS}
+	rm -f ${SIGPROC_OBJECTS} ${DEDUP_OBJECTS} ${WRITEFASTQ_OBJECTS}
 
 distclean: clean
 	rm -f ${PROG}
@@ -50,3 +55,5 @@ ${bindir}/tailseq-sigproc: ${SIGPROC_OBJECTS}
 ${bindir}/tailseq-dedup: ${DEDUP_OBJECTS}
 	${CC} ${CFLAGS} -o $@ ${DEDUP_OBJECTS} ${DEDUP_LIBS}
 
+${bindir}/tailseq-writefastq: ${WRITEFASTQ_OBJECTS}
+	${CC} ${CFLAGS} -o $@ ${WRITEFASTQ_OBJECTS} ${WRITEFASTQ_LIBS}

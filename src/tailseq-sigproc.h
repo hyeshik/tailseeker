@@ -33,6 +33,7 @@
 #include <pthread.h>
 #include "htslib/bgzf.h"
 #include "sigproc-flags.h"
+#include "utils.h"
 
 
 #define NUM_CHANNELS        4
@@ -378,7 +379,5 @@ extern int inverse_4x4_matrix(const float *m, float *out);
 /* parseconfig.c */
 extern struct TailseekerConfig *parse_config(const char *filename);
 extern void free_config(struct TailseekerConfig *cfg);
-extern char *replace_placeholder(const char *format, const char *old,
-                                 const char *new);
 
 #endif

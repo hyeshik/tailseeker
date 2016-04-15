@@ -701,26 +701,3 @@ free_config(struct TailseekerConfig *cfg)
 
     free(cfg);
 }
-
-
-char *
-replace_placeholder(const char *format, const char *old, const char *new)
-{
-    size_t newsize;
-    char *found, *formatted, *wptr;
-
-    found = strstr(format, old);
-    if (found == NULL)
-        return strdup(old);
-
-    newsize = strlen(format) - strlen(old) + strlen(new);
-    formatted = wptr = malloc(newsize + 1);
-    strncpy(formatted, format, found - format);
-    wptr += (found - format);
-    strcpy(wptr, new);
-    wptr += strlen(new);
-    strcpy(wptr, found + strlen(old));
-
-    return formatted;
-}
-

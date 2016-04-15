@@ -194,17 +194,39 @@ rule process_signals:
         shell('{BINDIR}/tailseq-sigproc {output.sigproc_conf}')
 
 
-TARGETS.extend(expand('scratch/taginfo-dedup/{sample}.txt.gz', sample=EXP_SAMPLES))
+TARGETS.extend(expand('taginfo/{sample}.txt.gz', sample=ALL_SAMPLES))
 rule merge_and_deduplicate_taginfo:
     input: expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
-    output: 'scratch/taginfo-dedup/{sample}.txt.gz'
+    output: 'taginfo/{sample}.txt.gz'
     threads: 12
-    shell: 'cat {input} | {BGZIP_CMD} -cd -@ {threads} | \
-            env BGZIP_OPT="-@ {threads}" sort -t "\t" -k6,6 -k1,1 -k2,2n \
-                --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
-            {BINDIR}/tailseq-dedup | \
-            env BGZIP_OPT="-@ {threads}" sort -t "\t" -k1,1 -k2,2n \
-                --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
-            {BGZIP_CMD} -@ {threads} -c > {output}'
+    run:
+        if wildcards.sample in EXP_SAMPLES:
+            shell('cat {sorted_input} | {BGZIP_CMD} -cd -@ {threads} | \
+                env BGZIP_OPT="-@ {threads}" sort -t "\t" -k6,6 -k1,1 -k2,2n \
+                    --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
+                {BINDIR}/tailseq-dedup | \
+                env BGZIP_OPT="-@ {threads}" sort -t "\t" -k1,1 -k2,2n \
+                    --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
+                {BGZIP_CMD} -@ {threads} -c > {output}')
+        elif wildcards.sample in SPIKEIN_SAMPLES:
+            sorted_input = sorted(input)
+            shell('{SCRIPTSDIR}/bgzf-merge.py --output {output} {sorted_input}')
+
+
+TARGETS.extend(expand('fastq/{sample}_{read}.fastq.gz', sample=EXP_SAMPLES,
+                      read=INSERT_READS))
+rule produce_fastq_outputs:
+    input:
+        taginfo='taginfo/{sample}.txt.gz',
+        seqquals=expand('scratch/seqqual/{{sample}}_{tile}.txt.gz', tile=TILES)
+    output:
+        R5='fastq/{sample}_R5.fastq.gz',
+        R3='fastq/{sample}_R3.fastq.gz'
+    threads: THREADS_MAXIMUM_CORE
+    params: seqqual_filename='scratch/seqqual/{sample}_@tile@.txt.gz'
+    shell: '{BINDIR}/tailseq-writefastq \
+                --taginfo {input.taginfo} --seqqual \'{params.seqqual_filename}\' \
+                --fastq5 {output.R5} --fastq3 {output.R3} \
+                --threads {threads}'
 
 # ex: syntax=snakemake
