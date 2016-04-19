@@ -123,6 +123,10 @@ if not WITHOUT_GSNAP:
         shell: 'gmap_build -D {params.output_prefix} -d genome -k {GMAP_INDEX_KMER_SIZE} \
                     -q {GMAP_INDEX_INTERVAL} --circular=chrM,chrMT,M,MT {input}'
 
+rule measure_chrom_sizes:
+    input: '{genome}/genome.fa.gz'
+    output: final_target('{genome}/chrom-sizes')
+    shell: 'faSize -detailed -tab <(zcat {input}) > {output}'
 
 # ===
 
