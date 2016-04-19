@@ -229,4 +229,7 @@ rule produce_fastq_outputs:
                 --fastq5 {output.R5} --fastq3 {output.R3} \
                 --threads {threads}'
 
+if CONF['analysis_level'] >= 2:
+    include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'level2_analysis.py')
+
 # ex: syntax=snakemake

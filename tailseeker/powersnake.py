@@ -114,9 +114,12 @@ class suffix_filter:
 
     def __getitem__(self, key):
         matches = [el for el in self.values if el.endswith(key)]
-        if len(matches) != 1:
+        if len(matches) > 1:
             raise ValueError("No single match found for {} in {}".format(key, self.values))
-        return matches[0]
+        elif len(matches) == 1:
+            return matches[0]
+        else:
+            return ''
 
 
 class temporary_file(str):

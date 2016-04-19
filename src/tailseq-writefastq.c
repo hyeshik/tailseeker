@@ -204,13 +204,9 @@ write_fastq_entry(BGZF *fastq5out, BGZF *fastq3out,
         return -1;
 
 
-    bufp = buf;
-
-    /* Line 1 of the 3'-side FASTQ */
-    *bufp++ = '@';
-    memcpy(bufp, entryname, entryname_len);
-    bufp += entryname_len;
-    *bufp++ = '\n';
+    /* Line 1 of the 3'-side FASTQ. The first line is identical to
+     * 5'-side FASTQ's. Just skip to the first letter of line 2. */
+    bufp = buf + entryname_len + 2;
 
     /* Line 2 of the 3'-side FASTQ */
     sqptr_2 = strchr(++sqptr_1, '\t');
