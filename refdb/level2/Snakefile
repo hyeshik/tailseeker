@@ -1,0 +1,135 @@
+#
+# Copyright (c) 2016 Hyeshik Chang
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# - Hyeshik Chang <hyeshik@snu.ac.kr>
+#
+
+from collections import defaultdict
+import os
+
+# With the default k-mer size 15 of GMAP/GSNAP, 1-5% among tags with long
+# poly(A) tails are not aligned. The poly(A) length distribution is also
+# affected by the percentage of mapped reads due to this poly(A)-length
+# dependent biases. This is not generally a big problem in most cases
+# where the samples being compared are sequenced and analyzed together.
+# If you have enough computing resources, try a smaller k-mer size (12).
+# It will lessen the distortions by poly(A) tail lengths.
+if os.environ.get('TAILSEEKER_SENSITIVE', '') in ('1', 'yes', 'YES', 'Yes'):
+    GMAP_INDEX_KMER_SIZE = 12
+    GMAP_INDEX_INTERVAL = 1
+else:
+    GMAP_INDEX_KMER_SIZE = 15
+    GMAP_INDEX_INTERVAL = 3
+
+WITHOUT_GSNAP = (os.environ.get('WITHOUT_GSNAP', '') in ('1', 'yes', 'YES', 'Yes'))
+
+shell.executable('bash')
+
+GENOMES = '''
+    GRCh38 GRCm38 GRCz10
+'''.split()
+
+GENOME_SEQUENCE_SOURCES = {
+    'GRCh38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_24/GRCh38.p5.genome.fa.gz',
+    'GRCm38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M9/GRCm38.p4.genome.fa.gz',
+    'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/fasta/danio_rerio/dna/Danio_rerio.GRCz10.dna.toplevel.fa.gz',
+}
+
+GENE_ANNOTATION_SOURCES = {
+    'GRCh38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_24/gencode.v24.chr_patch_hapl_scaff.annotation.gtf.gz',
+    'GRCm38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M9/gencode.vM9.chr_patch_hapl_scaff.annotation.gtf.gz',
+    'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/gtf/danio_rerio/Danio_rerio.GRCz10.84.gtf.gz',
+}
+
+TARGETS = defaultdict(list)
+
+def final_target(filename, genomes=None):
+    for genome in GENOMES if genomes is None else genomes:
+        TARGETS[genome].append(filename.format(genome=genome))
+    return filename
+
+rule default:
+    run:
+        print("Please specify name(s) of the genomes to build.")
+        print("Supported genomes:", ' '.join(GENOMES))
+
+rule download_genome_fasta:
+    output: final_target('{genome}/genome.fa.gz')
+    run:
+        url = GENOME_SEQUENCE_SOURCES[wildcards.genome]
+        shell('wget -O {output} "{url}"')
+
+rule download_gene_annotation:
+    output: final_target('{genome}/genes-main.gtf.gz')
+    run:
+        url = GENE_ANNOTATION_SOURCES[wildcards.genome]
+        shell('wget -O /dev/stdout "{url}" | gzip -cd - | \
+               bedtools sort -header | gzip -c - > {output}')
+
+rule uncompress_genome_fasta:
+    input: '{genome}/genome.fa.gz'
+    output: temp('{genome}/genome.fa')
+    shell: 'zcat {input} > {output}'
+
+rule uncompress_gene_annotations:
+    input: '{genome}/genes-main.gtf.gz'
+    output: temp('{genome}/genes-main.gtf')
+    shell: 'zcat {input} > {output}'
+
+rule build_STAR_index:
+    input:
+        genomeseq='{genome}/genome.fa',
+        geneanno='{genome}/genes-main.gtf'
+    output: final_target('{genome}/index.star/SA')
+    threads: 32
+    params: output_dir='{genome}/index.star'
+    shell: 'STAR --runThreadN {threads} --runMode genomeGenerate \
+                --genomeDir {params.output_dir} --genomeFastaFiles {input.genomeseq} \
+                --sjdbGTFfile {input.geneanno} --sjdbOverhang 50'
+
+if not WITHOUT_GSNAP:
+    rule build_gmap_spliceindex:
+        input: '{genome}/genes-main.gtf.gz'
+        output: final_target('{genome}/index.gmap/splicesites.iit')
+        shell: 'zcat {input} | gtf_splicesites | iit_store -o {output}'
+
+    rule build_gmap_intronindex:
+        input: '{genome}/genes-main.gtf.gz'
+        output: final_target('{genome}/index.gmap/introns.iit')
+        shell: 'zcat {input} | gtf_introns | iit_store -o {output}'
+
+    rule build_gmap_index:
+        input: '{genome}/genome.fa'
+        output: final_target('{genome}/index.gmap/genome/genome.sarray')
+        params: output_prefix='{genome}/index.gmap'
+        shell: 'gmap_build -D {params.output_prefix} -d genome -k {GMAP_INDEX_KMER_SIZE} \
+                    -q {GMAP_INDEX_INTERVAL} --circular=chrM,chrMT,M,MT {input}'
+
+
+# ===
+
+def donothing(*a, **k): pass
+for genome, targets in TARGETS.items():
+    shortcut = workflow.get_rule(workflow.add_rule(name=genome))
+    shortcut.set_input(targets)
+    shortcut.run_func = donothing
+
+# ex: syntax=snakemake
