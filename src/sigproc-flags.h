@@ -40,5 +40,6 @@
 #define PAFLAG_BALANCER_SIGNAL_BAD          1024
 #define PAFLAG_DARKCYCLE_OVER_THRESHOLD     2048
 #define PAFLAG_NO_POLYA_DETECTED            4096
+#define PAFLAG_CHIMERIC_TEMPLATE            8192    /* used by level 2 analysis */
 
 #endif

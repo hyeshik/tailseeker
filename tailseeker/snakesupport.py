@@ -24,6 +24,7 @@
 import sys
 import os
 import shutil
+from collections import defaultdict
 
 
 def setdefault(name, value):

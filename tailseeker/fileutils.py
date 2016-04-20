@@ -134,7 +134,7 @@ class ParsedLine(object):
     def __repr__(self):
         return '<ParsedLine %s>' % ' '.join(
             '%s=%s' % (name, repr(self.data[idx]))
-            for name, idx in sorted(self.field2index.iteritems(), key=lambda x: x[1])
+            for name, idx in sorted(self.field2index.items(), key=lambda x: x[1])
             if idx < len(self.data))
 
     if sys.version_info[0] >= 3:

@@ -72,7 +72,7 @@ rule default:
         print("Supported genomes:", ' '.join(GENOMES))
 
 rule download_genome_fasta:
-    output: final_target('{genome}/genome.fa.gz')
+    output: temp('{genome}/genome.fa.gz')
     run:
         url = GENOME_SEQUENCE_SOURCES[wildcards.genome]
         shell('wget -O {output} "{url}"')
@@ -86,8 +86,13 @@ rule download_gene_annotation:
 
 rule uncompress_genome_fasta:
     input: '{genome}/genome.fa.gz'
-    output: temp('{genome}/genome.fa')
+    output: final_target('{genome}/genome.fa')
     shell: 'zcat {input} > {output}'
+
+rule index_genome_fasta:
+    input: '{genome}/genome.fa'
+    output: '{genome}/genome.fa.fai'
+    shell: 'samtools faidx {input}'
 
 rule uncompress_gene_annotations:
     input: '{genome}/genes-main.gtf.gz'
@@ -124,9 +129,9 @@ if not WITHOUT_GSNAP:
                     -q {GMAP_INDEX_INTERVAL} --circular=chrM,chrMT,M,MT {input}'
 
 rule measure_chrom_sizes:
-    input: '{genome}/genome.fa.gz'
+    input: '{genome}/genome.fa'
     output: final_target('{genome}/chrom-sizes')
-    shell: 'faSize -detailed -tab <(zcat {input}) > {output}'
+    shell: 'faSize -detailed -tab {input} > {output}'
 
 # ===
 
