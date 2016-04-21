@@ -120,7 +120,7 @@ else:
 
 rule tabix_index_taginfo:
     input: 'taginfo/{sample}.txt.gz'
-    output: 'taginfo/{sample}.txt.gz.tbi'
+    output: temp('taginfo/{sample}.txt.gz.tbi')
     shell: '{TABIX_CMD} -0 -b 2 -e 2 -s 1 {input}'
 
 TARGETS.extend(expand('refined-taginfo/{sample}.txt.gz', sample=EXP_SAMPLES))
@@ -129,26 +129,29 @@ rule reevaluate_tails:
         taginfo='taginfo/{sample}.txt.gz',
         taginfo_index='taginfo/{sample}.txt.gz.tbi',
         alignment='alignments/{sample}_paired.bam'
-    output: 'refined-taginfo/{sample}.txt.gz'
+    output: temp('refined-taginfo/{sample}.txt.pre.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
                                  CONF['reference_set'][wildcards.sample])
+        analytic_options = """\
+            --max-fragment-size {modopt[maximum_fragment_size]} \
+            --max-polya-reevaluation {modopt[polya_reevaluation_limit]} \
+            --terminal-mismatch-recheck {modopt[terminal_mismatch_refine]} \
+            --polya-reev-contamination-prob {modopt[polya_reevaluation_contamination_prob]}\
+            --contaminated-polya-rescue-threshold \
+                {modopt[polya_reevaluation_terminal_a_rescue]}""".format(
+                modopt=CONF['modification_refinement'])
 
         shell('{SCRIPTSDIR}/refine-modifications.py \
                 --parallel {threads} \
                 --taginfo {input.taginfo} --alignment {input.alignment} \
-                --reference-seq {genomedir}/genome.fa \
-                --max-fragment-size 1000000 \
-                --max-polya-reevaluation 7 \
-                --terminal-mismatch-recheck 2 \
-                --polya-reev-contamination-prob 0.2 \
-                --contaminated-polya-rescue-threshold 3 | \
+                --reference-seq {genomedir}/genome.fa {analytic_options} | \
                 bgzip -c > {output}')
 
 rule generate_short_polya_list:
-    input: 'refined-taginfo/{sample}.txt.gz'
-    output: 'scratch/short-polya-list/{sample,[^_].*}.txt'
+    input: 'refined-taginfo/{sample}.txt.pre.gz'
+    output: temp('scratch/short-polya-list/{sample}.txt')
     run:
         import pandas as pd
         from tailseeker import tabledefs
@@ -163,7 +166,7 @@ rule extract_short_polya_tag_alignments:
     input:
         idlist='scratch/short-polya-list/{sample}.txt',
         alignments='alignments/{sample}_paired.bam'
-    output: 'scratch/polya-sites/indiv-{sample}.txt'
+    output: temp('scratch/polya-sites/indiv-{sample}.txt')
     threads: 4
     run:
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
@@ -185,7 +188,7 @@ def inputs_for_merge_polya_sites_list(wildcards):
 
 rule merge_polya_sites_list:
     input: inputs_for_merge_polya_sites_list
-    output: 'scratch/polya-sites/group-{group}.txt'
+    output: temp('scratch/polya-sites/group-{group}.txt')
     run:
         sample1 = EXPERIMENT_GROUPS[wildcards.group][0]
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
@@ -197,5 +200,52 @@ rule merge_polya_sites_list:
                {BEDTOOLS_CMD} slop -s -l {polya_site_window} \
                     -r {polya_site_window} -i - -g {genomedir}/chrom-sizes | \
                {BEDTOOLS_CMD} merge -i - -s -c 4,5,6 -o first > {output}')
+
+def inputs_for_apply_short_polya_filter(wildcards):
+    return 'scratch/polya-sites/group-{group}.txt'.format(
+                group=CONF['experiment_groups'][wildcards.sample])
+
+rule apply_short_polya_filter:
+    input:
+        alignment='alignments/{sample}_paired.bam',
+        taginfo='refined-taginfo/{sample}.txt.pre.gz',
+        pasitelist=inputs_for_apply_short_polya_filter
+    output: 'refined-taginfo/{sample}.txt.gz'
+    params: tmplist=SCRATCHDIR+'/apply_short_polya_filter-{sample}.txt'
+    run:
+        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+                                 CONF['reference_set'][wildcards.sample])
+
+        shell("{SAMTOOLS_CMD} view -b -f 128 -F 4 {input.alignment} | \
+               {BEDTOOLS_CMD} bamtobed | \
+               sed -e 's,-$,x,g' -e 's,+$,-,g' -e 's,x$,+,g' | \
+               {BEDTOOLS_CMD} flank -s -l 0 -r 1 -i - -g {genomedir}/chrom-sizes | \
+               awk -F '\t' '($2 < $3) {{ print $0; }}' | \
+               {BEDTOOLS_CMD} slop -s -l 1 -r -1 -g {genomedir}/chrom-sizes | \
+               {BEDTOOLS_CMD} intersect -nonamecheck -u -s -a - -b {input.pasitelist} | \
+               cut -f4 | cut -d: -f1-2 | uniq > {params.tmplist}")
+
+        import pandas as pd
+        import numpy as np
+        import subprocess as sp
+        import io
+        from tailseeker import tabledefs
+
+        shorttailsid = pd.read_table(params.tmplist, sep=':', names=['tile', 'cluster'],
+                                     dtype={'tile': str, 'cluster': np.uint32})
+        shorttailsid['additional_flags'] = 1.0
+
+        taginfo = pd.read_table(input.taginfo, **tabledefs.refined_taginfo)
+        merged = pd.merge(taginfo, shorttailsid, how='left', left_on=('tile', 'cluster'),
+                          right_on=('tile', 'cluster'))
+        merged['pflags'] += (tabledefs.PAFLAG_LIKELY_HAVE_INTACT_END *
+                             merged['additional_flags'].notnull())
+
+        with sp.Popen([BGZIP_CMD, '-c'], stdin=sp.PIPE, stdout=open(output[0], 'wb')) as proc:
+            with io.TextIOWrapper(proc.stdin) as stdin_text_stream:
+                merged.iloc[:, :len(taginfo.columns)].to_csv(stdin_text_stream,
+                                                        sep='\t', index=False, header=False)
+
+        os.unlink(params.tmplist)
 
 # ex: syntax=snakemake
