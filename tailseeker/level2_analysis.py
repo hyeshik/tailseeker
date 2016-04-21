@@ -98,14 +98,20 @@ if CONF['performance']['enable_gsnap']:
         output: 'alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
         # samtools 1.3 merge does not respect `-n' option for paired alignments.
-        shell: '{SAMTOOLS_CMD} merge -u -h {input.star} -@ {threads} - {input} | \
-                {SAMTOOLS_CMD} sort -n -@ {threads} -o {output}'
+        shell: '{SAMTOOLS_CMD} merge -n -u -h {input.star} -@ {threads} - {input} | \
+                {SAMTOOLS_CMD} sort -n -@ {threads} -O sam - | \
+                {PARALLEL_CMD} -j {threads} --keep-order \
+                    --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,p\'" | \
+                {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
 else:
     rule merge_alignments:
         input: 'scratch/alignments/{sample}_STAR_{type}.bam'
         output: 'alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
-        shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -o {output} {input}'
+        shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -O sam {input} | \
+                {PARALLEL_CMD} -j {threads} --keep-order \
+                    --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,p\'" | \
+                {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
 
 
 # ---
