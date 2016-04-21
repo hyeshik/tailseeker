@@ -101,7 +101,7 @@ if CONF['performance']['enable_gsnap']:
         shell: '{SAMTOOLS_CMD} merge -n -u -h {input.star} -@ {threads} - {input} | \
                 {SAMTOOLS_CMD} sort -n -@ {threads} -O sam - | \
                 {PARALLEL_CMD} -j {threads} --keep-order \
-                    --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,p\'" | \
+                    --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,g\'" | \
                 {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
 else:
     rule merge_alignments:
@@ -110,7 +110,7 @@ else:
         threads: THREADS_MAXIMUM_CORE
         shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -O sam {input} | \
                 {PARALLEL_CMD} -j {threads} --keep-order \
-                    --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,p\'" | \
+                    --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,g\'" | \
                 {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
 
 
@@ -118,19 +118,25 @@ else:
 # Refinement of non-templated 3'-end additions with reference genome.
 # ---
 
+rule tabix_index_taginfo:
+    input: 'taginfo/{sample}.txt.gz'
+    output: 'taginfo/{sample}.txt.gz.tbi'
+    shell: '{TABIX_CMD} -0 -b 2 -e 2 -s 1 {input}'
+
 TARGETS.extend(expand('refined-taginfo/{sample}.txt.gz', sample=EXP_SAMPLES))
 rule reevaluate_tails:
     input:
-        read3fastq='fastq/{sample}_R3.fastq.gz',
         taginfo='taginfo/{sample}.txt.gz',
+        taginfo_index='taginfo/{sample}.txt.gz.tbi',
         alignment='alignments/{sample}_paired.bam'
     output: 'refined-taginfo/{sample}.txt.gz'
-    threads: 2
+    threads: THREADS_MAXIMUM_CORE
     run:
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
                                  CONF['reference_set'][wildcards.sample])
 
-        shell('{SCRIPTSDIR}/refine-modifications.py --read3 {input.read3fastq} \
+        shell('{SCRIPTSDIR}/refine-modifications.py \
+                --parallel {threads} \
                 --taginfo {input.taginfo} --alignment {input.alignment} \
                 --reference-seq {genomedir}/genome.fa \
                 --max-fragment-size 1000000 \

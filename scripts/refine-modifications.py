@@ -24,8 +24,10 @@
 #
 
 from tailseeker.parsers import parse_sam, parse_taginfo, parse_fastq
-from tailseeker.fileutils import MultiJoinIterator
+from tailseeker.fileutils import MultiJoinIterator, TemporaryDirectory
 from tailseeker.sequtils import reverse_complement_bytes, GiantFASTAFile
+from tailseeker.parallel import open_tabix_parallel
+from concurrent import futures
 from scipy.stats import binom_test
 import subprocess as sp
 import sys
@@ -78,9 +80,10 @@ def test_terminal_match_seqs(refseq, readseq):
 
 MAPPED_READ_MASK = F_UNMAPPED | F_SECOND_READ
 is_r5_mapped = lambda x: (x.flag & MAPPED_READ_MASK) == 0
-is_r3_mapped = lambda x: (x.flag & MAPPED_READ_MASK) == F_SECOND_READ
+is_mapped = lambda x: (x.flag & F_UNMAPPED) != F_UNMAPPED
+is_r3 = lambda x: (x.flag & F_SECOND_READ) == F_SECOND_READ
 
-def reevaluate_terminal_additions(samrows, taginforows, seqrows, refgenome,
+def reevaluate_terminal_additions(samrows, taginforows, refgenome,
                                   maximum_fragment_length, terminal_recheck_width):
     rflags = 0
     samrows = list(samrows)
@@ -89,81 +92,87 @@ def reevaluate_terminal_additions(samrows, taginforows, seqrows, refgenome,
         return
 
     taginfo = taginforows[0]
-    r3seq = next(seqrows)
-    r3seq = reverse_complement_bytes(r3seq[1])
 
-    read3rows = list(filter(is_r3_mapped, samrows))
+    read3rows = list(filter(is_r3, samrows))
+    if not read3rows:
+        raise ValueError("Unmatched read pair {} found.".format(samrows[0].qname.decode()))
+
+    read3rows_mapped = list(filter(is_mapped, read3rows))
 
     # remove potential artifacts from RNA-RNA ligations
-    if maximum_fragment_length is not None:
-        read1rows = list(filter(is_r5_mapped, samrows))
+    if read3rows_mapped and maximum_fragment_length is not None:
+        read5rows = list(filter(is_r5_mapped, samrows))
 
         valid_read3rows = [
-            r3row for r3row in read3rows
-            if any((r1row.rname == r3row.rname and
-                        abs(r1row.pos - r3row.pos) < maximum_fragment_length)
-                    for r1row in read1rows)
+            r3row for r3row in read3rows_mapped
+            if any((r5row.rname == r3row.rname and
+                        abs(r5row.pos - r3row.pos) < maximum_fragment_length)
+                    for r5row in read5rows)
         ]
 
-        if read3rows and not valid_read3rows:
+        if read3rows_mapped and not valid_read3rows:
             # likely a chimeric clone
             rflags |= PAFLAG_CHIMERIC_TEMPLATE
-        else:
-            read3rows = valid_read3rows
+        #else:
+            # This filter appears to produce more false positives than expected
+            # purifications.
+            # read3rows_mapped = valid_read3rows
 
+    if not read3rows_mapped: # all read 3 alignments were unmapped or filtered out
+        fullmodlen = taginfo.polyA + len(taginfo.mods)
+        r3seq = read3rows[0].seq
+        if (read3rows[0].flag & F_REVERSE_STRAND) == 0:
+            r3seq = reverse_complement_bytes(r3seq)
+        modseq = r3seq[-fullmodlen:].decode() if fullmodlen > 0 else ''
 
-    read3rows.sort(key=lambda x: (-count_M_span(x.cigar), -x.mapq))
+        return taginfo, '-', modseq, rflags
+
+    read3rows_mapped.sort(key=lambda x: (-count_M_span(x.cigar), -x.mapq))
+    bestmap = read3rows_mapped[0]
     additional_clipping = 0
 
-    if not read3rows:
-        fullmodlen = taginfo.polyA + len(taginfo.mods)
-        cigarpart = b'X'
-        modseq = r3seq[-fullmodlen:] if fullmodlen else b''
+    cigartokens = cigar_pattern.findall(bestmap.cigar)
+    if bestmap.flag & F_REVERSE_STRAND:
+        # read 2 is reverse mapped -> RNA is same to + strand
+        modlen = int(cigartokens[-1][0]) if cigartokens[-1][1] == b'S' else 0
+
+        # realign the terminal M ops.
+        mapped_end = bestmap.pos - 1 + cigar_reference_advance(bestmap.cigar)
+        matchseq = bestmap.seq[:-modlen] if modlen else bestmap.seq
+        refseq = refgenome.get(bestmap.rname.decode(),
+                               mapped_end - terminal_recheck_width,
+                               mapped_end).upper()
+        if (len(refseq) == terminal_recheck_width and
+                len(matchseq) >= terminal_recheck_width):
+            additional_clipping = test_terminal_match_seqs(refseq.encode(),
+                                                matchseq[-terminal_recheck_width:])
+            if additional_clipping > 0:
+                modlen += additional_clipping
+
+        # common stuff for + strand
+        modseq = bestmap.seq[-modlen:] if modlen else b''
+        strand = b'+'
     else:
-        bestmap = read3rows[0]
+        # read 2 is forward mapped -> RNA is same to - strand
+        modlen = int(cigartokens[0][0]) if cigartokens[0][1] == b'S' else 0
 
-        cigartokens = cigar_pattern.findall(bestmap.cigar)
-        if bestmap.flag & F_REVERSE_STRAND:
-            # read 2 is reverse mapped -> RNA is same to + strand
-            modlen = int(cigartokens[-1][0]) if cigartokens[-1][1] == b'S' else 0
+        # realign the terminal M ops.
+        mapped_end = bestmap.pos - 1
+        matchseq = reverse_complement_bytes(bestmap.seq[modlen:] if modlen else bestmap.seq)
+        refseq = refgenome.get(bestmap.rname.decode(), mapped_end,
+                               mapped_end + terminal_recheck_width, '-').upper()
+        if (len(refseq) == terminal_recheck_width and
+                len(matchseq) >= terminal_recheck_width):
+            additional_clipping = test_terminal_match_seqs(refseq.encode(),
+                                                matchseq[-terminal_recheck_width:])
+            if additional_clipping > 0:
+                modlen += additional_clipping
 
-            # realign the terminal M ops.
-            mapped_end = bestmap.pos - 1 + cigar_reference_advance(bestmap.cigar)
-            matchseq = bestmap.seq[:-modlen] if modlen else bestmap.seq
-            refseq = refgenome.get(bestmap.rname.decode(),
-                                   mapped_end - terminal_recheck_width,
-                                   mapped_end).upper()
-            if (len(refseq) == terminal_recheck_width and
-                    len(matchseq) >= terminal_recheck_width):
-                additional_clipping = test_terminal_match_seqs(refseq.encode(),
-                                                    matchseq[-terminal_recheck_width:])
-                if additional_clipping > 0:
-                    modlen += additional_clipping
+        # common stuff for - strand
+        modseq = reverse_complement_bytes(bestmap.seq[:modlen]) if modlen else b''
+        strand = b'-'
 
-            # common stuff for + strand
-            modseq = bestmap.seq[-modlen:] if modlen else b''
-            strand = b'+'
-        else:
-            # read 2 is forward mapped -> RNA is same to - strand
-            modlen = int(cigartokens[0][0]) if cigartokens[0][1] == b'S' else 0
-
-            # realign the terminal M ops.
-            mapped_end = bestmap.pos - 1
-            matchseq = reverse_complement_bytes(bestmap.seq[modlen:] if modlen else bestmap.seq)
-            refseq = refgenome.get(bestmap.rname.decode(), mapped_end,
-                                   mapped_end + terminal_recheck_width, '-').upper()
-            if (len(refseq) == terminal_recheck_width and
-                    len(matchseq) >= terminal_recheck_width):
-                additional_clipping = test_terminal_match_seqs(refseq.encode(),
-                                                    matchseq[-terminal_recheck_width:])
-                if additional_clipping > 0:
-                    modlen += additional_clipping
-
-            # common stuff for - strand
-            modseq = reverse_complement_bytes(bestmap.seq[:modlen]) if modlen else b''
-            strand = b'-'
-
-        cigarpart = strand + bestmap.cigar
+    cigarpart = strand + bestmap.cigar
 
     return taginfo, cigarpart.decode(), modseq.decode(), rflags
 
@@ -183,26 +192,23 @@ def calculate_required_A_in_polyA(prob, pcutoff, maximum_length):
     return required_A
 
 
-def run(options):
-    readerproc = sp.Popen([SAMTOOLS_CMD, 'view', options.aln], stdout=sp.PIPE)
+def process_tile(options, tile, taginfo_input, output):
+    readerproc = sp.Popen([SAMTOOLS_CMD, 'view', '-r', tile, options.aln], stdout=sp.PIPE)
 
     # open the reference database
     refgenome = GiantFASTAFile(options.refseq_fasta)
 
     # parsing iterators
     samit = parse_sam(readerproc.stdout)
-    taginfoit = parse_taginfo(options.taginfo)
-    seqit = parse_fastq(options.fastq)
+    taginfoit = parse_taginfo(taginfo_input())
 
     # key functions for joiner
-    def parse_readid(readid):
-        tile, cluster, _ = readid.split(b':', 2)
-        return (tile, int(cluster))
+    def parse_readid_from_sam(samrow):
+        qtile, qcluster, _ = samrow.qname.split(b':', 2)
+        return (qtile, int(qcluster))
     taginfokey = lambda x: (x.tile, x.cluster)
-    samkey = lambda x: parse_readid(x.qname)
-    seqkey = lambda x: parse_readid(x[0])
 
-    joined_it = MultiJoinIterator([samit, taginfoit, seqit], [samkey, taginfokey, seqkey])
+    joined_it = MultiJoinIterator([samit, taginfoit], [parse_readid_from_sam, taginfokey])
     re_termmod = re.compile('(T+|G+|C+)?$')
     re_termA = re.compile('A*$')
 
@@ -210,9 +216,11 @@ def run(options):
     required_A = calculate_required_A_in_polyA(options.reev_cprob, 0.95, 100)
     rescue_threshold = options.rescue_threshold
 
-    for (tile, cluster), samrows, taginforows, seqrows in joined_it:
+    outfile = open(output, 'w')
+
+    for (tile, cluster), samrows, taginforows in joined_it:
         taginfo, cigar, nontmplmods, rflags = reevaluate_terminal_additions(
-                samrows, taginforows, seqrows, refgenome, options.fragsize,
+                samrows, taginforows, refgenome, options.fragsize,
                 options.termaln_check)
 
         if taginfo.polyA > polya_noreev_threshold:
@@ -243,7 +251,27 @@ def run(options):
         print(tile.decode(), cluster, taginfo.pflags | rflags, taginfo.clones,
               reev_mods['A'] if taginfo.polyA >= 0 else -1,
               reev_mods['T'], reev_mods['G'], reev_mods['C'],
-              nontmplmods, sep='\t')
+              nontmplmods, sep='\t', file=outfile)
+
+    return output
+
+
+def process(options):
+    taginfo_inputs = open_tabix_parallel(options.taginfo, named=True)
+
+    with futures.ProcessPoolExecutor(options.parallel) as executor, \
+            TemporaryDirectory(asobj=True) as workdir:
+        jobs = []
+
+        for tile, taginfo_open in sorted(taginfo_inputs.items()):
+            joboutput = os.path.join(workdir.path, tile)
+            job = executor.submit(process_tile, options, tile, taginfo_open, joboutput)
+            jobs.append(job)
+
+        for j in jobs:
+            joboutput = j.result()
+            sp.check_call(['cat', joboutput], stdout=sys.stdout)
+            os.unlink(joboutput)
 
 
 def parse_arguments():
@@ -251,8 +279,8 @@ def parse_arguments():
 
     parser = argparse.ArgumentParser(description='Generate a table for '
                                                  'non-templated 3\' additions')
-    parser.add_argument('--read3', dest='fastq', metavar='FILE', type=str,
-                        required=True, help="Path to a 3'-side sequence file")
+    parser.add_argument('--parallel', dest='parallel', metavar='NUM', type=int,
+                        default=1, help='Number of parallel processes')
     parser.add_argument('--taginfo', dest='taginfo', metavar='FILE', type=str,
                         required=True, help='Path to a taginfo file')
     parser.add_argument('--alignment', dest='aln', metavar='FILE', type=str,
@@ -285,4 +313,4 @@ def parse_arguments():
 
 if __name__ == '__main__':
     options = parse_arguments()
-    run(options)
+    process(options)
