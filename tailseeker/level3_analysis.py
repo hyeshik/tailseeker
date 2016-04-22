@@ -27,8 +27,8 @@ TARGETS.extend(expand('associations/{sample}.txt.gz', sample=EXP_SAMPLES))
 
 rule associate_tags_to_genes:
     input: 'alignments/{sample}_single.bam'
-    output: 'associations/{sample}.txt.gz'
-    threads: 6
+    output: temp('scratch/associations/{sample}.txt')
+    threads: 4
     run:
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level3',
                                  CONF['reference_set'][wildcards.sample])
@@ -39,9 +39,18 @@ rule associate_tags_to_genes:
                 -a - -b {genomedir}/exons.gtf.gz -s | \
                cut -f4,21 | \
                {PARALLEL_CMD} -j {threads} --pipe --block 10M \
-                    "sed -e \'s,gene_id \\"\\([^\\"]*\\)\\".*$,\\1,g\' \
-                        -e \'s,^\\([^:]*\\):0*\\([0-9][0-9]*\\):[^\t]*\t,\\1\t\\2\t,g\'" | \
-               sort -k1,1 -k2,2n -k3,3 | uniq | \
-               {BGZIP_CMD} -c > {output}')
+                    "sed -e \'s,gene_id \\"\\([^\\"]*\\)\\".*$,\\1,g\'" | \
+               sort -k1,2 | uniq > {output}')
+
+rule count_multiple_associations:
+    input: 'scratch/associations/{sample}.txt'
+    output: 'associations/{sample}.txt.gz'
+    threads: 3
+    shell: 'cut -d\'\t\' -f1 {input} | uniq -c | \
+            awk \'BEGIN {{ OFS="\t"; }} {{ print $2, $1; }}\' | \
+            join -j 1 -t\'\t\' {input} /dev/stdin | \
+            {PARALLEL_CMD} -j {threads} --pipe --block 10M \
+                "sed -e \'s,^\\([^:]*\\):0*\\([0-9][0-9]*\\):[^\t]*\t,\\1\t\\2\t,g\'" | \
+            {BGZIP_CMD} -@ {threads} -c > {output}'
 
 # ex: syntax=snakemake
