@@ -232,4 +232,7 @@ rule produce_fastq_outputs:
 if CONF['analysis_level'] >= 2:
     include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'level2_analysis.py')
 
+if CONF['analysis_level'] >= 3:
+    include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'level3_analysis.py')
+
 # ex: syntax=snakemake
