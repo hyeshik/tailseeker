@@ -57,7 +57,7 @@ rule make_exon_gtf:
             gzip -c - > {output}'
 
 rule download_ensembl_database:
-    output: 'tmp/{genome}/ensembl-{table}.txt.gz'
+    output: temp('tmp/{genome}/ensembl-{table}.txt.gz')
     run:
         url = '{prefix}{table}.txt.gz'.format(prefix=ENSEMBL_URLS[wildcards.genome],
                                               table=wildcards.table)
