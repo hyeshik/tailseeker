@@ -147,8 +147,8 @@ if 'UTR' in rtbl:
         utrleft.extend(leftutrs.index)
         utrright.extend(rightutrs.index)
 
-    rtbl['five_prime_utr'] = cdsandutr.ix[utr5ix]
-    rtbl['three_prime_utr'] = cdsandutr.ix[utr3ix]
+    rtbl['five_prime_utr'] = cdsandutr.ix[utr5ix].copy()
+    rtbl['three_prime_utr'] = cdsandutr.ix[utr3ix].copy()
     rtbl['five_prime_utr']['feature'] = 'five_prime_utr'
     rtbl['three_prime_utr']['feature'] = 'three_prime_utr'
     del rtbl['UTR']
