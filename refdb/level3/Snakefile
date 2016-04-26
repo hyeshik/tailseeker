@@ -31,6 +31,12 @@ GENOMES = '''
     GRCh38 GRCm38 GRCz10
 '''.split()
 
+ENSEMBL_URLS = {
+    'GRCh38': 'ftp://ftp.ensembl.org/pub/release-84/mysql/homo_sapiens_core_84_38/',
+    'GRCm38': 'ftp://ftp.ensembl.org/pub/release-84/mysql/mus_musculus_core_84_38/',
+    'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/mysql/danio_rerio_core_84_10/',
+}
+
 LEVEL2_REFDB = '../level2/'
 TARGETS = defaultdict(list)
 
@@ -49,6 +55,51 @@ rule make_exon_gtf:
     output: final_target('{genome}/exons.gtf.gz')
     shell: 'zcat {input} | awk -F\'\t\' \'/^#/; $3 == "exon"\' | \
             gzip -c - > {output}'
+
+rule download_ensembl_database:
+    output: 'tmp/{genome}/ensembl-{table}.txt.gz'
+    run:
+        url = '{prefix}{table}.txt.gz'.format(prefix=ENSEMBL_URLS[wildcards.genome],
+                                              table=wildcards.table)
+        shell('wget -O {output} "{url}"')
+
+rule make_xref_table:
+    input:
+        gene='tmp/{genome}/ensembl-gene.txt.gz',
+        transcript='tmp/{genome}/ensembl-transcript.txt.gz',
+        translation='tmp/{genome}/ensembl-translation.txt.gz',
+        external_db='tmp/{genome}/ensembl-external_db.txt.gz',
+        xref='tmp/{genome}/ensembl-xref.txt.gz',
+        identity_xref='tmp/{genome}/ensembl-identity_xref.txt.gz',
+        object_xref='tmp/{genome}/ensembl-object_xref.txt.gz',
+        ontology_xref='tmp/{genome}/ensembl-ontology_xref.txt.gz'
+    output:
+        internal_xrefs=final_target('{genome}/internal-xrefs.feather'),
+        identity_xrefs=final_target('{genome}/identity-xrefs.feather'),
+        ontology_xrefs=final_target('{genome}/ontology-xrefs.feather')
+    script: 'make_xref_table.py'
+
+rule make_geneinfo_tables:
+    input:
+        gtf=LEVEL2_REFDB + '{genome}/genes-main.gtf.gz',
+        database='tmp/{genome}/ensembl-gene.txt.gz'
+    output:
+        CDS=final_target('{genome}/annotations-CDS.feather'),
+        exon=final_target('{genome}/annotations-exon.feather'),
+        five_prime_utr=final_target('{genome}/annotations-five_prime_utr.feather'),
+        gene=final_target('{genome}/annotations-gene.feather'),
+        start_codon=final_target('{genome}/annotations-start_codon.feather'),
+        stop_codon=final_target('{genome}/annotations-stop_codon.feather'),
+        three_prime_utr=final_target('{genome}/annotations-three_prime_utr.feather'),
+        transcript=final_target('{genome}/annotations-transcript.feather')
+    script: 'make_geneinfo_tables.py'
+
+rule make_old_id_conversion_table:
+    input: 'tmp/{genome}/ensembl-stable_id_event.txt.gz'
+    output:
+        versioned_table=final_target('{genome}/id_changes-versioned.feather'),
+        nonversioned_table=final_target('{genome}/id_changes-nonversioned.feather')
+    script: 'make_id_changes.py'
 
 # ===
 
