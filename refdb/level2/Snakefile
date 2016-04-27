@@ -127,9 +127,14 @@ rule build_STAR_index:
     output: final_target('{genome}/index.star/SA')
     threads: 32
     params: output_dir='{genome}/index.star'
-    shell: 'STAR --runThreadN {threads} --runMode genomeGenerate \
+    run:
+        additional_opts = ''
+        if wildcards.genome == 'JGIxl91':
+            # STAR requires >= 280 GB of RAM to build index for Xenopus laevis.
+            additional_opts += ' --limitGenomeGenerateRAM 300000000000'
+        shell('STAR --runThreadN {threads} --runMode genomeGenerate \
                 --genomeDir {params.output_dir} --genomeFastaFiles {input.genomeseq} \
-                --sjdbGTFfile {input.geneanno} --sjdbOverhang 50'
+                --sjdbGTFfile {input.geneanno} --sjdbOverhang 50 {additional_opts}')
 
 if not WITHOUT_GSNAP:
     rule build_gmap_spliceindex:
