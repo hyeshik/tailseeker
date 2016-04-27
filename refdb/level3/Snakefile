@@ -27,15 +27,23 @@ import os
 
 shell.executable('bash')
 
-GENOMES = '''
-    GRCh38 GRCm38 GRCz10
-'''.split()
+GENOMES = {
+    'GRCh38': 'Homo sapiens',
+    'GRCm38': 'Mus musculus',
+    'GRCz10': 'Danio rerio',
+    'WBcel235': 'Caenorhabditis elegans',
+}
 
 ENSEMBL_URLS = {
     'GRCh38': 'ftp://ftp.ensembl.org/pub/release-84/mysql/homo_sapiens_core_84_38/',
     'GRCm38': 'ftp://ftp.ensembl.org/pub/release-84/mysql/mus_musculus_core_84_38/',
     'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/mysql/danio_rerio_core_84_10/',
+    'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/mysql/caenorhabditis_elegans_core_84_245/',
 }
+
+HAVE_ID_CHANGE_HISTORY = '''
+    GRCh38 GRCm38 GRCz10
+'''.split()
 
 LEVEL2_REFDB = '../level2/'
 TARGETS = defaultdict(list)
@@ -48,7 +56,12 @@ def final_target(filename, genomes=None):
 rule default:
     run:
         print("Please specify name(s) of the genomes to build.")
-        print("Supported genomes:", ' '.join(GENOMES))
+        print("Supported genomes:")
+
+        longest_name_length = max(map(len, GENOMES))
+        fmt = '  {{:<{len}s}}  {{}}'.format(len=longest_name_length)
+        for genome_name, species_name in sorted(GENOMES.items()):
+            print(fmt.format(genome_name, species_name))
 
 rule make_exon_gtf:
     input: LEVEL2_REFDB + '{genome}/genes-main.gtf.gz'
@@ -97,8 +110,10 @@ rule make_geneinfo_tables:
 rule make_old_id_conversion_table:
     input: 'tmp/{genome}/ensembl-stable_id_event.txt.gz'
     output:
-        versioned_table=final_target('{genome}/id_changes-versioned.feather'),
-        nonversioned_table=final_target('{genome}/id_changes-nonversioned.feather')
+        versioned_table=final_target('{genome}/id_changes-versioned.feather',
+                                     HAVE_ID_CHANGE_HISTORY),
+        nonversioned_table=final_target('{genome}/id_changes-nonversioned.feather',
+                                        HAVE_ID_CHANGE_HISTORY)
     script: 'make_id_changes.py'
 
 # ===
