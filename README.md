@@ -1,4 +1,4 @@
-# Tailseeker 2
+# Tailseeker 3
 
 Tailseeker is the official pipeline for TAIL-seq, which measures poly(A) tail
 lengths and 3′-end modifications with Illumina SBS sequencers.
@@ -6,6 +6,20 @@ lengths and 3′-end modifications with Illumina SBS sequencers.
 It is not yet fully stable for generic uses. Please feel free to ask anything
 to Hyeshik Chang &lt;hyeshik@snu.ac.kr&gt; whenever you are stuck on a problem while
 using it. 
+
+
+## Analysis levels
+
+Users can choose the extent of analysis by Tailseeker to let Tailseeker do
+almost everything, or just minimal tail length measurement. The options and
+the list of supported genomes are as followed:
+
+| Level | Genomes | Features |
+| ----- | ------- | -------- |
+| 1 | Any | Poly(A) length measurement (≥ 5nt)<br>Non-A additions to poly(A) tails<br>PCR duplicate removal<br>Quality check for poly(A) length measurement |
+| 2 | BDGP6 *(D. melanogaster)*<br>JGIxl91 *(Xenopus laevis)* | All features from level 1<br>Poly(A) length refinement based on genome sequence<br>Non-templated 3′-end tails<br>Alignments to genome (BAM) |
+| 3 | GRCh38 *(Homo sapiens)*<br>GRCm38 *(Mus musculus)*<br>GRCz10 *(Danio rerio)*<br>WBcel235 *(C. elegans)* | All features from level 2<br>Gene-level statistics for poly(A) length and non-templated additions<br>Gene-level quantifications |
+
 
 ## Prerequisite tools
 
