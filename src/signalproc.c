@@ -106,15 +106,17 @@ decrosstalk_intensity(float *out, const struct IntensitySet *original,
 
 
 static int
-check_balance_minimum(const char *seq, const struct BalancerParameters *params)
+check_balance_minimum(const char *seq, const struct BalancerParameters *params,
+                      int balancer_len)
 {
     short found[256];
     char *base;
-    int i;
+    int i, end;
 
     memset(found, 0, sizeof(short) * 256);
+    end = params->start + balancer_len;
 
-    for (i = params->start; i < params->end; i++) {
+    for (i = params->start; i < end; i++) {
 #ifdef DEBUG_SIGNAL_PROCESSING
         printf("%c", seq[i]);
 #endif
@@ -133,13 +135,14 @@ static int
 probe_signal_ranges(float *signal_range_low, float *signal_range_bandwidth,
                     const struct IntensitySet *intensities,
                     const float *colormatrix,
-                    const struct BalancerParameters *bparams)
+                    const struct BalancerParameters *bparams,
+                    int balancer_len)
 {
     int npos=bparams->num_positive_samples;
     int nneg=bparams->num_negative_samples;
     float upper_bounds[NUM_CHANNELS][npos];
     float lower_bounds[NUM_CHANNELS][nneg];
-    int channel, rank, cycle;
+    int channel, rank, cycle, end;
 
     for (channel = 0; channel < NUM_CHANNELS; channel++) {
         for (rank = 0; rank < npos; rank++)
@@ -148,7 +151,8 @@ probe_signal_ranges(float *signal_range_low, float *signal_range_bandwidth,
             lower_bounds[channel][rank] = INFINITY;
     }
 
-    for (cycle = bparams->start; cycle < bparams->end; cycle++) {
+    end = bparams->start + balancer_len;
+    for (cycle = bparams->start; cycle < end; cycle++) {
         float signals[NUM_CHANNELS];
 
         decrosstalk_intensity(signals, &intensities[cycle], colormatrix);
@@ -203,12 +207,13 @@ static int
 check_balancer(float *signal_range_low, float *signal_range_bandwidth,
                struct IntensitySet *intensities,
                const float *colormatrix, const char *seq,
-               struct BalancerParameters *params, int *flags)
+               struct BalancerParameters *params, int balancer_len,
+               int *flags)
 {
 #ifdef DEBUG_SIGNAL_PROCESSING
     printf(" BALSEQ = ");
 #endif
-    if (check_balance_minimum(seq, params) < 0) {
+    if (check_balance_minimum(seq, params, balancer_len) < 0) {
         *flags |= PAFLAG_BALANCER_BIASED;
 #ifdef DEBUG_SIGNAL_PROCESSING
         printf("\n");
@@ -220,7 +225,8 @@ check_balancer(float *signal_range_low, float *signal_range_bandwidth,
 #endif
 
     if (probe_signal_ranges(signal_range_low, signal_range_bandwidth,
-                            intensities, colormatrix, params) < 0) {
+                            intensities, colormatrix, params,
+                            balancer_len) < 0) {
         *flags |= PAFLAG_BALANCER_SIGNAL_BAD;
         return -1;
     }
@@ -473,7 +479,7 @@ measure_polya_length(struct TailseekerConfig *cfg,
     struct BalancerParameters *balancer_params;
     float signal_range_bandwidth[NUM_CHANNELS];
     float signal_range_low[NUM_CHANNELS];
-    int polya_start, polya_end, polya_len;
+    int polya_start, polya_end, polya_len, balancer_len;
     uint32_t polya_ret;
 
     balancer_params = &cfg->balancerparams;
@@ -486,6 +492,9 @@ measure_polya_length(struct TailseekerConfig *cfg,
     polya_end = polya_ret & 0xffff;
     polya_len = polya_end - polya_start;
     *terminal_mods = polya_start;
+    balancer_len = delimiter_end - cfg->threep_start;
+    if (balancer_len > balancer_params->length)
+        balancer_len = balancer_params->length;
 
     if (polya_start > 0)
         *procflags |= PAFLAG_HAVE_3P_MODIFICATION;
@@ -497,15 +506,15 @@ measure_polya_length(struct TailseekerConfig *cfg,
      * low-quality spots with poly(A)+ tags against poly(A)- tags.
      */
     {
-        struct IntensitySet spot_intensities[balancer_params->length];
+        struct IntensitySet spot_intensities[balancer_len];
 
         fetch_intensity(spot_intensities, intensities, 0,
-                        balancer_params->length, clusterno);
+                        balancer_len, clusterno);
 
         if (check_balancer(signal_range_low, signal_range_bandwidth,
                            spot_intensities, cfg->rulerparams.colormatrix,
                            sequence_formatted + cfg->threep_start,
-                           &cfg->balancerparams, procflags) < 0)
+                           &cfg->balancerparams, balancer_len, procflags) < 0)
             return -1;
     }
 
@@ -586,7 +595,7 @@ dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
     struct BalancerParameters *balancer_params;
     float signal_range_bandwidth[NUM_CHANNELS];
     float signal_range_low[NUM_CHANNELS];
-    int polya_start, polya_end, polya_len, threep_eff_len;
+    int polya_start, polya_end, polya_len, threep_eff_len, balancer_len;
     uint32_t polya_ret;
 
     balancer_params = &cfg->balancerparams;
@@ -598,22 +607,25 @@ dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
     polya_start = polya_ret >> 16;
     polya_end = polya_ret & 0xffff;
     polya_len = polya_end - polya_start;
+    balancer_len = delimiter_end - cfg->threep_start;
+    if (balancer_len > balancer_params->length)
+        balancer_len = balancer_params->length;
 
     /* Check balancer region for all spots including non-poly(A)
      * ones. This can be used to suppress the biased filtering of
      * low-quality spots with poly(A)+ tags against poly(A)- tags.
      */
     {
-        struct IntensitySet spot_intensities[balancer_params->length];
+        struct IntensitySet spot_intensities[balancer_len];
         int dummyflags=0;
 
         fetch_intensity(spot_intensities, intensities, 0,
-                        balancer_params->length, clusterno);
+                        balancer_len, clusterno);
 
         if (check_balancer(signal_range_low, signal_range_bandwidth,
                            spot_intensities, cfg->rulerparams.colormatrix,
                            sequence_formatted + cfg->threep_start,
-                           &cfg->balancerparams, &dummyflags) < 0)
+                           &cfg->balancerparams, balancer_len, &dummyflags) < 0)
             return 0;
     }
 
