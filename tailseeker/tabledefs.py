@@ -62,3 +62,10 @@ refined_taginfo = {
               'C': np.int32, 'mods': str},
     'keep_default_na': False,
 }
+
+associations = {
+    'compression': 'gzip',
+    'names': ['tile', 'cluster', 'gene', 'ambig'],
+    'dtype': {'tile': str, 'cluster': np.uint32, 'gene': str, 'ambig': np.int32},
+    'keep_default_na': False,
+}
