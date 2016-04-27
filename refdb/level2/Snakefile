@@ -43,20 +43,31 @@ WITHOUT_GSNAP = (os.environ.get('WITHOUT_GSNAP', '') in ('1', 'yes', 'YES', 'Yes
 
 shell.executable('bash')
 
-GENOMES = '''
-    GRCh38 GRCm38 GRCz10
-'''.split()
+GENOMES = {
+    'GRCh38': 'Homo sapiens',
+    'GRCm38': 'Mus musculus',
+    'GRCz10': 'Danio rerio',
+    'WBcel235': 'Caenorhabditis elegans',
+    'BDGP6': 'Drosophila melanogaster',
+    'JGIxl91': 'Xenopus laevis',
+}
 
 GENOME_SEQUENCE_SOURCES = {
     'GRCh38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_24/GRCh38.p5.genome.fa.gz',
     'GRCm38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M9/GRCm38.p4.genome.fa.gz',
     'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/fasta/danio_rerio/dna/Danio_rerio.GRCz10.dna.toplevel.fa.gz',
+    'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/fasta/caenorhabditis_elegans/dna/Caenorhabditis_elegans.WBcel235.dna.toplevel.fa.gz',
+    'BDGP6': 'ftp://ftp.ensembl.org/pub/release-84/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.dna.toplevel.fa.gz',
+    'JGIxl91': 'ftp://ftp.xenbase.org/pub/Genomics/JGI/Xenla9.1/Xla.v91.repeatMasked.fa.gz',
 }
 
 GENE_ANNOTATION_SOURCES = {
     'GRCh38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_24/gencode.v24.chr_patch_hapl_scaff.annotation.gtf.gz',
     'GRCm38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M9/gencode.vM9.chr_patch_hapl_scaff.annotation.gtf.gz',
     'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/gtf/danio_rerio/Danio_rerio.GRCz10.84.gtf.gz',
+    'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/gtf/caenorhabditis_elegans/Caenorhabditis_elegans.WBcel235.84.gtf.gz',
+    'BDGP6': 'ftp://ftp.ensembl.org/pub/release-84/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.84.gtf.gz',
+    'JGIxl91': 'ftp://ftp.xenbase.org/pub/Genomics/JGI/Xenla9.1/XL9.1_annot_v1.8.1.gene.gff3.gz',
 }
 
 TARGETS = defaultdict(list)
@@ -69,7 +80,12 @@ def final_target(filename, genomes=None):
 rule default:
     run:
         print("Please specify name(s) of the genomes to build.")
-        print("Supported genomes:", ' '.join(GENOMES))
+        print("Supported genomes:")
+
+        longest_name_length = max(map(len, GENOMES))
+        fmt = '  {{:<{len}s}}  {{}}'.format(len=longest_name_length)
+        for genome_name, species_name in sorted(GENOMES.items()):
+            print(fmt.format(genome_name, species_name))
 
 rule download_genome_fasta:
     output: temp('{genome}/genome.fa.gz')
@@ -81,8 +97,13 @@ rule download_gene_annotation:
     output: final_target('{genome}/genes-main.gtf.gz')
     run:
         url = GENE_ANNOTATION_SOURCES[wildcards.genome]
-        shell('wget -O /dev/stdout "{url}" | gzip -cd - | \
-               bedtools sort -header | gzip -c - > {output}')
+        if url.endswith('gtf.gz'):
+            shell('wget -O /dev/stdout "{url}" | gzip -cd - | \
+                   bedtools sort -header | gzip -c - > {output}')
+        elif url.endswith('gff3.gz'):
+            shell('wget -O /dev/stdout "{{url}}" | gzip -cd - | \
+                   {PYTHON_CMD} adopt_annotations_JGIxl91.py | \
+                   gzip -c - > {{output}}'.format(PYTHON_CMD=sys.executable))
 
 rule uncompress_genome_fasta:
     input: '{genome}/genome.fa.gz'
