@@ -55,8 +55,9 @@ def final_target(filename, genomes=None):
 
 rule default:
     run:
-        print("Please specify name(s) of the genomes to build.")
-        print("Supported genomes:")
+        if 'QUIET' not in os.environ:
+            print("Please specify name(s) of the genomes to build.")
+            print("Supported genomes:")
 
         longest_name_length = max(map(len, GENOMES))
         fmt = '  {{:<{len}s}}  {{}}'.format(len=longest_name_length)
