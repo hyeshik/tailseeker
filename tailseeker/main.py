@@ -200,6 +200,7 @@ rule merge_and_deduplicate_taginfo:
     output: 'taginfo/{sample}.txt.gz'
     threads: 12
     run:
+        sorted_input = sorted(input)
         if wildcards.sample in EXP_SAMPLES:
             shell('cat {sorted_input} | {BGZIP_CMD} -cd -@ {threads} | \
                 env BGZIP_OPT="-@ {threads}" sort -t "\t" -k6,6 -k1,1 -k2,2n \
@@ -209,7 +210,6 @@ rule merge_and_deduplicate_taginfo:
                     --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
                 {BGZIP_CMD} -@ {threads} -c > {output}')
         elif wildcards.sample in SPIKEIN_SAMPLES:
-            sorted_input = sorted(input)
             shell('{SCRIPTSDIR}/bgzf-merge.py --output {output} {sorted_input}')
 
 
