@@ -79,7 +79,8 @@ rule make_gene_level_counts:
         max_modcount = CONF['gene_level_stats']['maximum_nonA_mod_count']
         delim_settings = CONF['delimiter'][wildcards.sample]
         min_preamble_length = delim_settings[0] - 1 + len(delim_settings[1]) - 1
-        max_polya = CONF['read_cycles']['R3'] - min_preamble_length
+        R3 = CONF['read_cycles']['R3']
+        max_polya = R3[1] - R3[0] + 1 - min_preamble_length
         mod_of_interest = wildcards.modtype
 
         tbl[mod_of_interest] = tbl[mod_of_interest].clip_upper(max_modcount)

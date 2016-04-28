@@ -59,8 +59,16 @@ rule STAR_alignment:
                         CONF['reference_set'][wildcards.sample], 'index.star')
         input = suffix_filter(input)
 
-        shell('rm -rf {params.scratch}; mkdir -p {params.scratch} && \
-               {STAR_CMD} --runThreadN {threads} --genomeDir {genomedir} \
+        if os.path.isdir(params.scratch):
+            shutil.rmtree(params.scratch)
+        os.makedirs(params.scratch)
+
+        if CONF['performance']['enable_gsnap']:
+            unmapped_opts = '--outSAMunmapped None --outReadsUnmapped Fastx '
+        else:
+            unmapped_opts = '--outSAMunmapped Within KeepPairs --outReadsUnmapped None '
+
+        shell('{STAR_CMD} --runThreadN {threads} --genomeDir {genomedir} \
                 --readFilesIn {input[R5.fastq.gz]} {input[R3.fastq.gz]} \
                 --readFilesCommand zcat \
                 --outFilterType BySJout \
@@ -71,8 +79,12 @@ rule STAR_alignment:
                 --outSAMtype BAM Unsorted --sysShell {BASH_CMD} \
                 --outTmpDir {params.scratch}/tmp --outStd BAM_Unsorted \
                 --outFileNamePrefix {params.scratch}/ \
-                --outReadsUnmapped Fastx --outMultimapperOrder Random \
-                --outSAMunmapped None --outSAMmapqUnique 41 > {output}')
+                {unmapped_opts} --outMultimapperOrder Random \
+                --outSAMmapqUnique 41 > {output.mapped}')
+
+        if not CONF['performance']['enable_gsnap']:
+            open(output.unmapped, 'w')
+
 
 rule GSNAP_alignment:
     input: 'scratch/STAR-{sample}-{type}/Unmapped.out.mate1'
