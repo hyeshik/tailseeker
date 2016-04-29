@@ -109,9 +109,10 @@ if CONF['performance']['enable_gsnap']:
                          part=range(CONF['performance']['split_gsnap_jobs']))
         output: 'alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
+        params: sorttmp='scratch/alignments/{sample}_merge_{type}'
         # samtools 1.3 merge does not respect `-n' option for paired alignments.
         shell: '{SAMTOOLS_CMD} merge -n -u -h {input.star} -@ {threads} - {input} | \
-                {SAMTOOLS_CMD} sort -n -@ {threads} -O sam - | \
+                {SAMTOOLS_CMD} sort -n -@ {threads} -T {params.sorttmp} -O sam - | \
                 {PARALLEL_CMD} -j {threads} --keep-order \
                     --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,g\'" | \
                 {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
