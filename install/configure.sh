@@ -139,7 +139,7 @@ suffer from low sequence read quality, and this leads
 to failure in identification of tags. Usually, GSNAP
 rescues ~0.5% of total reads and ~10% among long poly(A)
 tails. However, it lengthens total running time of the
-pipeline by three-fold at least.
+pipeline by about 10-fold.
 
 Do you want to use GSNAP together with STAR?" 17 62
   
