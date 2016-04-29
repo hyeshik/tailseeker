@@ -260,4 +260,15 @@ rule apply_short_polya_filter:
 
         os.unlink(params.tmplist)
 
+
+TARGETS.append('stats/polya-length-distributions-L2.csv')
+rule generate_polya_length_distribution_stats_level2:
+    input: expand('refined-taginfo/{sample}.txt.gz', sample=sorted(EXP_SAMPLES))
+    output: 'stats/polya-length-distributions-L2.csv'
+    params:
+        samplenames=sorted(EXP_SAMPLES),
+        badflagmask=CONF['qcstats']['bad_flags_filter'],
+        refined=True, maxpalength=CONF['read_cycles']['R3'][1]
+    script: SCRIPTSDIR + '/stats-polya-len-dists.py'
+
 # ex: syntax=snakemake

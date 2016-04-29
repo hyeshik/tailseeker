@@ -76,7 +76,7 @@ if FIRST_CYCLE != 1:
 
 
 def sorted_spikein_first(samples):
-    spikein_lengths = CONF['spikein_lengths']
+    spikein_lengths = CONF['spikein_lengths'] if 'spikein_lengths' in CONF else {}
 
     names_with_design_length = [
         (spikein_lengths.get(sample, inf), sample)
@@ -228,6 +228,32 @@ rule produce_fastq_outputs:
                 --taginfo {input.taginfo} --seqqual \'{params.seqqual_filename}\' \
                 --fastq5 {output.R5} --fastq3 {output.R3} \
                 --threads {threads}'
+
+
+TARGETS.append('stats/polya-length-distributions-L1.csv')
+rule generate_polya_length_distribution_stats_level1:
+    input: expand('taginfo/{sample}.txt.gz', sample=sorted_spikein_first(ALL_SAMPLES))
+    output: 'stats/polya-length-distributions-L1.csv'
+    params:
+        samplenames=sorted_spikein_first(ALL_SAMPLES),
+        badflagmask=CONF['qcstats']['bad_flags_filter'],
+        refined=False, maxpalength=CONF['read_cycles']['R3'][1]
+    script: SCRIPTSDIR + '/stats-polya-len-dists.py'
+
+
+TARGETS.append('qcplots/global-polya-length.pdf')
+rule plot_global_polya_length_distributions:
+    input: 'stats/polya-length-distributions-L1.csv'
+    output: 'qcplots/global-polya-length.pdf'
+    params:
+        controls=','.join(name for length, name
+                          in sorted((CONF['spikein_lengths'][s], s) for s in SPIKEIN_SAMPLES)
+                          if length > 0),
+        samples=','.join(EXP_SAMPLES)
+    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/plot-virtual-gel.py \
+                    --tagcounts {input} --controls {params.controls} \
+                    --samples {params.samples} --output-plot {output}'
+
 
 if CONF['analysis_level'] >= 2:
     include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'level2_analysis.py')
