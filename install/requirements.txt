@@ -1,7 +1,8 @@
-numpy
-biopython
-scipy
-matplotlib
-scikit-learn
-PyYAML
-snakemake
+PyYAML>=3.11
+colormath>=2.1
+feather-format>=0.1.2
+matplotlib>=1.5
+numpy>=1.11
+pandas>=0.18
+scipy>=0.17
+snakemake>=3.6

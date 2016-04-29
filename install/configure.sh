@@ -39,7 +39,6 @@ required_pkgconfig_level1="\
 htslib:htslib"
 required_python3mod_level1="\
 colormath:colormath
-distutils:distutils
 matplotlib:matplotlib
 numpy:numpy
 pandas:pandas
@@ -272,7 +271,40 @@ END
 fi
 
 
-# TODO: Install a command line entry script.
+# =======================================================
+# Install a command line entry script
+# =======================================================
+
+writable_dirs=$(echo "$PATH" | awk -F: '{
+  NODESCR="\x7f"
+  for (i = 1; i <= NF; i++)
+    if (system("test ! \\( -w \""$i"\" -a -d \""$i"\" \\)"))
+      print $i " " NODESCR
+}')
+num_writable_dirs=$(echo "$writable_dirs" | wc -l)
+
+if [ -z "$writable_dirs" ]; then
+  cat - <<END
+No directory in your PATH is writable. Please create a new
+directory that will hold your own binaries, and add it to
+your PATH environment variable.
+END
+  exit 3
+fi
+
+install_dir=$($WHIPTAIL --title "Configure: install the tailseeker command" \
+--backtitle "$BACKTITLE" \
+--menu "\
+Choose a directory where to install the \"tailseeker\" command.
+It is recommended to keep the directory in your PATH." \
+$(($num_writable_dirs + 9)) 65 $num_writable_dirs $writable_dirs \
+3>&1 1>&2 2>&3)
+
+rm -f $install_dir/tailseeker
+cat $TOPDIR/install/tailseeker.in | \
+sed -e "s,%%TAILSEEKER_DIR%%,$TOPDIR,g" > $install_dir/tailseeker
+script_mode=$(printf "%04o\n" $((0777 & ~$(umask))))
+chmod $script_mode $install_dir/tailseeker
 
 
 # ============================
@@ -284,7 +316,7 @@ if [ "$analysis_level" -eq 1 ]; then
 
 Congratulations!
 
-You're ready to run Tailseeker. Please refer the documentation for what
+We are ready to run Tailseeker. Please refer the documentation for what
 to do next.
 
 Good Luck!
@@ -306,7 +338,7 @@ else
 
 Congratulations!
 
-You're almost ready to run Tailseeker.
+We are almost ready to run Tailseeker.
 
 Before running your first analysis, you need to prepare indices for the
 reference genome sequences and gene annotations.
