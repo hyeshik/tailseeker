@@ -318,19 +318,19 @@ END
   exit 3
 fi
 
-install_dir=$($WHIPTAIL --title "Configure: install the tailseeker command" \
+install_dir=$($WHIPTAIL --title "Configure: install the tseek command" \
 --backtitle "$BACKTITLE" \
 --menu "
-Choose a directory where to install the \"tailseeker\" command.
+Choose a directory where to install the \"tseek\" command.
 It is recommended to keep the directory in your PATH." \
 $(($num_writable_dirs + 10)) 65 $num_writable_dirs $writable_dirs \
 3>&1 1>&2 2>&3)
 
-rm -f $install_dir/tailseeker
+rm -f $install_dir/tseek
 cat $TOPDIR/install/tailseeker.in | \
-sed -e "s,%%TAILSEEKER_DIR%%,$TOPDIR,g" > $install_dir/tailseeker
+sed -e "s,%%TAILSEEKER_DIR%%,$TOPDIR,g" > $install_dir/tseek
 script_mode=$(printf "%04o\n" $((0777 & ~$(umask))))
-chmod $script_mode $install_dir/tailseeker
+chmod $script_mode $install_dir/tseek
 
 
 # ============================
