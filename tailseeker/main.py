@@ -202,7 +202,7 @@ rule merge_and_deduplicate_taginfo:
     run:
         sorted_input = sorted(input)
         if wildcards.sample in EXP_SAMPLES:
-            shell('cat {sorted_input} | {BGZIP_CMD} -cd -@ {threads} | \
+            shell('zcat {sorted_input} | \
                 env BGZIP_OPT="-@ {threads}" sort -t "\t" -k6,6 -k1,1 -k2,2n \
                     --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
                 {BINDIR}/tailseq-dedup | \
