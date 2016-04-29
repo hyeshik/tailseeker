@@ -86,17 +86,6 @@ else:
                      'or no.')
 
 
-# XXX: move these parameters somewhere out
-SIGNAL_STABILIZER_TARGET_RANGE = 1, 50 # in 1-based inclusive coordinate
-SIGNAL_STABILIZER_REFERENCE_RANGE = 51, 55 # 1-based
-SIGNAL_STABILIZER_POLYA_DETECTION_RANGE = 51, 100 # 1-based
-
-PASIGNAL_CLIP_MIN = -0.3
-PASIGNAL_CLIP_MAX = 2.5
-
-MAXIMUM_DELIMITER_MISALIGNMENT = 1
-# XXX
-
 # Predefined constants
 inf = float('inf')
 nan = float('nan')

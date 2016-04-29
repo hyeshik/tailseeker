@@ -24,7 +24,7 @@
 #
 
 BACKTITLE="Tailseeker 3"
-PATHCONF="${TOPDIR}/conf/newpaths.conf"
+PATHCONF="${TOPDIR}/conf/paths.conf"
 PYTHON=python3
 
 required_executables_level1="\
@@ -66,10 +66,7 @@ RED="[01;31m"
 WHITE="[1m"
 RESET="[00m"
 
-echo "tailseeker: $TOPDIR" > $PATHCONF
-echo "whiptail: $WHIPTAIL" >> $PATHCONF
 requirements_not_found=""
-
 
 # =======================================================
 # Choose the analysis level
@@ -77,8 +74,8 @@ requirements_not_found=""
 
 analysis_level=\
 $($WHIPTAIL --title "Configure: Analysis level" \
---backtitle "$BACKTITLE" \
---menu "\
+--backtitle "$BACKTITLE" --default-item "Level 3" \
+--menu "
 You can run Tailseeker for different ranges of provided
 functions. It can be used for essential tail length
 measurement only (level 1) or for getting the full gene-
@@ -86,7 +83,7 @@ level statistics (level 3). Higher level will include
 all result data from lower level, but it takes much more
 space, time, and external dependencies. Please choose
 one. You can re-configure it later." \
-17 60 3 \
+18 60 3 \
 "Level 1" " Tail length measurement and QC." \
 "Level 2" " Refinement of calls based on the genome." \
 "Level 3" " Gene-level statistics." 3>&1 1>&2 2>&3)
@@ -96,6 +93,9 @@ if [ $? -ne 0 ]; then
 fi
 
 analysis_level=$(echo $analysis_level | sed -e 's,Level ,,')
+
+echo "tailseeker: $TOPDIR" > $PATHCONF
+echo "whiptail: $WHIPTAIL" >> $PATHCONF
 echo "analysis_level: $analysis_level" >> $PATHCONF
 
 
@@ -115,7 +115,7 @@ basecalling in this case, gives 10-50% more mappable reads
 for tags adjacent to poly(A) tails > 100 nt.
 
 Do you want to use AYB for basecalling?" 15 62
-  
+
   if [ "$?" -eq 0 ]; then
     required_executables_level1="$required_executables_level1
 AYB:AYB_(All_Your_Bases)"
@@ -127,9 +127,10 @@ fi
 # Choose whether to use the GSNAP aligner
 # =======================================================
 
+use_gsnap=no
 if [ $analysis_level -ge 2 ]; then
   $WHIPTAIL --title "Configure: GSNAP alignment" \
---backtitle "$BACKTITLE" \
+--backtitle "$BACKTITLE" --defaultno \
 --yesno "\
 Tailseeker 3 uses STAR as the primary sequence alignment
 software. Optionally, GSNAP can be used to rescue unmapped
@@ -149,6 +150,31 @@ gmap_build:GSNAP_(GMAP)
 gtf_splicesites:GSNAP_(GMAP)
 gtf_introns:GSNAP_(GMAP)
 iit_store:GSNAP_(GMAP)"
+    use_gsnap=yes
+  fi
+fi
+
+
+# =======================================================
+# Choose GSNAP indexing sensitivity
+# =======================================================
+
+if [ "$use_gsnap" = yes -a $analysis_level -ge 2 ]; then
+  $WHIPTAIL --title "Configure: GSNAP sensitivity" \
+--backtitle "$BACKTITLE" --defaultno \
+--yesno "\
+Building GSNAP genome indices with shorter k-mer and more
+frequent sampling interval boosts the alignment sensitivity
+by 2-3% for the difficult alignments. Again, it makes the
+GSNAP tasks even slower by ~2x.
+
+Do you want to tune GSNAP index building for better
+sensitivity?" 13 64
+  
+  if [ "$?" -eq 0 ]; then
+    echo "gsnap_sensitive_index: yes" >> $PATHCONF
+  else
+    echo "gsnap_sensitive_index: no" >> $PATHCONF
   fi
 fi
 
@@ -294,10 +320,10 @@ fi
 
 install_dir=$($WHIPTAIL --title "Configure: install the tailseeker command" \
 --backtitle "$BACKTITLE" \
---menu "\
+--menu "
 Choose a directory where to install the \"tailseeker\" command.
 It is recommended to keep the directory in your PATH." \
-$(($num_writable_dirs + 9)) 65 $num_writable_dirs $writable_dirs \
+$(($num_writable_dirs + 10)) 65 $num_writable_dirs $writable_dirs \
 3>&1 1>&2 2>&3)
 
 rm -f $install_dir/tailseeker

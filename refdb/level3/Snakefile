@@ -24,8 +24,19 @@
 
 from collections import defaultdict
 import os
+import yaml
 
-shell.executable('bash')
+def load_configuration(conffile):
+    conf = yaml.load(open(conffile))
+    for key, value in conf.items():
+        if isinstance(value, str) and value.startswith('/'):
+            setattr(snakemake.workflow, '{}_CMD'.format(key.upper()), value)
+    return conf
+
+TAILSEEKER_DIR = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), '../..'))
+pathconf = load_configuration(os.path.join(TAILSEEKER_DIR, 'conf', 'paths.conf'))
+
+shell.executable(BASH_CMD)
 
 GENOMES = {
     'GRCh38': 'Homo sapiens',
@@ -75,7 +86,7 @@ rule download_ensembl_database:
     run:
         url = '{prefix}{table}.txt.gz'.format(prefix=ENSEMBL_URLS[wildcards.genome],
                                               table=wildcards.table)
-        shell('wget -O {output} "{url}"')
+        shell('{WGET_CMD} -O {output} "{url}"')
 
 rule make_xref_table:
     input:

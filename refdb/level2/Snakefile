@@ -24,6 +24,17 @@
 
 from collections import defaultdict
 import os
+import yaml
+
+def load_configuration(conffile):
+    conf = yaml.load(open(conffile))
+    for key, value in conf.items():
+        if isinstance(value, str) and value.startswith('/'):
+            setattr(snakemake.workflow, '{}_CMD'.format(key.upper()), value)
+    return conf
+
+TAILSEEKER_DIR = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), '../..'))
+pathconf = load_configuration(os.path.join(TAILSEEKER_DIR, 'conf', 'paths.conf'))
 
 # With the default k-mer size 15 of GMAP/GSNAP, 1-5% among tags with long
 # poly(A) tails are not aligned. The poly(A) length distribution is also
@@ -32,16 +43,14 @@ import os
 # where the samples being compared are sequenced and analyzed together.
 # If you have enough computing resources, try a smaller k-mer size (12).
 # It will lessen the distortions by poly(A) tail lengths.
-if os.environ.get('TAILSEEKER_SENSITIVE', '') in ('1', 'yes', 'YES', 'Yes'):
+if 'gsnap_sensitive_index' in pathconf and pathconf['gsnap_sensitive_index']:
     GMAP_INDEX_KMER_SIZE = 12
     GMAP_INDEX_INTERVAL = 1
 else:
     GMAP_INDEX_KMER_SIZE = 15
     GMAP_INDEX_INTERVAL = 3
 
-WITHOUT_GSNAP = (os.environ.get('WITHOUT_GSNAP', '') in ('1', 'yes', 'YES', 'Yes'))
-
-shell.executable('bash')
+shell.executable(BASH_CMD)
 
 GENOMES = {
     'GRCh38': 'Homo sapiens',
@@ -92,18 +101,18 @@ rule download_genome_fasta:
     output: temp('{genome}/genome.fa.gz')
     run:
         url = GENOME_SEQUENCE_SOURCES[wildcards.genome]
-        shell('wget -O {output} "{url}"')
+        shell('{WGET_CMD} -O {output} "{url}"')
 
 rule download_gene_annotation:
     output: final_target('{genome}/genes-main.gtf.gz')
     run:
         url = GENE_ANNOTATION_SOURCES[wildcards.genome]
         if url.endswith('gtf.gz'):
-            shell('wget -O /dev/stdout "{url}" | gzip -cd - | \
-                   bedtools sort -header | gzip -c - > {output}')
+            shell('{WGET_CMD} -O /dev/stdout "{url}" | gzip -cd - | \
+                   {BEDTOOLS_CMD} sort -header | gzip -c - > {output}')
         elif url.endswith('gff3.gz'):
-            shell('wget -O /dev/stdout "{{url}}" | gzip -cd - | \
-                   {PYTHON_CMD} adopt_annotations_JGIxl91.py | \
+            shell('{WGET_CMD} -O /dev/stdout "{{url}}" | gzip -cd - | \
+                   {PYTHON3_CMD} adopt_annotations_JGIxl91.py | \
                    gzip -c - > {{output}}'.format(PYTHON_CMD=sys.executable))
 
 rule uncompress_genome_fasta:
@@ -113,8 +122,8 @@ rule uncompress_genome_fasta:
 
 rule index_genome_fasta:
     input: '{genome}/genome.fa'
-    output: '{genome}/genome.fa.fai'
-    shell: 'samtools faidx {input}'
+    output: final_target('{genome}/genome.fa.fai')
+    shell: '{SAMTOOLS_CMD} faidx {input}'
 
 rule uncompress_gene_annotations:
     input: '{genome}/genes-main.gtf.gz'
@@ -133,32 +142,32 @@ rule build_STAR_index:
         if wildcards.genome == 'JGIxl91':
             # STAR requires >= 280 GB of RAM to build index for Xenopus laevis.
             additional_opts += ' --limitGenomeGenerateRAM 300000000000'
-        shell('STAR --runThreadN {threads} --runMode genomeGenerate \
+        shell('{STAR_CMD} --runThreadN {threads} --runMode genomeGenerate \
                 --genomeDir {params.output_dir} --genomeFastaFiles {input.genomeseq} \
                 --sjdbGTFfile {input.geneanno} --sjdbOverhang 50 {additional_opts}')
 
-if not WITHOUT_GSNAP:
+if 'gsnap' in pathconf:
     rule build_gmap_spliceindex:
         input: '{genome}/genes-main.gtf.gz'
         output: final_target('{genome}/index.gmap/splicesites.iit')
-        shell: 'zcat {input} | gtf_splicesites | iit_store -o {output}'
+        shell: 'zcat {input} | {GTF_SPLICESITES_CMD} | {IIT_STORE_CMD} -o {output}'
 
     rule build_gmap_intronindex:
         input: '{genome}/genes-main.gtf.gz'
         output: final_target('{genome}/index.gmap/introns.iit')
-        shell: 'zcat {input} | gtf_introns | iit_store -o {output}'
+        shell: 'zcat {input} | {GTF_INTRONS_CMD} | {IIT_STORE_CMD} -o {output}'
 
     rule build_gmap_index:
         input: '{genome}/genome.fa'
         output: final_target('{genome}/index.gmap/genome/genome.sarray')
         params: output_prefix='{genome}/index.gmap'
-        shell: 'gmap_build -D {params.output_prefix} -d genome -k {GMAP_INDEX_KMER_SIZE} \
+        shell: '{GMAP_BUILD_CMD} -D {params.output_prefix} -d genome -k {GMAP_INDEX_KMER_SIZE} \
                     -q {GMAP_INDEX_INTERVAL} --circular=chrM,chrMT,M,MT {input}'
 
 rule measure_chrom_sizes:
-    input: '{genome}/genome.fa'
+    input: '{genome}/genome.fa.fai'
     output: final_target('{genome}/chrom-sizes')
-    shell: 'faSize -detailed -tab {input} > {output}'
+    shell: 'cut -f1,2 {input} > {output}'
 
 # ===
 
