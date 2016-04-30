@@ -24,6 +24,7 @@
 #
 
 from tailseeker.plotutils import colormap_lch
+from tailseeker import stats
 from functools import partial
 import pandas as pd
 import numpy as np
@@ -36,18 +37,9 @@ from matplotlib import pyplot as plt
 xtransform = lambda v: np.log2(v.clip(1)) if not isinstance(v, int) else np.log2(max(1, v))
 xtransform_rev = lambda v: 2 ** v
 
-def geomean(lengths):
-    return np.exp(np.log(lengths.clip(1)).mean())
-
-def rmse(lengths, explength):
-    return ((lengths - explength) ** 2).mean() ** 0.5
-
-def mae(lengths, explength):
-    return np.abs(lengths - explength).mean()
 
 def load_stats(options, controlsamples):
-    stats = {}
-    dists = {}
+    res_stats = {}
 
     patbl = pd.read_csv(options.inputfile, index_col=0)
 
@@ -55,18 +47,20 @@ def load_stats(options, controlsamples):
     dists.index = xtransform(np.array(dists.index))
 
     for sample, explength in controlsamples:
-        polyadist = dists[sample]
+        polyadist = patbl[sample]
+        polyadist_clipped = patbl[sample].iloc[1:].copy()
+        polyadist_clipped.iloc[0] += polyadist.iloc[0]
 
-        stats[sample] = {
-            'median': np.median(polyadist),
-            'arimean': np.mean(polyadist),
-            'geomean': geomean(polyadist),
-            'mode': mode(polyadist).mode[0],
-            'rmse': rmse(polyadist, explength),
-            'mae': mae(polyadist, explength),
+        res_stats[sample] = {
+            'median': stats.weighted_median(polyadist),
+            'arimean': stats.weighted_mean(polyadist),
+            'geomean': stats.weighted_geomean(polyadist_clipped),
+            'mode': stats.weighted_mode(polyadist),
+            'rmse': stats.weighted_rmse(polyadist, explength),
+            'mae': stats.weighted_mae(polyadist, explength),
         }
 
-    return dists, stats
+    return dists, res_stats
 
 
 def plot_dists(outpath, dists, controlsamples):
@@ -114,7 +108,7 @@ def write_descriptive_stats(outfile, stats, controlsamples):
         s = stats[filepath]
 
         results.append([
-            samplename, explength, s['median'], s['mode'], s['geomean'],
+            samplename, int(explength), s['median'], s['mode'], s['geomean'],
             s['arimean'], s['rmse'], s['mae']])
 
     tbl = pd.DataFrame(results, columns=['name', 'design length', 'median',
@@ -124,7 +118,7 @@ def write_descriptive_stats(outfile, stats, controlsamples):
         if dtype == np.float64:
             tbl[name] = tbl[name].round(2)
 
-    tbl.to_csv(outfile, index=False)
+    tbl.sort_values(by='design length').to_csv(outfile, index=False)
 
 def parse_arguments():
     import argparse
