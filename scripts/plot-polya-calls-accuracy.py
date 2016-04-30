@@ -23,8 +23,7 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailseeker.parsers import parse_polya_calls
-from tailseeker.plotutils import prepare_cumulative, colormap_lch
+from tailseeker.plotutils import colormap_lch
 from functools import partial
 import pandas as pd
 import numpy as np
@@ -33,101 +32,44 @@ from scipy.stats import mode
 
 import matplotlib; matplotlib.use('Agg')
 from matplotlib import pyplot as plt
-from matplotlib import cm
-from matplotlib.ticker import AutoMinorLocator
 
 xtransform = lambda v: np.log2(v.clip(1)) if not isinstance(v, int) else np.log2(max(1, v))
 xtransform_rev = lambda v: 2 ** v
 
-def plot_qc(p1result, p2result, output, clip_range):
-    fig = plt.figure(figsize=(8, 4.5))
-    clip_range = list(map(float, clip_range.split(':')))
-
-    def plot_an_array(arr):
-        plt.pcolor(np.array(arr).clip(*clip_range), cmap=cm.OrRd, rasterized=True,
-                    vmin=clip_range[0], vmax=clip_range[1])
-        #plt.axvline(25, c='black')
-        #plt.axvline(128, c='black')
-        plt.grid(True)
-        plt.grid(True, which='minor')
-        plt.gca().yaxis.grid(False)
-        plt.gca().yaxis.grid(False, which='minor')
-        #plt.colorbar()
-        plt.ylim(ymax=len(arr))
-        plt.gca().xaxis.set_minor_locator(AutoMinorLocator(5))
-        plt.xlabel('cycle (read 2)')
-        plt.ylabel('reads')
-
-    fig.add_subplot(1, 2, 1)
-    random.shuffle(p1result)
-    neworder = similarity_sort(p1result[:len(p2result)])
-    plot_an_array(np.array(p1result)[neworder])
-
-    fig.add_subplot(1, 2, 2)
-    neworder = similarity_sort(p2result)
-    plot_an_array(np.array(p2result)[neworder])
-
-    plt.tight_layout()
-
-    plt.savefig(output)
-
-
 def geomean(lengths):
     return np.exp(np.log(lengths.clip(1)).mean())
 
-def rmsd(lengths, explength):
+def rmse(lengths, explength):
     return ((lengths - explength) ** 2).mean() ** 0.5
+
+def mae(lengths, explength):
+    return np.abs(lengths - explength).mean()
 
 def load_stats(options, controlsamples):
     stats = {}
     dists = {}
 
-    for filepath, explength in controlsamples:
-        patbl = parse_polya_calls.as_table(filepath)
+    patbl = pd.read_csv(options.inputfile, index_col=0)
 
-        finaldist_x, finaldist_y = prepare_cumulative(xtransform(patbl['polya_len']))
-        seqdist_x, seqdist_y = prepare_cumulative(xtransform(patbl['seqbased_len']))
-        hmmdist_x, hmmdist_y = prepare_cumulative(xtransform(patbl['hmmbased_len']))
-        naivedist_x, naivedist_y = prepare_cumulative(xtransform(patbl['naive_len']))
+    dists = (patbl.cumsum(axis=0) / patbl.sum(axis=0))[[c for c, s in controlsamples]]
+    dists.index = xtransform(np.array(dists.index))
 
-        dists[filepath] = {
-            'final': (finaldist_x, finaldist_y),
-            'seqbased': (seqdist_x, seqdist_y),
-            'hmmbased': (hmmdist_x, hmmdist_y),
-            'naive': (naivedist_x, naivedist_y),
-        }
+    for sample, explength in controlsamples:
+        polyadist = dists[sample]
 
-        stats[filepath] = {
-            'median_final': np.median(patbl['polya_len']),
-            'median_seqbased': np.median(patbl['seqbased_len']),
-            'median_hmmbased': np.median(patbl['hmmbased_len']),
-            'median_naive': np.median(patbl['naive_len']),
-
-            'arimean_final': np.mean(patbl['polya_len']),
-            'arimean_seqbased': np.mean(patbl['seqbased_len']),
-            'arimean_hmmbased': np.mean(patbl['hmmbased_len']),
-            'arimean_naive': np.mean(patbl['naive_len']),
-
-            'geomean_final': geomean(patbl['polya_len']),
-            'geomean_seqbased': geomean(patbl['seqbased_len']),
-            'geomean_hmmbased': geomean(patbl['hmmbased_len']),
-            'geomean_naive': geomean(patbl['naive_len']),
-
-            'mode_final': mode(patbl['polya_len']).mode[0],
-            'mode_seqbased': mode(patbl['seqbased_len']).mode[0],
-            'mode_hmmbased': mode(patbl['hmmbased_len']).mode[0],
-            'mode_naive': mode(patbl['naive_len']).mode[0],
-
-            'rmsd_final': rmsd(patbl['polya_len'], explength),
-            'rmsd_seqbased': rmsd(patbl['seqbased_len'], explength),
-            'rmsd_hmmbased': rmsd(patbl['hmmbased_len'], explength),
-            'rmsd_naive': rmsd(patbl['naive_len'], explength),
+        stats[sample] = {
+            'median': np.median(polyadist),
+            'arimean': np.mean(polyadist),
+            'geomean': geomean(polyadist),
+            'mode': mode(polyadist).mode[0],
+            'rmse': rmse(polyadist, explength),
+            'mae': mae(polyadist, explength),
         }
 
     return dists, stats
 
 
-def plot_dists(outdir, dists, controlsamples):
+def plot_dists(outpath, dists, controlsamples):
     from matplotlib import style
 
     style.use('ggplot')
@@ -135,35 +77,33 @@ def plot_dists(outdir, dists, controlsamples):
     samplecolors = colormap_lch(len(controlsamples))
     samplessorted = sorted(controlsamples, key=lambda x: (x[1], x[0]))
 
-    xtickmax = np.ceil(max(x[-1] for d1 in dists.values() for x, y in d1.values()))
-    xticks = np.arange(0, xtickmax + 0.1)
+    xticks = np.arange(0, dists.index[-1] + 0.1)
     xticks_disp = [format(v, 'g') for v in xtransform_rev(xticks)]
 
-    for plottype in next(iter(dists.values())).keys():
-        fig = plt.figure(figsize=(4, 3.2))
+    fig, ax = plt.subplots(1, 1, figsize=(4, 3.2))
+    ax.patch.set_facecolor('#f7f7f7')
 
-        ax = fig.add_subplot(1, 1, 1)
+    for (samplename, explength), color in zip(samplessorted, samplecolors):
+        ax.plot(dists[samplename], color=color, label=samplename, zorder=3)
+        ax.axvline(xtransform(explength), color=color, linewidth=2, alpha=0.3)
 
-        for (filepath, explength), color in zip(samplessorted, samplecolors):
-            samplename = os.path.basename(filepath).rsplit('.')[0]
-            distx, disty = dists[filepath][plottype]
-            ax.plot(distx, disty, color=color, label=samplename, zorder=3)
-            ax.axvline(xtransform(explength), color=color, linewidth=2, alpha=0.3)
+    leg = ax.legend(loc='center left', fontsize=10)
+    plt.setp([leg.get_frame()], facecolor='white', edgecolor='#e8e8e8')
 
-        ax.legend(loc='center left', fontsize=10)
-        ax.set_xlabel('Poly(A) length (nt)')
-        ax.set_ylabel('Cumulative fraction')
-        ax.set_title('Poly(A) control distribution: {}'.format(plottype), fontsize=12)
+    ax.set_xlabel('Poly(A) length (nt)')
+    ax.set_ylabel('Cumulative fraction')
+    ax.set_title('Poly(A) length distribution', fontsize=12)
 
-        ax.set_xticks(xticks)
-        ax.set_xticklabels(xticks_disp)
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xticks_disp)
 
-        plt.tight_layout()
+    plt.setp(ax.get_xgridlines() + ax.get_ygridlines(), color='#e0e0e0')
 
-        output_path = os.path.join(outdir, 'control-length-accuracy-{}.pdf'.format(plottype))
-        plt.savefig(output_path)
+    plt.tight_layout()
 
-        plt.close(fig)
+    plt.savefig(outpath)
+
+    plt.close(fig)
 
 
 def write_descriptive_stats(outfile, stats, controlsamples):
@@ -174,24 +114,11 @@ def write_descriptive_stats(outfile, stats, controlsamples):
         s = stats[filepath]
 
         results.append([
-            samplename, explength,
-            s['median_final'], s['mode_final'], s['geomean_final'],
-            s['arimean_final'], s['rmsd_final'],
-            s['median_seqbased'], s['mode_seqbased'],
-            s['geomean_seqbased'], s['arimean_seqbased'], s['rmsd_seqbased'],
-            s['median_hmmbased'], s['mode_hmmbased'],
-            s['geomean_hmmbased'], s['arimean_hmmbased'], s['rmsd_hmmbased'],
-            s['median_naive'], s['mode_naive'], s['geomean_naive'], s['arimean_naive'],
-            s['rmsd_naive'],
-        ])
+            samplename, explength, s['median'], s['mode'], s['geomean'],
+            s['arimean'], s['rmse'], s['mae']])
 
-    tbl = pd.DataFrame(results, columns=['name', 'design length', 'median (final)',
-                        'mode (final)', 'geomean (final)', 'arimean (final)',
-                        'rmsd (final)', 'median (seq)', 'mode (seq)', 'geomean (seq)',
-                        'arimean (seq)', 'rmsd (seq)', 'median (HMM)', 'mode (HMM)',
-                        'geomean (HMM)', 'arimean (HMM)', 'rmsd (HMM)', 'median (naive)',
-                        'mode (naive)', 'geomean (naive)', 'arimean (naive)',
-                        'rmsd (naive)'])
+    tbl = pd.DataFrame(results, columns=['name', 'design length', 'median',
+                        'mode', 'geomean', 'arimean', 'rmse', 'mae'])
 
     for name, dtype in tbl.dtypes.items():
         if dtype == np.float64:
@@ -204,19 +131,20 @@ def parse_arguments():
 
     parser = argparse.ArgumentParser(description=
                             'Draw poly(A) length accuracy plots for poly(A) controls')
-    parser.add_argument('--control', dest='control', metavar='LEN:FILE', type=str,
+    parser.add_argument('--control', dest='control', metavar='LEN:NAME', type=str,
                         nargs='+')
-    parser.add_argument('--output-plots', dest='output_plots', metavar='DIR', type=str,
-                        default=None, help='Directory to write plot files')
+    parser.add_argument('--input', dest='inputfile', metavar='FILE', type=str,
+                        required=True)
+    parser.add_argument('--output-plot', dest='output_plot', metavar='FILE', type=str,
+                        default=None, help='Path to a PDF file')
     parser.add_argument('--output-stats', dest='output_stats', metavar='FILE', type=str,
                         default=None, help='Path to a CSV file')
 
     options = parser.parse_args()
 
     controlsamples = [
-        (filepath, int(length))
-        for length, filepath
-        in map(partial(str.split, sep=':'), options.control)
+        (name, int(length))
+        for length, name in map(partial(str.split, sep=':'), options.control)
     ]
 
     return options, controlsamples
@@ -229,8 +157,8 @@ if __name__ == '__main__':
 
     dists, stats = load_stats(options, controlsamples)
 
-    if options.output_plots is not None:
-        plot_dists(options.output_plots, dists, controlsamples)
+    if options.output_plot is not None:
+        plot_dists(options.output_plot, dists, controlsamples)
 
     if options.output_stats is not None:
         write_descriptive_stats(options.output_stats, stats, controlsamples)

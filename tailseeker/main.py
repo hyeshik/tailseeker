@@ -255,6 +255,25 @@ rule plot_global_polya_length_distributions:
                     --samples {params.samples} --output-plot {output}'
 
 
+if 'spikein_lengths' in CONF and len(CONF['spikein_lengths']) > 0:
+    TARGETS.extend(['stats/control-length-accuracy.csv',
+                    'qcplots/control-length-accuracy.pdf'])
+
+    rule generate_accuracy_stats:
+        input: 'stats/polya-length-distributions-L1.csv'
+        output:
+            statsout='stats/control-length-accuracy.csv',
+            plotout='qcplots/control-length-accuracy.pdf'
+        run:
+            controlsamples = ' '.join('{}:{}'.format(CONF['spikein_lengths'][s], s)
+                                      for s in SPIKEIN_SAMPLES)
+
+            shell('{PYTHON3_CMD} {SCRIPTSDIR}/plot-polya-calls-accuracy.py \
+                        --control {controlsamples} --output-plot {output.plotout} \
+                        --output-stats {output.statsout} \
+                        --input {input}')
+
+
 if CONF['analysis_level'] >= 2:
     include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'level2_analysis.py')
 
