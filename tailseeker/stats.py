@@ -28,7 +28,7 @@ __all__ = [
     'similarity_sort', 'sample_iterable', 'ReservoirSampler',
     'weighted_mean', 'weighted_geomean', 'weighted_mode',
     'weighted_rmse', 'weighted_mae', 'weighted_median',
-    'smooth', 'savitzky_golay',
+    'weighted_quantile', 'smooth', 'savitzky_golay',
 ]
 
 from scipy.spatial.distance import pdist, squareform, cdist
@@ -78,15 +78,14 @@ def weighted_mae(vset, center):
     vsetindex = vset.index.to_series()
     return (np.abs(vsetindex - center) * vset).sum() / vset.sum()
 
-def weighted_median(vset):
-    scum = vset.sort_index().cumsum()
-    stotal = vset.sum()
-    median_rank = int((stotal + 1) / 2),
-    if median_rank[0] * 2 != stotal + 1:
-        median_rank = median_rank[0], median_rank[0] + 1
+from bisect import bisect_right
+def weighted_quantile(vset, quantile):
+    vset_sorted = vset.sort_index()
+    scum = vset_sorted.cumsum() / vset.sum()
+    return scum.index[bisect_right(list(scum), quantile)]
 
-    return np.mean([scum.index[np.where(scum >= rank)[0][0]]
-                    for rank in median_rank])
+def weighted_median(vset):
+    return weighted_quantile(vset, 0.5)
 
 
 class ReservoirSampler(object):

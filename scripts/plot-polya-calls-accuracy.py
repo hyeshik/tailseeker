@@ -52,7 +52,11 @@ def load_stats(options, controlsamples):
         polyadist_clipped.iloc[0] += polyadist.iloc[0]
 
         res_stats[sample] = {
+            '10thpct': stats.weighted_quantile(polyadist, 0.1),
+            '1Q': stats.weighted_quantile(polyadist, 0.25),
             'median': stats.weighted_median(polyadist),
+            '3Q': stats.weighted_quantile(polyadist, 0.75),
+            '90thpct': stats.weighted_quantile(polyadist, 0.9),
             'arimean': stats.weighted_mean(polyadist),
             'geomean': stats.weighted_geomean(polyadist_clipped),
             'mode': stats.weighted_mode(polyadist),
@@ -108,11 +112,13 @@ def write_descriptive_stats(outfile, stats, controlsamples):
         s = stats[filepath]
 
         results.append([
-            samplename, int(explength), s['median'], s['mode'], s['geomean'],
-            s['arimean'], s['rmse'], s['mae']])
+            samplename, int(explength), s['mode'], s['geomean'],
+            s['arimean'], s['rmse'], s['mae'],
+            s['10thpct'], s['1Q'], s['median'], s['3Q'], s['90thpct']])
 
-    tbl = pd.DataFrame(results, columns=['name', 'design length', 'median',
-                        'mode', 'geomean', 'arimean', 'rmse', 'mae'])
+    tbl = pd.DataFrame(results, columns=['name', 'design length',
+                        'mode', 'geomean', 'arimean', 'rmse', 'mae',
+                        '10th pct', '1Q', 'median', '3Q', '90th pct'])
 
     for name, dtype in tbl.dtypes.items():
         if dtype == np.float64:
