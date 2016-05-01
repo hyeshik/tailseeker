@@ -51,7 +51,7 @@ rule STAR_alignment:
     input: inputs_for_STAR_alignment
     output:
         mapped='scratch/alignments/{sample}_STAR_{type,[^_.]+}.bam',
-        unmapped='scratch/STAR-{sample}-{type}/Unmapped.out.mate1'
+        unmapped='scratch/unmapped-reads/{sample}-{type}-read1.fastq.gz'
     threads: THREADS_MAXIMUM_CORE
     params: scratch='scratch/STAR-{sample}-{type}'
     run:
@@ -65,6 +65,20 @@ rule STAR_alignment:
 
         if CONF['performance']['enable_gsnap']:
             unmapped_opts = '--outSAMunmapped None --outReadsUnmapped Fastx '
+
+            if wildcards.type == 'paired':
+                # STAR sometimes write unmapped FASTQ files in different order for
+                # mates. We here reorder them to keep it usable by GSNAP.
+                for mateno in [1, 2]:
+                    outputfile = (
+                        output.unmapped.replace('read1.fastq', 'read{}.fastq'.format(mateno)))
+                    shell('mkfifo {params.scratch}/Unmapped.out.mate{mateno}')
+                    shell('''awk '{{ printf("%s\b", $0); n++; if (n%4==0) {{ print; }} }}' \
+                                {params.scratch}/Unmapped.out.mate{mateno} | \
+                                sort -k1,1 -t'\b' | \
+                                awk -F'\b' '{{ \
+                                    printf("%s\\n%s\\n%s\\n%s\\n", $1, $2, $3, $4); }}' | \
+                                {BGZIP_CMD} -@ {threads} -c > {outputfile} &''')
         else:
             unmapped_opts = '--outSAMunmapped Within KeepPairs --outReadsUnmapped None '
 
@@ -83,11 +97,18 @@ rule STAR_alignment:
                 --outSAMmapqUnique 41 > {output.mapped}')
 
         if not CONF['performance']['enable_gsnap']:
-            open(output.unmapped, 'w')
+            import gzip
+            gzip.open(output.unmapped, 'w')
+        elif wildcards.type == 'single':
+            shell('{BGZIP_CMD} -@ {threads} -c {params.scratch}/Unmapped.out.mate1 \
+                    > {output.unmapped} && rm -f {params.scratch}/Unmapped.out.mate1')
+        else:
+            for mateno in [1, 2]:
+                shell('rm -f {params.scratch}/Unmapped.out.mate{mateno}')
 
 
 rule GSNAP_alignment:
-    input: 'scratch/STAR-{sample}-{type}/Unmapped.out.mate1'
+    input: 'scratch/unmapped-reads/{sample}-{type}-read1.fastq.gz'
     output: 'scratch/alignments/{sample}_GSNAP_{type,[^_.]+}.bam.{part}'
     threads: THREADS_MAXIMUM_CORE
     run:
@@ -97,7 +118,7 @@ rule GSNAP_alignment:
             input.append(re.sub('mate1$', 'mate2', str(input)))
         partno = '{}/{}'.format(wildcards.part, CONF['performance']['split_gsnap_jobs'])
 
-        shell('{GSNAP_CMD} -D {genomedir} -d genome -A sam -B 4 -q {partno} \
+        shell('{GSNAP_CMD} -D {genomedir} -d genome -A sam -B 4 --gunzip -q {partno} \
                 -s {genomedir}/splicesites.iit -m 0.05 -t {threads} \
                 {input} | {SAMTOOLS_CMD} view -@ 3 -bS - > {output}')
 
