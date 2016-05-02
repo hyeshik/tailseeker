@@ -97,10 +97,11 @@ signal-dump = scratch/sigdumps/signaldump-{{name}}-{tile}.dmp.gz
 def generate_alternative_calls_section(outf):
     print("[alternative_calls]", file=outf)
     for readname, program in params.conf['third_party_basecaller'].items():
-        startcycle = params.conf['read_cycles'][readname][0]
-        seqpath = 'scratch/{prog}calls/{name}_{tile}.fastq.gz'.format(
-                        prog=program.lower(), name=readname, tile=wildcards.tile)
-        print('{} = {}'.format(startcycle, seqpath), file=outf)
+        if program:
+            startcycle = params.conf['read_cycles'][readname][0]
+            seqpath = 'scratch/{prog}calls/{name}_{tile}.fastq.gz'.format(
+                            prog=program.lower(), name=readname, tile=wildcards.tile)
+            print('{} = {}'.format(startcycle, seqpath), file=outf)
 
     print('', file=outf)
 

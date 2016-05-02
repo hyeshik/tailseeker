@@ -166,15 +166,16 @@ rule basecall_ayb:
         shutil.rmtree(tempdir)
 
 
-def determine_inputs_demultiplex_signals(wildcards, as_dict=False):
-    inputs = {}
+def determine_inputs_demultiplex_signals(wildcards):
+    inputs = []
 
     for readid, program in CONF.get('third_party_basecaller', {}).items():
-        fastqpath = 'scratch/{program}calls/{readid}_{tile}.fastq.gz'.format(
-                        program=program.lower(), readid=readid, tile=wildcards.tile)
-        inputs[readid] = fastqpath
+        if program:
+            fastqpath = 'scratch/{program}calls/{readid}_{tile}.fastq.gz'.format(
+                            program=program.lower(), readid=readid, tile=wildcards.tile)
+            inputs.append(fastqpath)
 
-    return inputs if as_dict else list(inputs.values())
+    return inputs
 
 rule process_signals:
     input: determine_inputs_demultiplex_signals
