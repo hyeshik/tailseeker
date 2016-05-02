@@ -36,8 +36,8 @@ EXPERIMENT_GROUPS = prepare_experiment_groups_view()
 # Sequence alignment to the genome.
 # ---
 
-TARGETS.extend(expand('alignments/{sample}_{type}.bam',
-                      sample=EXP_SAMPLES, type=['single', 'paired']))
+TARGETS.extend(expand('alignments/{sample}_{type}.bam{suffix}',
+                      sample=EXP_SAMPLES, type=['single', 'paired'], suffix=['', '.bai']))
 
 def inputs_for_STAR_alignment(wildcards):
     fastq_filename = 'fastq/{sample}_{{read}}.fastq.gz'.format(sample=wildcards.sample)
@@ -65,20 +65,6 @@ rule STAR_alignment:
 
         if CONF['performance']['enable_gsnap']:
             unmapped_opts = '--outSAMunmapped None --outReadsUnmapped Fastx '
-
-            if wildcards.type == 'paired':
-                # STAR sometimes write unmapped FASTQ files in different order for
-                # mates. We here reorder them to keep it usable by GSNAP.
-                for mateno in [1, 2]:
-                    outputfile = (
-                        output.unmapped.replace('read1.fastq', 'read{}.fastq'.format(mateno)))
-                    shell('mkfifo {params.scratch}/Unmapped.out.mate{mateno}')
-                    shell('''awk '{{ printf("%s\b", $0); n++; if (n%4==0) {{ print; }} }}' \
-                                {params.scratch}/Unmapped.out.mate{mateno} | \
-                                sort -k1,1 -t'\b' | \
-                                awk -F'\b' '{{ \
-                                    printf("%s\\n%s\\n%s\\n%s\\n", $1, $2, $3, $4); }}' | \
-                                {BGZIP_CMD} -@ {threads} -c > {outputfile} &''')
         else:
             unmapped_opts = '--outSAMunmapped Within KeepPairs --outReadsUnmapped None '
 
@@ -103,7 +89,18 @@ rule STAR_alignment:
             shell('{BGZIP_CMD} -@ {threads} -c {params.scratch}/Unmapped.out.mate1 \
                     > {output.unmapped} && rm -f {params.scratch}/Unmapped.out.mate1')
         else:
+            # STAR sometimes write unmapped FASTQ files in different order for
+            # mates. We here reorder them to keep it usable by GSNAP.
             for mateno in [1, 2]:
+                outputfile = (
+                    output.unmapped.replace('read1.fastq', 'read{}.fastq'.format(mateno)))
+                shell('''awk '{{ printf("%s\b", $0); n++; if (n%4==0) {{ print; }} }}' \
+                            {params.scratch}/Unmapped.out.mate{mateno} | \
+                            sort -k1,1 -t'\b' | \
+                            awk -F'\b' '{{ \
+                                printf("%s\\n%s\\n%s\\n%s\\n", $1, $2, $3, $4); }}' | \
+                            {BGZIP_CMD} -@ {threads} -c > {outputfile}''')
+
                 shell('rm -f {params.scratch}/Unmapped.out.mate{mateno}')
 
 
@@ -128,7 +125,7 @@ if CONF['performance']['enable_gsnap']:
             star='scratch/alignments/{sample}_STAR_{type}.bam',
             gsnap=expand('scratch/alignments/{{sample}}_GSNAP_{{type}}.bam.{part}',
                          part=range(CONF['performance']['split_gsnap_jobs']))
-        output: 'alignments/{sample}_{type,[^_.]+}.bam'
+        output: 'scratch/merged-alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
         # samtools 1.3 merge does not respect `-n' option for paired alignments.
@@ -140,12 +137,25 @@ if CONF['performance']['enable_gsnap']:
 else:
     rule merge_alignments:
         input: 'scratch/alignments/{sample}_STAR_{type}.bam'
-        output: 'alignments/{sample}_{type,[^_.]+}.bam'
+        output: 'scratch/merged-alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
-        shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -O sam {input} | \
+        params: sorttmp='scratch/alignments/{sample}_merge_{type}'
+        shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -T {params.sorttmp} -O sam {input} | \
                 {PARALLEL_CMD} -j {threads} --keep-order \
                     --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,g\'" | \
                 {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
+
+rule sort_alignments:
+    input: 'scratch/merged-alignments/{name}.bam'
+    output: 'alignments/{name}.bam'
+    threads: THREADS_MAXIMUM_CORE
+    params: sorttmp='scratch/merged-alignments/{name}'
+    shell: '{SAMTOOLS_CMD} sort -@ {threads} -T {params.sorttmp} -o {output} {input}'
+
+rule index_alignments:
+    input: 'alignments/{name}.bam'
+    output: 'alignments/{name}.bam.bai'
+    shell: '{SAMTOOLS_CMD} index -b {input} {output}'
 
 
 # ---
@@ -162,7 +172,7 @@ rule reevaluate_tails:
     input:
         taginfo='taginfo/{sample}.txt.gz',
         taginfo_index='taginfo/{sample}.txt.gz.tbi',
-        alignment='alignments/{sample}_paired.bam'
+        alignment='scratch/merged-alignments/{sample}_paired.bam'
     output: temp('refined-taginfo/{sample}.txt.pre.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
@@ -199,7 +209,7 @@ rule generate_short_polya_list:
 rule extract_short_polya_tag_alignments:
     input:
         idlist='scratch/short-polya-list/{sample}.txt',
-        alignments='alignments/{sample}_paired.bam'
+        alignments='scratch/merged-alignments/{sample}_paired.bam'
     output: temp('scratch/polya-sites/indiv-{sample}.txt')
     threads: 4
     run:
@@ -241,7 +251,7 @@ def inputs_for_apply_short_polya_filter(wildcards):
 
 rule apply_short_polya_filter:
     input:
-        alignment='alignments/{sample}_paired.bam',
+        alignment='scratch/merged-alignments/{sample}_paired.bam',
         taginfo='refined-taginfo/{sample}.txt.pre.gz',
         pasitelist=inputs_for_apply_short_polya_filter
     output: 'refined-taginfo/{sample}.txt.gz'
