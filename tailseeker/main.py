@@ -249,11 +249,12 @@ rule plot_global_polya_length_distributions:
     params:
         controls=','.join(name for length, name
                           in sorted((CONF['spikein_lengths'][s], s) for s in SPIKEIN_SAMPLES)
-                          if length > 0),
-        samples=','.join(EXP_SAMPLES)
-    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/plot-virtual-gel.py \
+                          if length > 0)
+    run:
+        samples = '--samples ' + ','.join(EXP_SAMPLES) if EXP_SAMPLES else ''
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/plot-virtual-gel.py \
                     --tagcounts {input} --controls {params.controls} \
-                    --samples {params.samples} --output-plot {output}'
+                    {samples} --output-plot {output}')
 
 
 if 'spikein_lengths' in CONF and len(CONF['spikein_lengths']) > 0:
