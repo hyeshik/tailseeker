@@ -438,12 +438,17 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
 
                 polya_len = -1;
             }
-            else
+            else {
+                int insert_len=cfg->threep_start + cfg->threep_length - delimiter_end;
+
+                if (bc->limit_threep_processing > 0 && bc->limit_threep_processing < insert_len)
+                    insert_len = bc->limit_threep_processing;
+
                 polya_len = measure_polya_length(cfg, intensities,
                                 sequence_formatted, clusterno,
                                 delimiter_end, &procflags,
-                                &terminal_mods,
-                                bc->limit_threep_processing);
+                                &terminal_mods, insert_len);
+            }
         }
 
         if (write_measurements_to_buffers(cfg, wbuf, bc,

@@ -474,7 +474,7 @@ measure_polya_length(struct TailseekerConfig *cfg,
                      struct CIFData **intensities,
                      const char *sequence_formatted, uint32_t clusterno,
                      int delimiter_end, int *procflags,
-                     int *terminal_mods, int threep_eff_len)
+                     int *terminal_mods, int insert_len)
 {
     struct BalancerParameters *balancer_params;
     float signal_range_bandwidth[NUM_CHANNELS];
@@ -525,7 +525,6 @@ measure_polya_length(struct TailseekerConfig *cfg,
 
     /* Process the signals */
     if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
-        size_t insert_len=cfg->threep_start + threep_eff_len - delimiter_end;
         struct IntensitySet spot_intensities[insert_len];
         int polya_len_from_sig;
 
@@ -595,7 +594,8 @@ dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
     struct BalancerParameters *balancer_params;
     float signal_range_bandwidth[NUM_CHANNELS];
     float signal_range_low[NUM_CHANNELS];
-    int polya_start, polya_end, polya_len, threep_eff_len, balancer_len;
+    int polya_start, polya_end, polya_len, balancer_len;
+    int insert_len, dumping_len;
     uint32_t polya_ret;
 
     balancer_params = &cfg->balancerparams;
@@ -629,21 +629,24 @@ dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
             return 0;
     }
 
-    threep_eff_len = bc->limit_threep_processing;
+    insert_len = cfg->threep_start + cfg->threep_length - delimiter_end;
+    if (bc->limit_threep_processing > 0 && bc->limit_threep_processing < insert_len)
+        dumping_len = bc->limit_threep_processing;
+    else
+        dumping_len = insert_len;
 
     /* Process the signals */
     if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
-        size_t insert_len=cfg->threep_start + threep_eff_len - delimiter_end;
-        struct IntensitySet spot_intensities[insert_len];
-        float scores[insert_len];
+        struct IntensitySet spot_intensities[dumping_len];
+        float scores[dumping_len];
         ssize_t padding;
         #define ZEROPAD_BLOCK   20
         static const float zeropad[ZEROPAD_BLOCK]={};
 
         fetch_intensity(spot_intensities, intensities, delimiter_end - cfg->threep_start,
-                        insert_len, clusterno);
+                        dumping_len, clusterno);
 
-        if (dump_polya_score(spot_intensities, insert_len, signal_range_low,
+        if (dump_polya_score(spot_intensities, dumping_len, signal_range_low,
                              signal_range_bandwidth, &cfg->rulerparams, scores) < 0)
             return 0;
 
@@ -653,7 +656,7 @@ dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
             return -1;
         }
 
-        padding = threep_eff_len - insert_len;
+        padding = bc->dump_processed_signals - dumping_len;
         for (; padding > 0; padding -= ZEROPAD_BLOCK) {
             if (bgzf_write(bc->stream_signal_dump, zeropad,
                     sizeof(float) * (padding < ZEROPAD_BLOCK ? padding : ZEROPAD_BLOCK)) < 0) {

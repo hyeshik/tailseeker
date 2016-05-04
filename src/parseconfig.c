@@ -580,9 +580,6 @@ compute_derived_values(struct TailseekerConfig *cfg)
         sample->numindex = nsamples++;
         pthread_mutex_init(&sample->statslock, NULL);
 
-        if (sample->limit_threep_processing <= 0)
-            sample->limit_threep_processing = cfg->threep_length;
-
         sample->delimiter_pos += cfg->threep_start;
     }
     cfg->num_samples = nsamples;

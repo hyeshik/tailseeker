@@ -85,9 +85,17 @@ open_writers(struct TailseekerConfig *cfg)
             }
             free(filename);
 
-            /* Write header for signal dumps*/
+            /* Calculate width of signal dump */
+            if (sample->limit_threep_processing > 0)
+                sample->dump_processed_signals = sample->limit_threep_processing;
+            else if (sample->delimiter_length > 0)
+                sample->dump_processed_signals = cfg->threep_length - sample->delimiter_length;
+            else
+                sample->dump_processed_signals = cfg->threep_length;
+
+            /* Write header for signal dumps */
             uint32_t sigdumpheader[2];
-            sigdumpheader[0] = sample->limit_threep_processing;
+            sigdumpheader[0] = sample->dump_processed_signals;
             sigdumpheader[1] = sizeof(float);
             if (bgzf_write(sample->stream_signal_dump, (void *)sigdumpheader,
                            sizeof(sigdumpheader)) < 0) {

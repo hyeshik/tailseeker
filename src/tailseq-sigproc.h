@@ -360,7 +360,7 @@ extern int load_color_matrix(float *mtx, const char *filename);
 extern int measure_polya_length(struct TailseekerConfig *cfg,
                 struct CIFData **intensities, const char *sequence_formatted,
                 uint32_t clusterno, int delimiter_end, int *procflags,
-                int *terminal_mods, int threep_effective_length);
+                int *terminal_mods, int insert_len);
 extern void precalc_score_tables(struct PolyARulerParameters *params,
                                  float t_score_k, float t_score_center);
 extern int dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
