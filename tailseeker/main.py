@@ -296,6 +296,27 @@ rule optimize_parameter:
                 > {output.optimal_param}'
 
 
+rule evaluate_parameter:
+    input: expand('scratch/sigdumps/signaldump-{{sample}}-{tile}.dmp.gz', tile=TILES)
+    output:
+        signal_histogram='parameval/{cutoff,[0-9.]+}/signal-histogram-{sample}.pdf',
+        likelihoodratio_plot='parameval/{cutoff,[0-9.]+}/likelihood-ratio-{sample}.pdf',
+        signal_samples='parameval/{cutoff,[0-9.]+}/signal-samples-{sample}.pdf',
+        measurement_cdf='parameval/{cutoff,[0-9.]+}/measurement-accuracy-{sample}.pdf',
+        measurement_csv='parameval/{cutoff,[0-9.]+}/measurements-{sample}.csv',
+        optimal_param='parameval/{cutoff,[0-9.]+}/optimal-param-{sample}.txt'
+    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/determine-optimal-parameter.py \
+                --preset-threshold {wildcards.cutoff} \
+                --sigdump-files \
+                    "scratch/sigdumps/signaldump-{wildcards.sample}-%%TILE%%.dmp.gz" \
+                --output-signal-histogram {output.signal_histogram} \
+                --output-parameter-determination {output.likelihoodratio_plot} \
+                --output-signal-samples {output.signal_samples} \
+                --output-measurements-cdf-plot {output.measurement_cdf} \
+                --output-measurements-csv {output.measurement_csv} \
+                > {output.optimal_param}'
+
+
 if CONF['analysis_level'] >= 2:
     include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'level2_analysis.py')
 

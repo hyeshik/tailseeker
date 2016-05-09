@@ -123,12 +123,17 @@ def determine_threshold(sigdumps, options):
     logLR = stats.smooth(np.log(pa_pdf / nonpa_pdf), options.pdf_smoothing)
 
     bincenters = (edges_pa[:-1] + edges_pa[1:]) / 2
-    expected_range = bincenters < options.expected_maximum
 
-    inwin_x = bincenters[expected_range]
-    inwin_y = logLR[expected_range]
-    inwin_f = interpolate.UnivariateSpline(inwin_x, inwin_y, s=0)
-    cutoff_val = inwin_f.roots()[0]
+    if options.preset_threshold is None:
+        expected_range = bincenters < options.expected_maximum
+
+        inwin_x = bincenters[expected_range]
+        inwin_y = logLR[expected_range]
+        inwin_f = interpolate.UnivariateSpline(inwin_x, inwin_y, s=0)
+
+        cutoff_val = inwin_f.roots()[0]
+    else:
+        cutoff_val = options.preset_threshold
 
     if options.param_det_output is not None:
         fig, ax = plt.subplots(1, 1, figsize=(5, 3.5))
@@ -278,6 +283,9 @@ def parse_arguments():
                         default=5, help='Window size for smoothing PDFs')
     parser.add_argument('--expected-maximum', dest='expected_maximum', type=float,
                         default=0.2, help='Empirically expected maximum value for a threshold')
+    parser.add_argument('--preset-threshold', dest='preset_threshold', type=float,
+                        default=None, help='Evaluate a given parameter rather than '
+                                           'producing an optimal value')
 
     return parser.parse_args()
 
