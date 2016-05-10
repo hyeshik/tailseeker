@@ -387,9 +387,9 @@ feed_sample_entry(struct TailseekerConfig *cfg, const char *samplename,
         sample->maximum_fingerprint_mismatches = atoi(value);
     else if (MATCH("dump-processed-signals")) {
         if (strcasecmp(value, "yes") == 0 || strcmp(value, "1") == 0)
-            sample->dump_processed_signals = 1;
+            sample->dump_signals = 1;
         else if (strcasecmp(value, "no") == 0 || strcmp(value, "0") == 0)
-            sample->dump_processed_signals = 0;
+            sample->dump_signals = 0;
         else {
             fprintf(stderr, "\"%s\" must be either yes or no.\n", name);
             return -1;

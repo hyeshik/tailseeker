@@ -381,6 +381,7 @@ dump_polya_score(struct IntensitySet *intensities, int ncycles,
                  float *scores)
 {
     int cycle, chan, ndarkcycles;
+    int i;
 
     ndarkcycles = 0;
 
@@ -401,6 +402,8 @@ dump_polya_score(struct IntensitySet *intensities, int ncycles,
 
         if (signal_sum < params->dark_cycles_threshold) {
             ndarkcycles++;
+            for (i = -1; i < NUM_CHANNELS; i++)
+                *scores++ = NAN;
             continue;
         }
 
@@ -412,8 +415,18 @@ dump_polya_score(struct IntensitySet *intensities, int ncycles,
              * all channels are zero or negative after normalization.
              * It is treated as a dark cycle in this case. */
             ndarkcycles++;
+            for (i = -1; i < NUM_CHANNELS; i++)
+                *scores++ = NAN;
             continue;
         }
+#if NUM_CHANNELS == 4
+        *scores++ = normsignals[0];
+        *scores++ = normsignals[1];
+        *scores++ = normsignals[2];
+        *scores++ = normsignals[3];
+#else
+#error Unsupported signal channel count.
+#endif
 
         entropy_score = params->maximum_entropy -
                         shannon_entropy(normsignals);
@@ -426,7 +439,7 @@ dump_polya_score(struct IntensitySet *intensities, int ncycles,
 #error Unsupported signal channel count.
 #endif
 
-        scores[cycle] = entropy_score * t_intensity_score;
+        *scores++ = entropy_score * t_intensity_score;
     }
 
     if (ndarkcycles >= params->max_dark_cycles)
@@ -584,9 +597,9 @@ measure_polya_length(struct TailseekerConfig *cfg,
 
 
 int
-dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
-                       struct CIFData **intensities, const char *sequence_formatted,
-                       uint32_t clusterno, int delimiter_end)
+dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
+                  struct CIFData **intensities, const char *sequence_formatted,
+                  uint32_t clusterno, int delimiter_end)
 /* This function is only used for debugging and optimizing parameters to new platforms,
  * occasionally. Keep the processing algorithm synchronized with `measure_polya_length`.
  */
@@ -638,7 +651,7 @@ dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
     /* Process the signals */
     if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
         struct IntensitySet spot_intensities[dumping_len];
-        float scores[dumping_len];
+        float scores[dumping_len * (NUM_CHANNELS + 1)];
         ssize_t padding;
         #define ZEROPAD_BLOCK   20
         static const float zeropad[ZEROPAD_BLOCK]={};
@@ -656,7 +669,7 @@ dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
             return -1;
         }
 
-        padding = bc->dump_processed_signals - dumping_len;
+        padding = (bc->dump_signals - dumping_len) * (NUM_CHANNELS + 1);
         for (; padding > 0; padding -= ZEROPAD_BLOCK) {
             if (bgzf_write(bc->stream_signal_dump, zeropad,
                     sizeof(float) * (padding < ZEROPAD_BLOCK ? padding : ZEROPAD_BLOCK)) < 0) {

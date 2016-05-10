@@ -110,7 +110,7 @@ struct SampleInfo {
     int umi_total_length;
 
     int limit_threep_processing;
-    int dump_processed_signals;
+    int dump_signals;
 
     BGZF *stream_seqqual;       /* use wsync_* locking for theses two */
     BGZF *stream_taginfo;
@@ -363,7 +363,7 @@ extern int measure_polya_length(struct TailseekerConfig *cfg,
                 int *terminal_mods, int insert_len);
 extern void precalc_score_tables(struct PolyARulerParameters *params,
                                  float t_score_k, float t_score_center);
-extern int dump_processed_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
+extern int dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
                 struct CIFData **intensities, const char *sequence_formatted,
                 uint32_t clusterno, int delimiter_end);
 
