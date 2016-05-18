@@ -51,7 +51,8 @@ rule STAR_alignment:
     input: inputs_for_STAR_alignment
     output:
         mapped='scratch/alignments/{sample}_STAR_{type,[^_.]+}.bam',
-        unmapped='scratch/unmapped-reads/{sample}-{type}-read1.fastq.gz'
+        unmapped='scratch/unmapped-reads/{sample}-{type}-read1.fastq.gz',
+        transcriptome='scratch/tr-alignments/{sample}_{type}.bam'
     threads: THREADS_MAXIMUM_CORE
     params: scratch='scratch/STAR-{sample}-{type}'
     run:
@@ -77,10 +78,14 @@ rule STAR_alignment:
                 --alignIntronMin 15 --alignIntronMax 1000000 \
                 --alignMatesGapMax 1000000 --runRNGseed 8809 \
                 --outSAMtype BAM Unsorted --sysShell {BASH_CMD} \
+                --quantMode TranscriptomeSAM \
+                --quantTranscriptomeBan Singleend \
                 --outTmpDir {params.scratch}/tmp --outStd BAM_Unsorted \
                 --outFileNamePrefix {params.scratch}/ \
                 {unmapped_opts} --outMultimapperOrder Random \
                 --outSAMmapqUnique 41 > {output.mapped}')
+        shell('mv -f "{params.scratch}/Aligned.toTranscriptome.out.bam" \
+                     {output.transcriptome}')
 
         if not CONF['performance']['enable_gsnap']:
             import gzip

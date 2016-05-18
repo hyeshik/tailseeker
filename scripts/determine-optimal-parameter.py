@@ -25,6 +25,7 @@
 
 from tailseeker.plotutils import apply_dropped_spine, prepare_cumulative
 from tailseeker import stats
+import warnings
 from struct import unpack
 import pandas as pd
 import numpy as np
@@ -42,9 +43,9 @@ from matplotlib import cm
 
 def load_sigdump(filename):
     inpfile = gzip.open(filename, 'rb')
-    ncycles, datasize = unpack('<II', inpfile.read(8))
+    ncycles, nchannels, datasize = unpack('<III', inpfile.read(12))
     sigs = np.fromstring(inpfile.read(), np.float32)
-    return sigs.reshape((sigs.shape[0] // ncycles, ncycles))
+    return sigs.reshape((sigs.shape[0] // ncycles // nchannels, ncycles, nchannels))[:, :, 4]
 
 def load_all_sigdumps(sigdumpfiles):
     files = glob(sigdumpfiles.replace('%%TILE%%', '*'))
@@ -131,7 +132,12 @@ def determine_threshold(sigdumps, options):
         inwin_y = logLR[expected_range]
         inwin_f = interpolate.UnivariateSpline(inwin_x, inwin_y, s=0)
 
-        cutoff_val = inwin_f.roots()[0]
+        cutoff_candidates = inwin_f.roots()
+        if len(cutoff_candidates) > 0:
+            cutoff_val = cutoff_candidates[0]
+        else:
+            cutoff_val = options.expected_maximum
+            warnings.warn("No optimal cut-off was found.")
     else:
         cutoff_val = options.preset_threshold
 
@@ -282,7 +288,7 @@ def parse_arguments():
     parser.add_argument('--pdf-smoothing-window', dest='pdf_smoothing', type=int,
                         default=5, help='Window size for smoothing PDFs')
     parser.add_argument('--expected-maximum', dest='expected_maximum', type=float,
-                        default=0.2, help='Empirically expected maximum value for a threshold')
+                        default=0.3, help='Empirically expected maximum value for a threshold')
     parser.add_argument('--preset-threshold', dest='preset_threshold', type=float,
                         default=None, help='Evaluate a given parameter rather than '
                                            'producing an optimal value')

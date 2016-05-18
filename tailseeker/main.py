@@ -26,16 +26,7 @@
 import os
 import shutil
 
-def get_topdir():
-    if os.path.islink('Snakefile'):
-        tailseekerpkgdir = os.path.dirname(os.readlink('Snakefile'))
-        return os.path.abspath(os.path.dirname(tailseekerpkgdir))
-    elif 'TAILSEEKER_DIR' in os.environ:
-        return os.environ['TAILSEEKER_DIR']
-    else:
-        raise ValueError("You need to set an environment variable, TAILSEEKER_DIR.")
-
-TAILSEEKER_DIR = get_topdir()
+TAILSEEKER_DIR = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), '..'))
 TARGETS = []
 
 include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'snakesupport.py')
@@ -56,8 +47,6 @@ ALL_READS = INSERT_READS + INDEX_READS
 FIRST_CYCLE = min(f for f, l, _ in CONF['read_cycles'].values())
 LAST_CYCLE = max(l for f, l, _ in CONF['read_cycles'].values())
 NUM_CYCLES = LAST_CYCLE - FIRST_CYCLE + 1
-
-PHIX_ID_REF = ['R5', 6, 40] # identify PhiX reads using 40 bases from the 6th cycle.
 
 THREADS_MAXIMUM_CORE = CONF['maximum_threads']
 

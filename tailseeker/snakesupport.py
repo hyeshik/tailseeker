@@ -27,10 +27,6 @@ import shutil
 from collections import defaultdict
 
 
-def setdefault(name, value):
-    if name not in globals():
-        globals()[name] = value
-
 def make_scratch_dir(prefix):
     dirprefix = os.path.join(SCRATCHDIR, prefix)
     if not os.path.isdir(dirprefix):
@@ -56,7 +52,6 @@ def immediate_clearing(arg, sntemp=temp):
 
 
 #========== Initializations ============
-sys.path.append(TAILSEEKER_DIR)
 from tailseeker.powersnake import *
 
 # Load and parse configuration settings.
@@ -91,7 +86,7 @@ inf = float('inf')
 nan = float('nan')
 
 # Commands needs to be run with bash with these options to terminate on errors correctly.
-shell.executable(os.popen('which bash').read().strip()) # pipefail is supported by bash only.
+shell.executable(BASH_CMD) # pipefail is supported by bash only.
 shell.prefix(('set -e; set -o pipefail; '
               'export PYTHONPATH="{PYTHONPATH}" '
                      'BGZIP_CMD="{BGZIP_CMD}" '
