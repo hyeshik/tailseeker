@@ -204,8 +204,8 @@ def process_tile(options, tile, taginfo_input, output):
 
     # key functions for joiner
     def parse_readid_from_sam(samrow):
-        qtile, qcluster, _ = samrow.qname.split(b':', 2)
-        return (qtile, int(qcluster))
+        qtokens = samrow.qname.split(b':', 2)
+        return (qtokens[0], int(qtokens[1]))
     taginfokey = lambda x: (x.tile, x.cluster)
 
     joined_it = MultiJoinIterator([samit, taginfoit], [parse_readid_from_sam, taginfokey])

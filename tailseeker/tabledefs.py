@@ -43,7 +43,7 @@ PAFLAG_CHIMERIC_TEMPLATE            = 0x2000  # used by level 2 analysis
 PAFLAG_LIKELY_HAVE_INTACT_END       = 0x4000  # used by level 2 analysis
 
 
-seqid_format = '{r.tile}:{r.cluster:08d}:{r.pflags:04x}:{r.clones}:{r.polyA}:{r.mods}'
+seqid_format = '{r.tile}:{r.cluster:08d}'
 
 taginfo = {
     'compression': 'gzip',

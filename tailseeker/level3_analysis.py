@@ -50,7 +50,7 @@ rule count_multiple_associations:
             awk \'BEGIN {{ OFS="\t"; }} {{ print $2, $1; }}\' | \
             join -j 1 -t\'\t\' {input} /dev/stdin | \
             {PARALLEL_CMD} -j {threads} --pipe --block 10M \
-                "sed -e \'s,^\\([^:]*\\):0*\\([0-9][0-9]*\\):[^\t]*\t,\\1\t\\2\t,g\'" | \
+                "sed -e \'s,^\\([^:]*\\):0*\\([0-9][0-9]*\\)\\(:[^\t]*\\)*\t,\\1\t\\2\t,g\'" | \
             {BGZIP_CMD} -@ {threads} -c > {output}'
 
 

@@ -129,25 +129,31 @@ if CONF['performance']['enable_gsnap']:
         input:
             star='scratch/alignments/{sample}_STAR_{type}.bam',
             gsnap=expand('scratch/alignments/{{sample}}_GSNAP_{{type}}.bam.{part}',
-                         part=range(CONF['performance']['split_gsnap_jobs']))
+                         part=range(CONF['performance']['split_gsnap_jobs'])),
+            taginfo_internal=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES),
+            taginfo_deduped='taginfo/{sample}.txt.gz'
         output: 'scratch/merged-alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
         # samtools 1.3 merge does not respect `-n' option for paired alignments.
-        shell: '{SAMTOOLS_CMD} merge -n -u -h {input.star} -@ {threads} - {input} | \
+        shell: '{SAMTOOLS_CMD} merge -n -u -h {input.star} -@ {threads} - \
+                    {input.star} {input.gsnap} | \
                 {SAMTOOLS_CMD} sort -n -@ {threads} -T {params.sorttmp} -O sam - | \
-                {PARALLEL_CMD} -j {threads} --keep-order \
-                    --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,g\'" | \
+                {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-level2.py \
+                    {input.taginfo_deduped} {input.taginfo_internal} | \
                 {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
 else:
     rule merge_alignments:
-        input: 'scratch/alignments/{sample}_STAR_{type}.bam'
+        input:
+            star='scratch/alignments/{sample}_STAR_{type}.bam',
+            taginfo_internal=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES),
+            taginfo_deduped='taginfo/{sample}.txt.gz'
         output: 'scratch/merged-alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
-        shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -T {params.sorttmp} -O sam {input} | \
-                {PARALLEL_CMD} -j {threads} --keep-order \
-                    --pipe "sed -e \'s,^\\([^@][^:]*\\)\\(:.*\\),\\1\\2\tRG:Z:\\1,g\'" | \
+        shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -T {params.sorttmp} -O sam {input.star} | \
+                {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-level2.py \
+                    {input.taginfo_deduped} {input.taginfo_internal} | \
                 {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
 
 rule sort_alignments:

@@ -214,10 +214,12 @@ rule produce_fastq_outputs:
         R3='fastq/{sample}_R3.fastq.gz'
     threads: THREADS_MAXIMUM_CORE
     params: seqqual_filename='scratch/seqqual/{sample}_@tile@.txt.gz'
-    shell: '{BINDIR}/tailseq-writefastq \
+    run:
+        verbosity_opt = '--fastq-id-verbose ' if CONF['analysis_level'] <= 1 else ''
+        shell('{BINDIR}/tailseq-writefastq \
                 --taginfo {input.taginfo} --seqqual \'{params.seqqual_filename}\' \
                 --fastq5 {output.R5} --fastq3 {output.R3} \
-                --threads {threads}'
+                {verbosity_opt} --threads {threads}')
 
 
 TARGETS.append('stats/polya-length-distributions-L1.csv')

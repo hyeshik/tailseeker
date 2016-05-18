@@ -149,16 +149,21 @@ read_and_peek_seqqual(gzFile fp, char *line)
 
 static int
 write_fastq_entry(BGZF *fastq5out, BGZF *fastq3out,
-                  struct TagInfo *taginfo, const char *seqqual_line)
+                  struct TagInfo *taginfo, const char *seqqual_line,
+                  int verbose_id)
 {
     char entryname[MAX_ENTRYNAME_LEN];
     char buf[LINE_BUFFER_SIZE], *bufp, *sqptr_1, *sqptr_2;
     int entryname_len, seq_len;
 
-    entryname_len = snprintf(entryname, MAX_ENTRYNAME_LEN, "%s:%08u:%04x:%d:%d:%s",
-                           taginfo->tilename, (unsigned)taginfo->clusterno,
-                           taginfo->flags, taginfo->num_duplicates, taginfo->polyA_len,
-                           taginfo->modifications);
+    if (verbose_id)
+        entryname_len = snprintf(entryname, MAX_ENTRYNAME_LEN, "%s:%08u:%04x:%d:%d:%s",
+                               taginfo->tilename, (unsigned)taginfo->clusterno,
+                               taginfo->flags, taginfo->num_duplicates, taginfo->polyA_len,
+                               taginfo->modifications);
+    else
+        entryname_len = snprintf(entryname, MAX_ENTRYNAME_LEN, "%s:%08u",
+                                 taginfo->tilename, (unsigned)taginfo->clusterno);
 
     bufp = buf;
 
@@ -238,7 +243,7 @@ write_fastq_entry(BGZF *fastq5out, BGZF *fastq3out,
 
 static int
 process_write_fastq(gzFile taginfof, const char *seqqual_filename,
-                    BGZF *fastq5out, BGZF *fastq3out)
+                    BGZF *fastq5out, BGZF *fastq3out, int verbose_id)
 {
     char tile_current[MAX_TILENAME_LEN];
     char line[LINE_BUFFER_SIZE];
@@ -282,7 +287,7 @@ process_write_fastq(gzFile taginfof, const char *seqqual_filename,
             }
         } while (seqqual_clusterno < taginfo.clusterno);
 
-        if (write_fastq_entry(fastq5out, fastq3out, &taginfo, line) < 0) {
+        if (write_fastq_entry(fastq5out, fastq3out, &taginfo, line, verbose_id) < 0) {
             fprintf(stderr, "Failed to write an entry in %s.\n", tile_current);
             gzclose(seqqualf);
             return -1;
@@ -308,11 +313,13 @@ main(int argc, char *argv[])
     gzFile taginfof;
     BGZF *fastq5, *fastq3;
     int r, threads;
+    int fastq_id_verbose;
     char *taginfo_filename, *seqqual_filename;
     char *fastq5_filename, *fastq3_filename;
 
     struct option long_options[] =
     {
+        {"fastq-id-verbose", no_argument, &fastq_id_verbose, 1},
         {"threads", required_argument,  0,  't'},
         {"taginfo", required_argument,  0,  'i'},
         {"seqqual", required_argument,  0,  's'},
@@ -321,6 +328,7 @@ main(int argc, char *argv[])
         {0, 0, 0, 0}
     };
 
+    fastq_id_verbose = 0;
     threads = 1;
     taginfo_filename = seqqual_filename =
         fastq5_filename = fastq3_filename = NULL;
@@ -355,9 +363,6 @@ main(int argc, char *argv[])
             case '3': /* --fastq3 */
                 fastq3_filename = strdup(optarg);
                 break;
-
-            default:
-                abort();
         }
     }
 
@@ -398,7 +403,8 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    r = process_write_fastq(taginfof, seqqual_filename, fastq5, fastq3);
+    r = process_write_fastq(taginfof, seqqual_filename, fastq5, fastq3,
+                            fastq_id_verbose);
 
     gzclose(taginfof);
     bgzf_close(fastq5);

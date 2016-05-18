@@ -36,6 +36,15 @@ parse_taginfo = LineParser([
     ('clones', int)
 ], linefeed=b'\n')
 
+parse_taginfo_internal = LineParser([
+    ('tile', None),
+    ('cluster', int),
+    ('pflags', int),
+    ('polyA', int),
+    ('mods', None),
+    ('umi', None)
+], linefeed=b'\n')
+
 parse_sam = LineParser([
     ('qname', None),
     ('flag', int),
