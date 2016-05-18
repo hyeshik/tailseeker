@@ -23,24 +23,35 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailseeker.parsers import parse_sam, parse_taginfo_internal, parse_taginfo
+from tailseeker.parsers import parse_sam, parse_refined_taginfo
 from tailseeker.fileutils import MultiJoinIterator, ParsedLineComment
 import subprocess as sp
 import sys
 import gzip
 import os
 
+"""
+ 48 parse_refined_taginfo = LineParser([
+ 49     ('tile', None),
+ 50     ('cluster', int),
+ 51     ('pflags', int),
+ 52     ('clones', int),
+ 53     ('polyA', int),
+ 54     ('U', int),
+ 55     ('G', int),
+ 56     ('C', int),
+ 57     ('mods', None),
+ 58 ], linefeed=b'\n')
+"""
 
-def process(taginfo_orig_files, taginfo_dedup_file):
-    taginfo_read_proc = sp.Popen(['zcat'] + sorted(taginfo_orig_files), stdout=sp.PIPE)
-    taginfo_input = taginfo_read_proc.stdout
-    taginfo_dedup_input = gzip.open(taginfo_dedup_file, 'rb')
+
+def process(taginfo_file):
+    taginfo_input = gzip.open(taginfo_file, 'rb')
     sam_input = os.fdopen(sys.stdin.fileno(), 'rb')
 
     # parsing iterators
     samit = parse_sam(sam_input)
-    taginfoit = parse_taginfo_internal(taginfo_input)
-    taginfoit_dedup = parse_taginfo(taginfo_dedup_input)
+    taginfoit = parse_refined_taginfo(taginfo_input)
 
     # key functions for joiner
     def parse_readid_from_sam(samrow):
@@ -50,27 +61,23 @@ def process(taginfo_orig_files, taginfo_dedup_file):
         return (qtokens[0], int(qtokens[1]))
     taginfokey = lambda x: (x.tile, x.cluster)
 
-    joined_it = MultiJoinIterator([samit, taginfoit, taginfoit_dedup],
-                                  [parse_readid_from_sam, taginfokey, taginfokey])
+    joined_it = MultiJoinIterator([samit, taginfoit], [parse_readid_from_sam, taginfokey])
     output = os.fdopen(sys.stdout.fileno(), 'wb')
-    tagformat = '\tRG:Z:{}\tZF:i:{}\tZA:i:{}\tZS:Z:_{}\tZM:Z:{}\tZD:i:{}\n'
+    tagformat = '\tZF:i:{}\tZD:i:{}\tZU:i:{}\tZG:i:{}\tZC:i:{}\tZa:i:{}\n'
 
-    for (tile, cluster), samrows, taginforows_orig, taginforows_dedup in joined_it:
+    for (tile, cluster), samrows, taginforows in joined_it:
         samrows = list(samrows)
-        taginforows = list(taginforows_dedup)
+        taginforows = list(taginforows)
 
         if len(taginforows) < 1:
-            if len(samrows) > 0:
-                output.write(b''.join(row.line for row in samrows))
+            output.write(b''.join(row.line for row in samrows))
             continue
         elif len(samrows) < 1:
             continue
 
         taginfo = taginforows[0]
-        umi = next(taginforows_orig).umi
-
-        tags_formatted = tagformat.format(tile.decode(), taginfo.pflags, taginfo.polyA,
-                                          taginfo.mods.decode(), umi.decode(), taginfo.clones)
+        tags_formatted = tagformat.format(taginfo.pflags, taginfo.clones, taginfo.U,
+                                          taginfo.G, taginfo.C, taginfo.polyA)
 
         for row in samrows:
             output.write(row.line[:-1])
@@ -78,7 +85,6 @@ def process(taginfo_orig_files, taginfo_dedup_file):
 
 
 if __name__ == '__main__':
-    taginfo_deduplicated = sys.argv[1]
-    taginfo_original = sys.argv[2:]
-    process(taginfo_original, taginfo_deduplicated)
+    taginfo = sys.argv[1]
+    process(taginfo)
 

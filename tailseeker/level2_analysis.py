@@ -130,8 +130,7 @@ if CONF['performance']['enable_gsnap']:
             star='scratch/alignments/{sample}_STAR_{type}.bam',
             gsnap=expand('scratch/alignments/{{sample}}_GSNAP_{{type}}.bam.{part}',
                          part=range(CONF['performance']['split_gsnap_jobs'])),
-            taginfo_internal=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES),
-            taginfo_deduped='taginfo/{sample}.txt.gz'
+            taginfo=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
         output: 'scratch/merged-alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
@@ -139,34 +138,19 @@ if CONF['performance']['enable_gsnap']:
         shell: '{SAMTOOLS_CMD} merge -n -u -h {input.star} -@ {threads} - \
                     {input.star} {input.gsnap} | \
                 {SAMTOOLS_CMD} sort -n -@ {threads} -T {params.sorttmp} -O sam - | \
-                {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-level2.py \
-                    {input.taginfo_deduped} {input.taginfo_internal} | \
+                {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-primary.py {input.taginfo} | \
                 {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
 else:
     rule merge_alignments:
         input:
             star='scratch/alignments/{sample}_STAR_{type}.bam',
-            taginfo_internal=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES),
-            taginfo_deduped='taginfo/{sample}.txt.gz'
+            taginfo=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
         output: 'scratch/merged-alignments/{sample}_{type,[^_.]+}.bam'
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
         shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -T {params.sorttmp} -O sam {input.star} | \
-                {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-level2.py \
-                    {input.taginfo_deduped} {input.taginfo_internal} | \
+                {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-primary.py {input.taginfo} | \
                 {SAMTOOLS_CMD} view -@ {threads} -b -o {output} -'
-
-rule sort_alignments:
-    input: 'scratch/merged-alignments/{name}.bam'
-    output: 'alignments/{name}.bam'
-    threads: THREADS_MAXIMUM_CORE
-    params: sorttmp='scratch/merged-alignments/{name}'
-    shell: '{SAMTOOLS_CMD} sort -@ {threads} -T {params.sorttmp} -o {output} {input}'
-
-rule index_alignments:
-    input: 'alignments/{name}.bam'
-    output: 'alignments/{name}.bam.bai'
-    shell: '{SAMTOOLS_CMD} index -b {input} {output}'
 
 
 # ---
@@ -256,6 +240,9 @@ rule merge_polya_sites_list:
                     -r {polya_site_window} -i - -g {genomedir}/chrom-sizes | \
                {BEDTOOLS_CMD} merge -i - -s -c 4,5,6 -o first > {output}')
 
+        import time
+        time.sleep(5) # This task often fails to sync between NFS nodes.
+
 def inputs_for_apply_short_polya_filter(wildcards):
     return 'scratch/polya-sites/group-{group}.txt'.format(
                 group=CONF['experiment_groups'][wildcards.sample])
@@ -313,5 +300,26 @@ rule generate_polya_length_distribution_stats_level2:
         badflagmask=CONF['qcstats']['bad_flags_filter'],
         refined=True, maxpalength=CONF['read_cycles']['R3'][1]
     script: SCRIPTSDIR + '/stats-polya-len-dists.py'
+
+
+# ---
+# Generate the final tagged alignment files
+# ---
+
+rule sort_alignments:
+    input:
+        bam='scratch/merged-alignments/{sample}_{type}.bam',
+        taginfo='refined-taginfo/{sample}.txt.gz'
+    output: 'alignments/{sample}_{type,[^_.]+}.bam'
+    threads: THREADS_MAXIMUM_CORE
+    params: sorttmp='scratch/merged-alignments/{sample}_{type}'
+    shell: '{SAMTOOLS_CMD} view -h {input.bam} | \
+            {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-refined.py {input.taginfo} | \
+            {SAMTOOLS_CMD} sort -@ {threads} -T {params.sorttmp} -o {output} -'
+
+rule index_alignments:
+    input: 'alignments/{name}.bam'
+    output: 'alignments/{name}.bam.bai'
+    shell: '{SAMTOOLS_CMD} index -b {input} {output}'
 
 # ex: syntax=snakemake
