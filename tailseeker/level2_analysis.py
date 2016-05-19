@@ -367,4 +367,29 @@ rule index_alignments:
     output: 'alignments/{name}.bam.bai'
     shell: '{SAMTOOLS_CMD} index -b {input} {output}'
 
+rule make_read5_position_dists:
+    input:
+        bam='scratch/tr-alignments/{sample}_single.bam',
+        transcript_sizes=lambda wc: os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+                                        CONF['reference_set'][wc.sample], 'transcript-sizes')
+    output: 'scratch/read5-pos-dists/{sample}.csv'
+    script: SCRIPTSDIR + '/make-read5-positions-dist.py'
+
+
+# ---
+# Quality check and stats
+# ---
+
+TARGETS.append('stats/read5-position-dists.csv')
+
+rule merge_read5_position_dists:
+    input: expand('scratch/read5-pos-dists/{sample}.csv', sample=EXP_SAMPLES)
+    output: 'stats/read5-position-dists.csv'
+    run:
+        import pandas, numpy
+        (pandas.DataFrame({
+            name: pandas.read_csv(infile, names=['pos', 'count'], index_col=0)['count']
+            for name, infile in zip(EXP_SAMPLES, input)})
+         .fillna(0).astype(numpy.int64).to_csv(output[0]))
+
 # ex: syntax=snakemake
