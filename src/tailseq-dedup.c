@@ -84,20 +84,22 @@ struct TagInfoQueue { /* a circular queue */
 static inline int
 calculate_tag_prority(int flags)
 {
-    int rflags=~flags;
-
+#define SET(value, flagbit) (((value) & (flagbit)) != 0)
+#define NOTSET(value, flagbit) (((value) & (flagbit)) == 0)
     return
-        (rflags & PAFLAG_BARCODE_HAS_MISMATCHES) * 1024 +
-        (rflags & PAFLAG_DELIMITER_NOT_FOUND) * 512 +
-        (rflags & PAFLAG_DELIMITER_HAS_MISMATCH) * 256 +
-        (flags & PAFLAG_MEASURED_FROM_FLUORESCENCE) * 128 +
-        (rflags & PAFLAG_DARKCYCLE_OVER_THRESHOLD) * 64 +
-        (rflags & PAFLAG_BALANCER_BIASED) * 32 +
-        (rflags & PAFLAG_BALANCER_SIGNAL_BAD) * 16 +
-        (rflags & PAFLAG_DARKCYCLE_EXISTS) * 8 +
-        (rflags & PAFLAG_DELIMITER_IS_SHIFTED) * 4 +
-        (rflags & PAFLAG_NO_POLYA_DETECTED) * 2 +
-        (rflags & PAFLAG_MEASURED_USING_NAIVE_RULER) * 1;
+        NOTSET(flags, PAFLAG_BARCODE_HAS_MISMATCHES) * 1024 +
+        NOTSET(flags, PAFLAG_DELIMITER_NOT_FOUND) * 512 +
+        NOTSET(flags, PAFLAG_DELIMITER_HAS_MISMATCH) * 256 +
+        SET(flags, PAFLAG_MEASURED_FROM_FLUORESCENCE) * 128 +
+        NOTSET(flags, PAFLAG_DARKCYCLE_OVER_THRESHOLD) * 64 +
+        NOTSET(flags, PAFLAG_BALANCER_BIASED) * 32 +
+        NOTSET(flags, PAFLAG_BALANCER_SIGNAL_BAD) * 16 +
+        NOTSET(flags, PAFLAG_DARKCYCLE_EXISTS) * 8 +
+        NOTSET(flags, PAFLAG_DELIMITER_IS_SHIFTED) * 4 +
+        NOTSET(flags, PAFLAG_NO_POLYA_DETECTED) * 2 +
+        NOTSET(flags, PAFLAG_MEASURED_USING_NAIVE_RULER);
+#undef SET
+#undef NOTSET
 }
 
 static struct TagInfoQueue *
