@@ -291,7 +291,7 @@ rule apply_short_polya_filter:
 
 TARGETS.append('stats/polya-length-distributions-L2.csv')
 rule generate_polya_length_distribution_stats_level2:
-    input: expand('refined-taginfo/{sample}.txt.gz', sample=sorted(EXP_SAMPLES))
+    input: expand('refined-taginfo/{sample}.mapped.txt.gz', sample=sorted(EXP_SAMPLES))
     output: 'stats/polya-length-distributions-L2.csv'
     params:
         samplenames=sorted(EXP_SAMPLES),
@@ -307,7 +307,7 @@ rule generate_polya_length_distribution_stats_level2:
 rule sort_alignments:
     input:
         bam='scratch/merged-alignments/{sample}_{type}.bam',
-        taginfo='refined-taginfo/{sample}.txt.gz'
+        taginfo='refined-taginfo/{sample}.all.txt.gz'
     output: 'scratch/sorted-alignments/{sample}_{type,[^_.]+}.bam'
     threads: THREADS_MAXIMUM_CORE
     params: sorttmp='scratch/merged-alignments/{sample}_{type}'
