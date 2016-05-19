@@ -169,6 +169,11 @@ rule measure_chrom_sizes:
     output: final_target('{genome}/chrom-sizes')
     shell: 'cut -f1,2 {input} > {output}'
 
+rule make_transcript_length_table:
+    input: '{genome}/genes-main.gtf.gz'
+    output: final_target('{genome}/transcript-sizes')
+    script: 'make_transcript_lengths.py'
+
 # ===
 
 def donothing(*a, **k): pass
