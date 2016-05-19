@@ -53,7 +53,8 @@ samtools:samtools
 bedtools:bedtools
 parallel:GNU_parallel"
 required_pkgconfig_level2=""
-required_python3mod_level2=""
+required_python3mod_level2="\
+Levenshtein:python-Levenshtein"
 
 required_executables_level3=""
 required_pkgconfig_level3=""

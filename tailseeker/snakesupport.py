@@ -88,7 +88,7 @@ nan = float('nan')
 # Commands needs to be run with bash with these options to terminate on errors correctly.
 shell.executable(BASH_CMD) # pipefail is supported by bash only.
 shell.prefix(('set -e; set -o pipefail; '
-              'export PYTHONPATH="{PYTHONPATH}" '
+              'export PYTHONPATH="{PYTHONPATH}" LC_ALL=C '
                      'BGZIP_CMD="{BGZIP_CMD}" '
                      'TABIX_CMD="{TABIX_CMD}" '
                      'TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}" '

@@ -162,7 +162,8 @@ rule tabix_index_taginfo:
     output: temp('taginfo/{sample}.txt.gz.tbi')
     shell: '{TABIX_CMD} -0 -b 2 -e 2 -s 1 {input}'
 
-TARGETS.extend(expand('refined-taginfo/{sample}.txt.gz', sample=EXP_SAMPLES))
+TARGETS.extend(expand('refined-taginfo/{sample}.{type}.txt.gz',
+                      sample=EXP_SAMPLES, type=['mapped', 'all']))
 rule reevaluate_tails:
     input:
         taginfo='taginfo/{sample}.txt.gz',
@@ -227,7 +228,7 @@ def inputs_for_merge_polya_sites_list(wildcards):
 
 rule merge_polya_sites_list:
     input: inputs_for_merge_polya_sites_list
-    output: temp('scratch/polya-sites/group-{group}.txt')
+    output: 'scratch/polya-sites/group-{group}.txt'
     run:
         sample1 = EXPERIMENT_GROUPS[wildcards.group][0]
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
@@ -240,9 +241,6 @@ rule merge_polya_sites_list:
                     -r {polya_site_window} -i - -g {genomedir}/chrom-sizes | \
                {BEDTOOLS_CMD} merge -i - -s -c 4,5,6 -o first > {output}')
 
-        import time
-        time.sleep(5) # This task often fails to sync between NFS nodes.
-
 def inputs_for_apply_short_polya_filter(wildcards):
     return 'scratch/polya-sites/group-{group}.txt'.format(
                 group=CONF['experiment_groups'][wildcards.sample])
@@ -252,7 +250,7 @@ rule apply_short_polya_filter:
         alignment='scratch/merged-alignments/{sample}_paired.bam',
         taginfo='refined-taginfo/{sample}.txt.pre.gz',
         pasitelist=inputs_for_apply_short_polya_filter
-    output: 'refined-taginfo/{sample}.txt.gz'
+    output: 'refined-taginfo/{sample}.all.txt.gz'
     params: tmplist=SCRATCHDIR+'/apply_short_polya_filter-{sample}.txt'
     run:
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
@@ -303,19 +301,66 @@ rule generate_polya_length_distribution_stats_level2:
 
 
 # ---
-# Generate the final tagged alignment files
+# Duplicated tag elimination by approximate matching using R5 mapped positions.
 # ---
 
 rule sort_alignments:
     input:
         bam='scratch/merged-alignments/{sample}_{type}.bam',
         taginfo='refined-taginfo/{sample}.txt.gz'
-    output: 'alignments/{sample}_{type,[^_.]+}.bam'
+    output: 'scratch/sorted-alignments/{sample}_{type,[^_.]+}.bam'
     threads: THREADS_MAXIMUM_CORE
     params: sorttmp='scratch/merged-alignments/{sample}_{type}'
     shell: '{SAMTOOLS_CMD} view -h {input.bam} | \
             {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-refined.py {input.taginfo} | \
             {SAMTOOLS_CMD} sort -@ {threads} -T {params.sorttmp} -o {output} -'
+
+rule find_approximate_duplicates:
+    input: 'scratch/sorted-alignments/{sample}_single.bam'
+    output: 'scratch/approx-duplicates/{sample}.txt'
+    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/find-approximate-duplicates.py \
+                --bam {input} --tolerated-interval \
+                    {CONF[approximate_duplicate_elimination][mapped_position_tolerance]} \
+                --tolerated-edit-distance \
+                    {CONF[approximate_duplicate_elimination][umi_edit_dist_tolenrance]} | \
+            sort -k3,3 | uniq -f 2 > {output}'
+
+rule filter_approximate_duplicates:
+    input:
+        bam='scratch/merged-alignments/{sample}_{type}.bam',
+        dupinfo='scratch/approx-duplicates/{sample}.txt'
+    output: 'alignments/{sample}_{type,[^_.]+}.bam'
+    threads: 3
+    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/filter-approximate-duplicates.py \
+                --bam {input.bam} --duplicates {input.dupinfo} | \
+            {SAMTOOLS_CMD} view -b -@ {threads} -o {output} -'
+
+rule update_refined_taginfo_for_mapped:
+    input:
+        taginfo='refined-taginfo/{sample}.all.txt.gz',
+        dupinfo='scratch/approx-duplicates/{sample}.txt'
+    output: 'refined-taginfo/{sample}.mapped.txt.gz'
+    run:
+        import pandas as pd
+        import numpy as np
+        import subprocess as sp
+        import io
+        from tailseeker import tabledefs
+
+        dupinfo = pd.read_table(input.dupinfo, names=['polyA', 'clones', 'readid'],
+                                dtype={'polyA': np.int32, 'clones': np.uint32,
+                                       'readid': str})
+        dupinfo['tile'] = dupinfo['readid'].apply(lambda x: x.split(':')[0])
+        dupinfo['cluster'] = dupinfo['readid'].apply(lambda x: int(x.split(':')[1]))
+
+        taginfo = pd.read_table(input.taginfo, **tabledefs.refined_taginfo)
+        merged = pd.merge(taginfo, dupinfo, how='right', left_on=('tile', 'cluster'),
+                          right_on=('tile', 'cluster'), suffixes=['_orig', ''])
+
+        with sp.Popen([BGZIP_CMD, '-c'], stdin=sp.PIPE, stdout=open(output[0], 'wb')) as proc:
+            with io.TextIOWrapper(proc.stdin) as stdin_text_stream:
+                merged[taginfo.columns].to_csv(stdin_text_stream, sep='\t',
+                                               index=False, header=False)
 
 rule index_alignments:
     input: 'alignments/{name}.bam'

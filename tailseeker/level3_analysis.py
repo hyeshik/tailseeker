@@ -60,7 +60,7 @@ TARGETS.extend(expand('tagcounts/{sample}-{ambigtype}-{modtype}.msgpack.xz',
 
 rule make_gene_level_counts:
     input:
-        taginfo='refined-taginfo/{sample}.txt.gz',
+        taginfo='refined-taginfo/{sample}.mapped.txt.gz',
         associations='associations/{sample}.txt.gz'
     output: 'tagcounts/{sample}-{ambigtype}-{modtype}.msgpack.xz'
     run:
