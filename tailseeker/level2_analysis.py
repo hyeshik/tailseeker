@@ -327,7 +327,7 @@ rule find_approximate_duplicates:
 
 rule filter_approximate_duplicates:
     input:
-        bam='scratch/merged-alignments/{sample}_{type}.bam',
+        bam='scratch/sorted-alignments/{sample}_{type}.bam',
         dupinfo='scratch/approx-duplicates/{sample}.txt'
     output: 'alignments/{sample}_{type,[^_.]+}.bam'
     threads: 3
