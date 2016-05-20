@@ -43,7 +43,7 @@
 struct BCLReader {
     uint32_t nclusters;
 
-    FILE *fptr;
+    gzFile fptr;
     uint32_t read;
 };
 

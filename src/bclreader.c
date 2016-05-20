@@ -46,23 +46,30 @@ struct BCLReader *
 open_bcl_file(const char *filename)
 {
     struct BCLReader *bcl;
-    FILE *fp;
+    gzFile fp;
 
-    fp = fopen(filename, "rb");
+    fp = gzopen(filename, "rb");
     if (fp == NULL) {
-        fprintf(stderr, "load_bcl_file: Can't open file %s.\n", filename);
-        return NULL;
+        char filename_with_suffix[BUFSIZ];
+        strcpy(filename_with_suffix, filename);
+        strcat(filename_with_suffix, ".gz");
+
+        fp = gzopen(filename_with_suffix, "rb");
+        if (fp == NULL) {
+            fprintf(stderr, "load_bcl_file: Can't open file %s.\n", filename);
+            return NULL;
+        }
     }
 
     bcl = malloc(sizeof(struct BCLReader));
     if (bcl == NULL) {
-        fclose(fp);
+        gzclose(fp);
         return NULL;
     }
 
-    if (fread(&bcl->nclusters, sizeof(bcl->nclusters), 1, fp) < 1) {
+    if (gzread(fp, &bcl->nclusters, sizeof(bcl->nclusters)) < 1) {
         fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
-        fclose(fp);
+        gzclose(fp);
         free(bcl);
         return NULL;
     }
@@ -82,7 +89,7 @@ close_bcl_file(struct BCLReader *bcl)
         return;
 
     if (bcl->fptr == NULL)
-        fclose(bcl->fptr);
+        gzclose(bcl->fptr);
     free(bcl);
 }
 
@@ -102,7 +109,7 @@ load_bcl_data(struct BCLReader *bcl, struct BCLData *data, uint32_t nclusters)
     else
         toread = nclusters;
 
-    if (fread(data->basequality, toread, 1, bcl->fptr) < 1) {
+    if (gzread(bcl->fptr, data->basequality, toread) < 1) {
         fprintf(stderr, "Unexpected EOF %s:%d.\n", __FILE__, __LINE__);
         return -1;
     }
