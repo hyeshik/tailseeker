@@ -3,7 +3,7 @@ CXX?=		g++
 #CFLAGS=	-O0 -Wall -Werror -pg -ggdb ${HTSLIB_CFLAGS}
 #CXXFLAGS=	-O0 -DNO_OPENMP -Wall -pg -ggdb
 CFLAGS=		-O3 -Wall -DNDEBUG ${HTSLIB_CFLAGS}
-CXXFLAGS=	-O3 -DNO_OPENMP -DNDEBUG
+CXXFLAGS=	-O3 -fopenmp -DNDEBUG
 
 SIGPROC_LIBS=	-lz -lm -lpthread ${HTSLIB_LIBS}
 DEDUP_PERFECT_LIBS=	-lm
@@ -86,7 +86,7 @@ ${bindir}/tailseq-dedup-perfect: ${DEDUP_PERFECT_OBJECTS}
 	${CC} ${CFLAGS} -o $@ ${DEDUP_PERFECT_OBJECTS} ${DEDUP_PERFECT_LIBS}
 
 ${bindir}/tailseq-dedup-approx: ${DEDUP_APPROX_OBJECTS}
-	${CXX} ${CFLAGS} -o $@ ${DEDUP_APPROX_OBJECTS} ${DEDUP_APPROX_LIBS}
+	${CXX} ${CFLAGS} -fopenmp -o $@ ${DEDUP_APPROX_OBJECTS} ${DEDUP_APPROX_LIBS}
 
 ${bindir}/tailseq-writefastq: ${WRITEFASTQ_OBJECTS}
 	${CC} ${CFLAGS} -o $@ ${WRITEFASTQ_OBJECTS} ${WRITEFASTQ_LIBS}

@@ -141,7 +141,7 @@ cdhit_cluster_minitags(struct deduppool *pool)
 }
 
 int
-init_cdhit_internals(double similarity_threshold)
+init_cdhit_internals(int threads, double similarity_threshold)
 {
     int argc=5;
     const char *argv[argc];
@@ -159,6 +159,7 @@ init_cdhit_internals(double similarity_threshold)
     options.NAA = 10;
     options.NAAN = NAA8;
     options.NAA_top_limit = 12;
+    options.threads = threads;
     setaa_to_na();
     mat.set_to_na();
 

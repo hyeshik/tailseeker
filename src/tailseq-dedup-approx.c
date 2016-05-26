@@ -584,7 +584,8 @@ merge_similar_umi_clusters(struct deduppool *tpool, struct tagcluster *query,
 
 static int
 perform_tag_clustering(struct deduppool *tpool, int editdist_threshold,
-                       int trimercomp_threshold, int cdhit_bypass)
+                       int trimercomp_threshold, int cdhit_bypass,
+                       pthread_mutex_t *lock)
 {
     struct tagcluster *clstr;
 
@@ -595,8 +596,13 @@ perform_tag_clustering(struct deduppool *tpool, int editdist_threshold,
 //            (int)tpool->tagcluster_left,
 //            (int)tpool->tagcluster_right,
 //            (int)tpool->tagclusters_live);
-    if (tpool->tagclusters_live >= cdhit_bypass)
-        return cdhit_cluster_minitags(tpool);
+    if (tpool->tagclusters_live >= cdhit_bypass) {
+        int r;
+        pthread_mutex_lock(lock);
+        r = cdhit_cluster_minitags(tpool);
+        pthread_mutex_unlock(lock);
+        return r;
+    }
 
     for (clstr = &tpool->tagclusters[tpool->tagcluster_left];
             clstr->next >= 0; clstr = &tpool->tagclusters[clstr->next]) {
@@ -668,7 +674,8 @@ deduplicate_tailseq_bam(struct taskpool *tasks, samFile *samf, hts_idx_t *bamidx
             if (clstr->tid != bamentry->core.tid || clstr->pos < validfrom) {
                 if (perform_tag_clustering(tpool, editdist_threshold,
                                            trimercomp_threshold,
-                                           tasks->cdhit_bypass) < 0)
+                                           tasks->cdhit_bypass,
+                                           &tasks->cdhitlock) < 0)
                     return -1;
 
                 while ((clstr = tagcluster_popleft_not_after_pos(tpool, bamentry->core.tid,
@@ -709,7 +716,8 @@ deduplicate_tailseq_bam(struct taskpool *tasks, samFile *samf, hts_idx_t *bamidx
 
         if (perform_tag_clustering(tpool, editdist_threshold,
                                    trimercomp_threshold,
-                                   tasks->cdhit_bypass) < 0)
+                                   tasks->cdhit_bypass,
+                                   &tasks->cdhitlock) < 0)
             return -1;
 
         while ((clstr = tagcluster_popleft(tpool)) != NULL) {
@@ -852,11 +860,12 @@ main(int argc, char *argv[])
 
     pthread_mutex_init(&tasks.poollock, NULL);
     pthread_mutex_init(&tasks.writelock, NULL);
+    pthread_mutex_init(&tasks.cdhitlock, NULL);
 
     if (load_sam_targets_count(&tasks) < 0)
         return 101;
 
-    if (init_cdhit_internals(cdhit_similarity_threshold) < 0) {
+    if (init_cdhit_internals(nthreads, cdhit_similarity_threshold) < 0) {
         fprintf(stderr, "ERROR: Failed to initialize internal states of CD-HIT.\n");
         return 102;
     }
@@ -872,6 +881,7 @@ main(int argc, char *argv[])
             pthread_join(threads[i], NULL);
     }
 
+    pthread_mutex_destroy(&tasks.cdhitlock);
     pthread_mutex_destroy(&tasks.writelock);
     pthread_mutex_destroy(&tasks.poollock);
 

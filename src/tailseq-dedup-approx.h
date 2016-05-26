@@ -60,6 +60,7 @@ struct taskpool {
 
     pthread_mutex_t poollock;
     pthread_mutex_t writelock;
+    pthread_mutex_t cdhitlock;
 };
 
 struct tagaln;
@@ -109,7 +110,7 @@ struct deduppool {
 };
 
 /* cdhit-proxy.cc */
-extern int init_cdhit_internals(double similarity_threshold);
+extern int init_cdhit_internals(int nthreads, double similarity_threshold);
 extern int cdhit_cluster_minitags(struct deduppool *pool);
 
 /* tailseq-dedup-approx.c */
