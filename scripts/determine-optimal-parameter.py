@@ -280,15 +280,15 @@ def parse_arguments():
     parser.add_argument('--design-length', dest='design_length', type=float,
                         default=118, help='Length of poly(A) tail in design')
     parser.add_argument('--polya-region-stepback', dest='polya_spacing', type=int,
-                        default=5, help='Distance from the design length to the end of '
-                                        'poly(A) region to be sampled')
+                        default=10, help='Distance from the design length to the end of '
+                                         'poly(A) region to be sampled')
     parser.add_argument('--genebody-region-stepforward', dest='genebody_spacing', type=int,
-                        default=5, help='Distance from the design length to the begin of '
-                                        'gene body region to be sampled')
+                        default=10, help='Distance from the design length to the begin of '
+                                         'gene body region to be sampled')
     parser.add_argument('--pdf-smoothing-window', dest='pdf_smoothing', type=int,
                         default=5, help='Window size for smoothing PDFs')
     parser.add_argument('--expected-maximum', dest='expected_maximum', type=float,
-                        default=0.3, help='Empirically expected maximum value for a threshold')
+                        default=0.5, help='Empirically expected maximum value for a threshold')
     parser.add_argument('--preset-threshold', dest='preset_threshold', type=float,
                         default=None, help='Evaluate a given parameter rather than '
                                            'producing an optimal value')

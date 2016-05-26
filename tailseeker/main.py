@@ -195,7 +195,7 @@ rule merge_and_deduplicate_taginfo:
             shell('zcat {sorted_input} | \
                 env BGZIP_OPT="-@ {threads}" sort -t "\t" -k6,6 -k1,1 -k2,2n \
                     --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
-                {BINDIR}/tailseq-dedup | \
+                {BINDIR}/tailseq-dedup-perfect | \
                 env BGZIP_OPT="-@ {threads}" sort -t "\t" -k1,1 -k2,2n \
                     --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
                 {BGZIP_CMD} -@ {threads} -c > {output}')

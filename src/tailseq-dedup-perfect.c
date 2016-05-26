@@ -1,5 +1,5 @@
 /*
- * tailseq-dedup.c
+ * tailseq-dedup-perfect.c
  *
  * Copyright (c) 2016 Hyeshik Chang
  *

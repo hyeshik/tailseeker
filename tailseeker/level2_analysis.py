@@ -315,15 +315,29 @@ rule sort_alignments:
             {PYTHON3_CMD} {SCRIPTSDIR}/add-sam-tags-refined.py {input.taginfo} | \
             {SAMTOOLS_CMD} sort -@ {threads} -T {params.sorttmp} -o {output} -'
 
+rule index_sorted_alignments:
+    input: 'scratch/sorted-alignments/{name}.bam'
+    output: 'scratch/sorted-alignments/{name}.bam.bai'
+    shell: '{SAMTOOLS_CMD} index -b {input} {output}'
+
 rule find_approximate_duplicates:
-    input: 'scratch/sorted-alignments/{sample}_single.bam'
+    input:
+        bam='scratch/sorted-alignments/{sample}_single.bam',
+        bamidx='scratch/sorted-alignments/{sample}_single.bam.bai',
     output: 'scratch/approx-duplicates/{sample}.txt'
-    shell: '{PYTHON3_CMD} {SCRIPTSDIR}/find-approximate-duplicates.py \
-                --bam {input} --tolerated-interval \
-                    {CONF[approximate_duplicate_elimination][mapped_position_tolerance]} \
-                --tolerated-edit-distance \
-                    {CONF[approximate_duplicate_elimination][umi_edit_dist_tolenrance]} | \
-            sort -k3,3 | uniq -f 2 > {output}'
+    threads: 6
+    run:
+        dedupopts = CONF['approximate_duplicate_elimination']
+        umi_length = sum(end - start + 1 for start, end
+                         in CONF['dupcheck_regions'][wildcards.sample])
+        similarity_threshold = (umi_length -
+                                dedupopts['umi_edit_dist_tolenrance']) / umi_length
+        shell('{BINDIR}/tailseq-dedup-approx {input.bam} \
+                {dedupopts[mapped_position_tolerance]} \
+                {dedupopts[umi_edit_dist_tolenrance]} \
+                {dedupopts[accelerated_matching_threshold]} \
+                {similarity_threshold} {threads} | \
+               sort -k3,3 | uniq -f 2 > {output}')
 
 rule filter_approximate_duplicates:
     input:
