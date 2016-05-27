@@ -75,12 +75,6 @@ rule default:
         for genome_name, species_name in sorted(GENOMES.items()):
             print(fmt.format(genome_name, species_name))
 
-rule make_exon_gtf:
-    input: LEVEL2_REFDB + '{genome}/genes-main.gtf.gz'
-    output: final_target('{genome}/exons.gtf.gz')
-    shell: 'zcat {input} | awk -F\'\t\' \'/^#/; $3 == "exon"\' | \
-            gzip -c - > {output}'
-
 rule download_ensembl_database:
     output: temp('tmp/{genome}/ensembl-{table}.txt.gz')
     run:
