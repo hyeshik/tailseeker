@@ -500,7 +500,7 @@ rule make_gene_level_statistics:
         U='tagcounts/{sample}-{ambigtype}-U.msgpack.xz',
         G='tagcounts/{sample}-{ambigtype}-G.msgpack.xz',
         C='tagcounts/{sample}-{ambigtype}-C.msgpack.xz'
-    output: 'stats/genelevelstats-{sample}-{ambigtype}.csv'
+    output: limit('stats/genelevelstats-{sample}-{{ambigtype}}.csv', sample=EXP_SAMPLES)
     params: confidence_interval_span=CONF['gene_level_stats']['polyA_len_confidence_interval']
     script: SCRIPTSDIR + '/stats-gene-level-tailing.py'
 

@@ -25,6 +25,7 @@ import sys
 import os
 import shutil
 from collections import defaultdict
+from snakemake.io import limit
 
 
 def make_scratch_dir(prefix):

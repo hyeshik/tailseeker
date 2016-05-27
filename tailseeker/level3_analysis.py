@@ -23,5 +23,26 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
+ALL_GENOMES_USED = sorted(set(CONF['reference_set'].values()))
+SAMPLES_BY_GENOME = {
+    genome: [smp for smp in EXP_SAMPLES if CONF['reference_set'][smp] == genome]
+    for genome in ALL_GENOMES_USED
+}
+
+TARGETS.extend(expand('stats/genelevelstats-{genome}-{ambigtype}.{ext}',
+                      genome=ALL_GENOMES_USED, ambigtype=['single', 'paired'],
+                      ext=['csv', 'feather']))
+
+rule merge_gene_level_stats:
+    input:
+        lambda wc: expand('stats/genelevelstats-{sample}-{ambigtype}.csv',
+                          sample=SAMPLES_BY_GENOME[wc.genome], ambigtype=[wc.ambigtype])
+    output:
+        csv=limit('stats/genelevelstats-{genome}-{{ambigtype}}.csv', genome=ALL_GENOMES_USED),
+        feather='stats/genelevelstats-{genome}-{ambigtype}.feather'
+    params:
+        genomedir=TAILSEEKER_DIR + '/refdb/level3/{genome}',
+        samples_by_genome=SAMPLES_BY_GENOME
+    script: SCRIPTSDIR + '/merge-gene-level-stats.py'
 
 # ex: syntax=snakemake

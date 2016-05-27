@@ -54,13 +54,12 @@ bedtools:bedtools
 parallel:GNU_parallel"
 required_pkgconfig_level2=""
 required_python3mod_level2="\
-Levenshtein:python-Levenshtein"
+feather:feather-format
+lzma:lzma"
 
 required_executables_level3=""
 required_pkgconfig_level3=""
-required_python3mod_level3="\
-lzma:lzma
-feather:feather-format"
+required_python3mod_level3=""
 
 
 RED="[01;31m"
