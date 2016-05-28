@@ -328,15 +328,9 @@ rule find_approximate_duplicates:
     threads: 6
     run:
         dedupopts = CONF['approximate_duplicate_elimination']
-        umi_length = sum(end - start + 1 for start, end
-                         in CONF['dupcheck_regions'][wildcards.sample])
-        similarity_threshold = (umi_length -
-                                dedupopts['umi_edit_dist_tolenrance']) / umi_length
         shell('{BINDIR}/tailseq-dedup-approx {input.bam} \
                 {dedupopts[mapped_position_tolerance]} \
-                {dedupopts[umi_edit_dist_tolenrance]} \
-                {dedupopts[accelerated_matching_threshold]} \
-                {similarity_threshold} {threads} | \
+                {dedupopts[umi_edit_dist_tolenrance]} {threads} | \
                sort -k3,3 | uniq -f 2 > {output}')
 
 rule filter_approximate_duplicates:

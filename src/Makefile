@@ -1,9 +1,6 @@
 CC?=		gcc
-CXX?=		g++
 #CFLAGS=	-O0 -Wall -Werror -pg -ggdb ${HTSLIB_CFLAGS}
-#CXXFLAGS=	-O0 -DNO_OPENMP -Wall -pg -ggdb
 CFLAGS=		-O3 -Wall -DNDEBUG ${HTSLIB_CFLAGS}
-CXXFLAGS=	-O3 -fopenmp -DNDEBUG
 
 SIGPROC_LIBS=	-lz -lm -lpthread ${HTSLIB_LIBS}
 DEDUP_PERFECT_LIBS=	-lm
@@ -40,21 +37,16 @@ DEDUP_PERFECT_OBJECTS= \
 	tailseq-dedup-perfect.o
 
 DEDUP_APPROX_OBJECTS= \
-	tailseq-dedup-approx.o \
-	cdhit-proxy.o \
-	cdhit/cdhit-common-patched.o
+	tailseq-dedup-approx.o
 
 WRITEFASTQ_OBJECTS= \
 	utils.o \
 	tailseq-writefastq.o
 
-.SUFFIXES:.c .cc .o
+.SUFFIXES:.c .o
 
 .c.o:
 	${CC} -c ${CFLAGS} ${ARCH_FLAGS} ${INCLUDES} $< -o $@
-
-.cc.o:
-	${CXX} -c ${CXXFLAGS} ${INCLUDES} $< -o $@
 
 all: ${PROG}
 
@@ -65,19 +57,6 @@ clean:
 
 distclean: clean
 	rm -f ${PROG}
-
-cdhit/cdhit-common-patched.cc: cdhit/cdhit-common.c++ cdhit/cdhit-common.h
-	patch -f -o $@ $< cdhit-patches.diff
-
-cdhit-proxy.o: cdhit/cdhit-common.h
-
-cdhit/cdhit-common.c++:
-	mkdir -p cdhit
-	wget -O $@ 'https://raw.githubusercontent.com/weizhongli/cdhit/master/cdhit-common.c%2B%2B'
-
-cdhit/cdhit-common.h:
-	mkdir -p cdhit
-	wget -O $@ 'https://raw.githubusercontent.com/weizhongli/cdhit/master/cdhit-common.h'
 
 ${bindir}/tailseq-sigproc: ${SIGPROC_OBJECTS}
 	${CC} ${CFLAGS} -o $@ ${SIGPROC_OBJECTS} ${SIGPROC_LIBS}

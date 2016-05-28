@@ -56,11 +56,9 @@ struct taskpool {
     const char *bam_filename;
     int coorddist_tolerance;
     int editdist_tolerance;
-    int cdhit_bypass;
 
     pthread_mutex_t poollock;
     pthread_mutex_t writelock;
-    pthread_mutex_t cdhitlock;
 };
 
 struct tagaln;
@@ -108,10 +106,6 @@ struct deduppool {
     ssize_t tagcluster_right;
     ssize_t tagclusters_live;
 };
-
-/* cdhit-proxy.cc */
-extern int init_cdhit_internals(int nthreads, double similarity_threshold);
-extern int cdhit_cluster_minitags(struct deduppool *pool);
 
 /* tailseq-dedup-approx.c */
 extern ssize_t tagcluster_new(struct deduppool *pool);
