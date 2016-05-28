@@ -59,7 +59,8 @@ lzma:lzma"
 
 required_executables_level3=""
 required_pkgconfig_level3=""
-required_python3mod_level3=""
+required_python3mod_level3="\
+xlsxwriter:xlsxwriter"
 
 
 RED="[01;31m"

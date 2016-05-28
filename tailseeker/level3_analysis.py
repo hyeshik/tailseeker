@@ -31,7 +31,7 @@ SAMPLES_BY_GENOME = {
 
 TARGETS.extend(expand('stats/genelevelstats-{genome}-{ambigtype}.{ext}',
                       genome=ALL_GENOMES_USED, ambigtype=['single', 'multi'],
-                      ext=['csv', 'feather']))
+                      ext=['csv', 'feather', 'xlsx']))
 
 rule merge_gene_level_stats:
     input:
@@ -39,7 +39,8 @@ rule merge_gene_level_stats:
                           sample=SAMPLES_BY_GENOME[wc.genome], ambigtype=[wc.ambigtype])
     output:
         csv=limit('stats/genelevelstats-{genome}-{{ambigtype}}.csv', genome=ALL_GENOMES_USED),
-        feather='stats/genelevelstats-{genome}-{ambigtype}.feather'
+        feather='stats/genelevelstats-{genome}-{ambigtype}.feather',
+        excel='stats/genelevelstats-{genome}-{ambigtype}.xlsx'
     params:
         genomedir=TAILSEEKER_DIR + '/refdb/level3/{genome}',
         samples_by_genome=SAMPLES_BY_GENOME

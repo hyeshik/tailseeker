@@ -61,7 +61,58 @@ finaltbl = pd.concat([genes, sorteddatatbl], join='inner', axis=1)
 del sorteddatatbl, alldatatbl, genes
 
 # Write out in the csv format
+print("Writing to " + sm.output.csv)
 finaltbl.to_csv(sm.output.csv)
 
 # Write out in the feather format
+print("Writing to " + sm.output.feather)
 feather.write_dataframe(finaltbl, sm.output.feather)
+
+# Write out in the Excel format
+EXCEL_FORMAT_OPTS = {
+    'gene_name': [10.5, {'bg_color': '#ededed'}],
+    'gene_biotype': [8.5, {'font_color': '#787878'}],
+    'gene_description': [30, {'align': 'left'}],
+    ':polyA_mean': [6.2,
+        {'align': 'right', 'bg_color': '#ddebf7', 'num_format': '0.0'}],
+    ':polyA_mean_ci_lo': [6.2,
+        {'align': 'right', 'bg_color': '#fff2cc', 'num_format': '0.0'}],
+    ':polyA_mean_ci_hi': [6.2,
+        {'align': 'right', 'bg_color': '#fce4d6', 'num_format': '0.0'}],
+    ':polyA_median': [6.2,
+        {'align': 'right', 'num_format': '0.0'}],
+    ':polyA_tag_count': [6.2,
+        {'align': 'right', 'bg_color': '#e2efda', 'num_format': '0.0'}],
+}
+EXCEL_HEADER_FORMAT = {'align': 'left', 'text_wrap': True, 'bold': True,
+                       'valign': 'top', 'bg_color': '#d9d9d9'}
+EXCEL_INDEX_FORMAT = {'align': 'left', 'bold': False}
+
+with pd.ExcelWriter(sm.output.excel, engine='xlsxwriter') as writer:
+    print("Preparing an Excel table.")
+    finaltbl.to_excel(writer, sheet_name='TAIL-seq')
+    book = writer.book
+    sheet = writer.sheets['TAIL-seq']
+
+    print("Prettify'ing the table.")
+    for colname, (width, formatting) in EXCEL_FORMAT_OPTS.items():
+        if colname == '':
+            colnums = [0]
+        else:
+            colnums = [coli+1 for coli, col in enumerate(finaltbl.columns)
+                       if col.endswith(colname)]
+
+        fmt = book.add_format(formatting)
+        sheet.set_column(colnums[0], colnums[-1], width, fmt)
+
+    for i, name in enumerate(['gene_id'] + list(finaltbl.columns)):
+        sheet.write_string(0, i, name, book.add_format(EXCEL_HEADER_FORMAT))
+    for i, name in enumerate(finaltbl.index, 1):
+        sheet.write_string(i, 0, name, book.add_format(EXCEL_INDEX_FORMAT))
+    sheet.set_column(0, 0, 18.5)
+
+    sheet.freeze_panes('C2')
+    sheet.set_zoom(115)
+
+    print("Writing to " + sm.output.excel)
+    writer.save()
