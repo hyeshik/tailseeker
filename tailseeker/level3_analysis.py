@@ -30,7 +30,7 @@ SAMPLES_BY_GENOME = {
 }
 
 TARGETS.extend(expand('stats/genelevelstats-{genome}-{ambigtype}.{ext}',
-                      genome=ALL_GENOMES_USED, ambigtype=['single', 'paired'],
+                      genome=ALL_GENOMES_USED, ambigtype=['single', 'multi'],
                       ext=['csv', 'feather']))
 
 rule merge_gene_level_stats:
