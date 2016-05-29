@@ -412,7 +412,7 @@ rule associate_tags_to_genes:
     output: temp('scratch/associations/{sample}.txt')
     threads: 4
     run:
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level3',
+        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
                                  CONF['reference_set'][wildcards.sample])
         required_mapq = CONF['gene_level_stats']['required_mapping_quality']
 
