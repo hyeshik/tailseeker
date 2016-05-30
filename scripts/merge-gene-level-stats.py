@@ -33,7 +33,8 @@ GENELEVEL_STATS_COLUMN_ORDER = {name: format(i, '08d') for i, name in enumerate(
     polyA_mean polyA_mean_ci_lo polyA_mean_ci_hi polyA_median polyA_tag_count
 """.split())}
 
-GENEINFO_COLUMNS = "gene_name gene_biotype gene_description".split()
+GENEINFO_COLUMNS = "gene_name gene_type gene_description".split()
+GENETYPE_ALIASES = ['gene_biotype']
 
 def load_sample_data(sample, filename):
     tbl = pd.read_csv(filename, index_col=0)
@@ -50,6 +51,9 @@ alldatatbl = pd.concat(list(map(load_sample_data, samples, sm.input)), axis=1)
 
 # Merge selected columns from gene annotations
 genes = feather.read_dataframe(os.path.join(sm.params.genomedir, 'annotations-gene.feather'))
+for alias in GENETYPE_ALIASES:
+    if alias in genes.columns:
+        genes['gene_type'] = genes[alias]
 genes = genes.set_index('gene_id')[GENEINFO_COLUMNS]
 
 # Determine orders of columns and rows
@@ -71,7 +75,7 @@ feather.write_dataframe(finaltbl, sm.output.feather)
 # Write out in the Excel format
 EXCEL_FORMAT_OPTS = {
     'gene_name': [10.5, {'bg_color': '#ededed'}],
-    'gene_biotype': [8.5, {'font_color': '#787878'}],
+    'gene_type': [8.5, {'font_color': '#787878'}],
     'gene_description': [30, {'align': 'left'}],
     ':polyA_mean': [6.2,
         {'align': 'right', 'bg_color': '#ddebf7', 'num_format': '0.0'}],
