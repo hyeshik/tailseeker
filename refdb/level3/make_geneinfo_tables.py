@@ -185,6 +185,23 @@ if 'gene' in rtbl and 'exon' in rtbl:
                         'gene_id', 'transcript_id', 'appris']]
     appris_principal.columns = ['gene_id', 'principal_transcript_id', 'appris_score']
 
+    if '.' in rtbl['gene']['gene_id'].iloc[0]:
+        drop_version = lambda x: x.split('.', 1)[0]
+        gene_versions = pd.DataFrame({'gene_id': rtbl['gene']['gene_id'],
+                            'gene_id_noversion': rtbl['gene']['gene_id'].apply(drop_version)})
+        transcript_versions = pd.DataFrame({
+                'transcript_id': rtbl['transcript']['transcript_id'],
+                'transcript_id_noversion':
+                    rtbl['transcript']['transcript_id'].apply(drop_version)})
+
+        appris_w_version = \
+            pd.merge(pd.merge(appris_principal, gene_versions, left_on='gene_id',
+                     right_on='gene_id_noversion', suffixes=['_nov', '']),
+                     transcript_versions, left_on='principal_transcript_id',
+                     right_on='transcript_id_noversion')
+        appris_principal = appris_w_version[['gene_id', 'transcript_id', 'appris_score']]
+        appris_principal.columns = ['gene_id', 'principal_transcript_id', 'appris_score']
+
     rtbl['gene'] = pd.merge(rtbl['gene'], appris_principal, how='left',
                             left_on='gene_id', right_on='gene_id')
 
