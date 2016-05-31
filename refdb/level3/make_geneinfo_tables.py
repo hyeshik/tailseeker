@@ -168,6 +168,27 @@ for projtarget in ['gene', 'transcript']:
     del rtbl[projtarget]['description']
 
 
+if 'gene' in rtbl and 'exon' in rtbl:
+    print("Adding principal isoform annotations...")
+    appris_tbl_columns = ['gene_name', 'gene_id', 'transcript_id', 'score', 'appris']
+    appris_tbl = pd.read_table(snakemake.input.appris, compression='gzip',
+                               names=appris_tbl_columns)
+
+    rtbl['exon']['length'] = rtbl['exon']['end'] - rtbl['exon']['start'] + 1
+    exonlengths = rtbl['exon'].groupby('transcript_id').agg({'length': 'sum'})
+    appris_tbl = pd.merge(appris_tbl, exonlengths, how='left', left_on='transcript_id',
+                          right_index=True)
+
+    appris_principal = appris_tbl[appris_tbl['appris'].apply(lambda x:
+                                                             x.startswith('PRINCIPAL'))]
+    appris_principal = appris_principal.groupby('gene_id').first().reset_index()[[
+                        'gene_id', 'transcript_id', 'appris']]
+    appris_principal.columns = ['gene_id', 'principal_transcript_id', 'appris_score']
+
+    rtbl['gene'] = pd.merge(rtbl['gene'], appris_principal, how='left',
+                            left_on='gene_id', right_on='gene_id')
+
+
 print("Saving tables to the disk...")
 keycandidates = 'gene_id transcript_id seqname start end'.split()
 for annotype, tbl in rtbl.items():

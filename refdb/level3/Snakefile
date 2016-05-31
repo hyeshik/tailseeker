@@ -52,6 +52,13 @@ ENSEMBL_URLS = {
     'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/mysql/caenorhabditis_elegans_core_84_245/',
 }
 
+APPRIS_URLS = {
+    'GRCh38': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/homo_sapiens/GRCh38/appris_data.principal.txt',
+    'GRCm38': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/mus_musculus/GRCm38/appris_data.principal.txt',
+    'GRCz10': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/danio_rerio/GRCz10/appris_data.principal.txt',
+    'WBcel235': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/caenorhabditis_elegans/WBcel235/appris_data.principal.txt',
+}
+
 HAVE_ID_CHANGE_HISTORY = '''
     GRCh38 GRCm38 GRCz10
 '''.split()
@@ -82,6 +89,12 @@ rule download_ensembl_database:
                                               table=wildcards.table)
         shell('{WGET_CMD} -O {output} "{url}"')
 
+rule download_appris_principal_database:
+    output: temp('tmp/{genome}/appris-principal.txt.gz')
+    run:
+        url = APPRIS_URLS[wildcards.genome]
+        shell('{WGET_CMD} -O - "{url}" | gzip -c - > {output}')
+
 rule make_xref_table:
     input:
         gene='tmp/{genome}/ensembl-gene.txt.gz',
@@ -101,7 +114,8 @@ rule make_xref_table:
 rule make_geneinfo_tables:
     input:
         gtf=LEVEL2_REFDB + '{genome}/genes-main.gtf.gz',
-        database='tmp/{genome}/ensembl-gene.txt.gz'
+        database='tmp/{genome}/ensembl-gene.txt.gz',
+        appris='tmp/{genome}/appris-principal.txt.gz'
     output:
         CDS=final_target('{genome}/annotations-CDS.feather'),
         exon=final_target('{genome}/annotations-exon.feather'),
