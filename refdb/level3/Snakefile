@@ -136,6 +136,18 @@ rule make_old_id_conversion_table:
                                         HAVE_ID_CHANGE_HISTORY)
     script: 'make_id_changes.py'
 
+rule make_transcript_sequences:
+    input:
+        gene='{genome}/annotations-gene.feather',
+        fivep_utr='{genome}/annotations-five_prime_utr.feather',
+        threep_utr='{genome}/annotations-three_prime_utr.feather',
+        exon='{genome}/annotations-exon.feather',
+        genome=LEVEL2_REFDB + '{genome}/genome.fa'
+    output:
+        fasta=final_target('{genome}/transcripts.fa.gz'),
+        threependtable=final_target('{genome}/transcripts-threep-end-sequences.txt')
+    script: 'make_transcript_seqs.py'
+
 # ===
 
 def donothing(*a, **k): pass
