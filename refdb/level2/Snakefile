@@ -52,6 +52,17 @@ else:
 
 shell.executable(BASH_CMD)
 
+RFAM_FASTA_URL = 'ftp://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/fasta_files/{accession}.fa.gz'
+
+CONTAMINANTS_RFAM_ACCESSIONS = [
+    'RF00001', # 5S ribosomal RNA
+    'RF00002', # 5.8S ribosomal RNA
+    'RF01960', # Eukaryotic small subunit ribosomal RNA
+    'RF02543', # Eukaryotic large subunit ribosomal RNA
+    'RF00012', # Small nucleolar RNA U3
+    'RF00017', # Metazoan signal recognition particle RNA
+]
+
 GENOMES = {
     'GRCh38': 'Homo sapiens',
     'GRCm38': 'Mus musculus',
@@ -179,6 +190,46 @@ rule make_exon_gtf:
     output: final_target('{genome}/exons.gtf.gz')
     shell: 'zcat {input} | awk -F\'\t\' \'/^#/; $3 == "exon"\' | \
             gzip -c - > {output}'
+
+rule download_rfam_fasta:
+    output: 'tmp/Rfam/{accession}.fa.gz'
+    run:
+        url = RFAM_FASTA_URL.format(accession=wildcards.accession)
+        shell('wget -O {output} {url}')
+
+rule rfam_contaminant_seq_names:
+    input: 'tmp/Rfam/{accession}.fa.gz'
+    output: temp('tmp/{species}/contaminants-ids-{accession}')
+    run:
+        species_w_space = wildcards.species.replace('_', ' ')
+        shell("zgrep '^>.*{species_w_space}' {input} | \
+                sed -e 's,^>\([^ ]*\).*,\\1,g' > {output}")
+
+rule make_contaminants_fasta:
+    input:
+        rfam_ids='tmp/{species}/contaminants-ids-{accession}',
+        rfam_fasta='tmp/Rfam/{accession}.fa.gz'
+    output: temp('tmp/{species}/contaminants-{accession}.fa')
+    shell: 'faSomeRecords {input.rfam_fasta} {input.rfam_ids} {output}'
+
+rule merge_contaminants_fasta:
+    input:
+        lambda wc: expand('tmp/{species}/contaminants-{accession}.fa',
+                          accession=CONTAMINANTS_RFAM_ACCESSIONS,
+                          species=[GENOMES[wc.genome].replace(' ', '_')])
+    output: final_target('{genome}/contaminants.fa')
+    shell: 'cat {input} | awk \'/^>/ {{ print $0; }} \
+                                /^[^>]/ {{ gsub(/U/, "T"); print $0; }}\' > {output}'
+
+rule build_contaminant_STAR_index:
+    input: '{genome}/contaminants.fa'
+    output: final_target('{genome}/contaminants.star/SA')
+    threads: 32
+    params: output_dir='{genome}/contaminants.star'
+    shell: '{STAR_CMD} --runThreadN {threads} --runMode genomeGenerate \
+                --genomeChrBinNbits 14 --genomeSAindexNbases 10 \
+                --genomeDir {params.output_dir} \
+                --genomeFastaFiles {input}'
 
 # ===
 
