@@ -125,7 +125,7 @@ stats = [
 
 for modtype, tailcnt in tailcounts.items():
     tbl = tgsum.polya_mods_stats(tailcnt)
-    tbl.columns = [col.replace('_mods_', '_{}_'.format(col)) for col in tbl.columns]
+    tbl.columns = [col.replace('_mods_', '_{}_'.format(modtype)) for col in tbl.columns]
     stats.append(tbl)
 
 (pd.concat(stats, axis=1)
