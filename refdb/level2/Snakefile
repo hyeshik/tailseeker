@@ -192,7 +192,7 @@ rule make_exon_gtf:
             gzip -c - > {output}'
 
 rule download_rfam_fasta:
-    output: 'tmp/Rfam/{accession}.fa.gz'
+    output: temp('tmp/Rfam/{accession}.fa.gz')
     run:
         url = RFAM_FASTA_URL.format(accession=wildcards.accession)
         shell('wget -O {output} {url}')
@@ -210,7 +210,7 @@ rule make_contaminants_fasta:
         rfam_ids='tmp/{species}/contaminants-ids-{accession}',
         rfam_fasta='tmp/Rfam/{accession}.fa.gz'
     output: temp('tmp/{species}/contaminants-{accession}.fa')
-    shell: 'faSomeRecords {input.rfam_fasta} {input.rfam_ids} {output}'
+    shell: 'seqtk subseq {input.rfam_fasta} {input.rfam_ids} > {output}'
 
 rule merge_contaminants_fasta:
     input:

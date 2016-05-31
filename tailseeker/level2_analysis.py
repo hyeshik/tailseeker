@@ -33,6 +33,43 @@ EXPERIMENT_GROUPS = prepare_experiment_groups_view()
 
 
 # ---
+# Sequence alignment to contaminants (optional).
+# ---
+
+rule contaminant_alignment:
+    input: 'fastq/{sample}_R5.fastq.gz'
+    output: 'scratch/contaminants-unmapped/{sample}.txt'
+    threads: THREADS_MAXIMUM_CORE
+    params: scratch='scratch/contaminants-{sample}'
+    run:
+        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+                        CONF['reference_set'][wildcards.sample], 'contaminants.star')
+
+        if os.path.isdir(params.scratch):
+            shutil.rmtree(params.scratch)
+        os.makedirs(params.scratch)
+
+        shell('{STAR_CMD} --runThreadN {threads} \
+                --genomeDir {genomedir} --outSAMtype None --outSAMmode None \
+                --outFilterMultimapNmax 512 --outReadsUnmapped Fastx \
+                --readFilesIn {input} --readFilesCommand zcat \
+                --outTmpDir {params.scratch}/tmp \
+                --outFileNamePrefix {params.scratch}/')
+
+        shell('split -n r/1/4 {params.scratch}/Unmapped.out.mate1 | \
+               colrm 1 1 | sort > {output}')
+        shutil.rmtree(params.scratch)
+
+rule make_filtered_fastq:
+    input:
+        fastq='fastq/{sample}_{read}.fastq.gz',
+        survivorids='scratch/contaminants-unmapped/{sample}.txt'
+    output: 'fastq-filtered/{sample}_{read,[^_]+}.fastq.gz'
+    threads: 2
+    shell: '{SEQTK_CMD} subseq {input.fastq} {input.survivorids} | \
+            {BGZIP_CMD} -@ {threads} -c > {output}'
+
+# ---
 # Sequence alignment to the genome.
 # ---
 
@@ -40,7 +77,11 @@ TARGETS.extend(expand('alignments/{sample}_{type}.bam{suffix}',
                       sample=EXP_SAMPLES, type=['single', 'paired'], suffix=['', '.bai']))
 
 def inputs_for_STAR_alignment(wildcards):
-    fastq_filename = 'fastq/{sample}_{{read}}.fastq.gz'.format(sample=wildcards.sample)
+    fastq_filename = 'fastq{filtered_suffix}/{sample}_{{read}}.fastq.gz'.format(
+                            sample=wildcards.sample,
+                            filtered_suffix='-filtered'
+                                            if CONF['read_filtering']['contaminant_filtering']
+                                            else '')
 
     inputs = [fastq_filename.format(read='R5')]
     if wildcards.type == 'paired':
@@ -187,7 +228,7 @@ rule reevaluate_tails:
                 --parallel {threads} \
                 --taginfo {input.taginfo} --alignment {input.alignment} \
                 --reference-seq {genomedir}/genome.fa {analytic_options} | \
-                bgzip -c > {output}')
+                {BGZIP_CMD} -c > {output}')
 
 rule generate_short_polya_list:
     input: 'refined-taginfo/{sample}.txt.pre.gz'
