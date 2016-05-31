@@ -70,7 +70,7 @@ finaltbl.to_csv(sm.output.csv)
 
 # Write out in the feather format
 print("Writing to " + sm.output.feather)
-feather.write_dataframe(finaltbl, sm.output.feather)
+feather.write_dataframe(finaltbl.reset_index(), sm.output.feather)
 
 # Write out in the Excel format
 EXCEL_FORMAT_OPTS = {
