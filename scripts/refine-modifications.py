@@ -219,6 +219,10 @@ def process_tile(options, tile, taginfo_input, output):
     outfile = open(output, 'w')
 
     for (tile, cluster), samrows, taginforows in joined_it:
+        samrows = list(samrows)
+        if len(samrows) == 0:
+            continue # may filtered out by the contaminant filter.
+
         taginfo, cigar, nontmplmods, rflags = reevaluate_terminal_additions(
                 samrows, taginforows, refgenome, options.fragsize,
                 options.termaln_check)
