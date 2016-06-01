@@ -71,7 +71,7 @@ def break_attribute_tags(attrs):
 
 
 def adopt_gtf_table(tbl):
-    re_attrtags = re.compile('([^ ]+) "([^"]+)";')
+    re_attrtags = re.compile('([^ ]+) "?([^"]+)"?;')
 
     subtables = {}
     for feat_type, tagset in tbl.items():
@@ -124,7 +124,7 @@ rtbl = adopt_gtf_table(ensembl_tables)
 if 'UTR' in rtbl:
     cds_light = rtbl['CDS'][['strand', 'start', 'end', 'feature', 'transcript_id']]
     utr_light = rtbl['UTR'][['strand', 'start', 'end', 'feature', 'transcript_id']]
-    cdsandutr = pd.concat([cds_light, utr_light], axis=0)
+    cdsandutr = pd.concat([cds_light, utr_light], axis=0).reset_index(drop=True)
 
     utr5ix, utr3ix = [], []
     for trid, feats in cdsandutr.groupby('transcript_id'):

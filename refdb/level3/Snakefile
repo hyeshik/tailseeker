@@ -142,6 +142,7 @@ rule make_transcript_sequences:
         fivep_utr='{genome}/annotations-five_prime_utr.feather',
         threep_utr='{genome}/annotations-three_prime_utr.feather',
         exon='{genome}/annotations-exon.feather',
+        transcript='{genome}/annotations-transcript.feather',
         genome=LEVEL2_REFDB + '{genome}/genome.fa'
     output:
         fasta=final_target('{genome}/transcripts.fa.gz'),

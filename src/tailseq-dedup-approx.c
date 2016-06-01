@@ -43,7 +43,7 @@
 /* Set a temporary limit of clusters in buffer. This will be
  * removed again once I implement a scalable routine that works for
  * larger clusters. */
-#define XXX_TAGCLUSTER_LIMIT            2048
+#define XXX_TAGCLUSTER_LIMIT            256
 
 #define DEFAULT_TAGALN_BUFFER_LEN       65536
 #define DEFAULT_TAGCLUSTER_BUFFER_LEN   65536

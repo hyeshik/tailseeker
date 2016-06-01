@@ -45,6 +45,7 @@ utrlengths = pd.DataFrame({'fivep_utr_length': fivep_utr_length,
 del fivep_utr, threep_utr, fivep_utr_length, threep_utr_length
 
 genes = feather.read_dataframe(snakemake.input.gene)
+transcripts = feather.read_dataframe(snakemake.input.transcript).set_index('transcript_id')
 exons = feather.read_dataframe(snakemake.input.exon)
 
 with fileutils.TemporaryDirectory() as tmpdir:
@@ -69,19 +70,33 @@ exonseqs['exon_number'] = exonseqs['exon_name'].apply(lambda x: int(x.split('-')
 exonseqs = exonseqs.sort_values(by=['transcript_id', 'exon_number'])
 
 def alter_UTR_cases(row):
-    fivep_utr = (row['sequence'][:int(row['fivep_utr_length'])]
-                 if row['fivep_utr_length'] > 0 else '').lower()
-    threep_utr = (row['sequence'][-int(row['threep_utr_length']):]
-                 if row['threep_utr_length'] > 0 else '').lower()
-    cds = row['sequence'][len(fivep_utr):len(row['sequence'])-len(threep_utr)]
-    fullseq = fivep_utr + cds + threep_utr
-    assert len(fullseq) == len(row['sequence'])
+    if not row['is_coding']:
+        return row['sequence'].upper()
+
+    seq = row['sequence']
+    len5 = 0 if np.isnan(row['fivep_utr_length']) else int(row['fivep_utr_length'])
+    len3 = 0 if np.isnan(row['threep_utr_length']) else int(row['threep_utr_length'])
+    lencds = len(seq) - len5 - len3
+
+    fullseq = ((seq[:len5] if len5 > 0 else '').upper() +
+               (seq[len5:len5+lencds] if lencds > 0 else '').lower() +
+               (seq[len5+lencds:len5+lencds+len3] if len3 > 0 else '').upper())
+
+    if len(fullseq) != len(seq):
+        print(row)
+        print(fullseq)
+        print(seq)
+    assert len(fullseq) == len(seq)
     return fullseq
 
+transcripts['is_coding'] = (transcripts['transcript_biotype']
+                            if 'transcript_biotype' in transcripts.columns
+                            else transcripts['transcript_type']) == 'protein_coding'
 transcriptseqs = (
     exonseqs.groupby('transcript_id')
             .agg({'sequence': 'sum'})
             .join(utrlengths)
+            .join(transcripts[['is_coding']])
             .reset_index())
 transcriptseqs['seqaugmented'] = transcriptseqs.apply(alter_UTR_cases, axis=1)
 
