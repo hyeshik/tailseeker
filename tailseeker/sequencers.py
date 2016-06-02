@@ -38,14 +38,11 @@ TILE_LIST = {
         1101 1102 1103 1104 1105 1106 1107 1108 1109 1110 1111 1112 1113 1114
         2101 2102 2103 2104 2105 2106 2107 2108 2109 2110 2111 2112 2113 2114""".split(),
 }
-
-SIGNAL_SCALES = {
-    'HiSeq-RapidV1': 1,
-    'MiSeq-V2': 0,
-}
+TILE_LIST['HiSeq-RapidV2'] = TILE_LIST['HiSeq-RapidV1']
 
 INTENSITIES_SUBDIR = {
     'HiSeq-RapidV1': 'Data/Intensities',
+    'HiSeq-RapidV2': 'Data/Intensities',
     'MiSeq-V2': 'Data/Intensities',
 }
 
@@ -74,7 +71,4 @@ def get_tiles(conf):
             }
 
     return tilemaps
-
-def get_signalscale(chemistry_type):
-    return SIGNAL_SCALES[chemistry_type]
 
