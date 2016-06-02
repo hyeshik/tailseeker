@@ -140,8 +140,8 @@ rule STAR_alignment:
             gzip.open(output.unmapped3, 'w')
         elif wildcards.type == 'single':
             shell('{BGZIP_CMD} -@ {threads} -c {params.scratch}/Unmapped.out.mate1 \
-                    > {output.unmapped1} && rm -f {params.scratch}/Unmapped.out.mate1')
-            gzip.open(output.unmapped2, 'w')
+                    > {output.unmapped5} && rm -f {params.scratch}/Unmapped.out.mate1')
+            gzip.open(output.unmapped3, 'w')
         else:
             # STAR sometimes write unmapped FASTQ files in different order for
             # mates. We here reorder them to keep it usable by GSNAP.
