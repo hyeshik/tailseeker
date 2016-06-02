@@ -24,6 +24,7 @@
 
 from collections import defaultdict
 import os
+import sys
 import yaml
 
 def load_configuration(conffile):
@@ -35,6 +36,7 @@ def load_configuration(conffile):
 
 TAILSEEKER_DIR = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), '../..'))
 pathconf = load_configuration(os.path.join(TAILSEEKER_DIR, 'conf', 'paths.conf'))
+sys.path.append(TAILSEEKER_DIR)
 
 shell.executable(BASH_CMD)
 
@@ -43,6 +45,7 @@ GENOMES = {
     'GRCm38': 'Mus musculus',
     'GRCz10': 'Danio rerio',
     'WBcel235': 'Caenorhabditis elegans',
+    'Rnor_6.0': 'Rattus norvegicus',
 }
 
 ENSEMBL_URLS = {
@@ -50,6 +53,7 @@ ENSEMBL_URLS = {
     'GRCm38': 'ftp://ftp.ensembl.org/pub/release-84/mysql/mus_musculus_core_84_38/',
     'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/mysql/danio_rerio_core_84_10/',
     'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/mysql/caenorhabditis_elegans_core_84_245/',
+    'Rnor_6.0': 'ftp://ftp.ensembl.org/pub/release-84/mysql/rattus_norvegicus_core_84_6/',
 }
 
 APPRIS_URLS = {
@@ -57,10 +61,11 @@ APPRIS_URLS = {
     'GRCm38': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/mus_musculus/GRCm38/appris_data.principal.txt',
     'GRCz10': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/danio_rerio/GRCz10/appris_data.principal.txt',
     'WBcel235': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/caenorhabditis_elegans/WBcel235/appris_data.principal.txt',
+    'Rnor_6.0': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/rattus_norvegicus/Rnor_6.0/appris_data.principal.txt',
 }
 
 HAVE_ID_CHANGE_HISTORY = '''
-    GRCh38 GRCm38 GRCz10
+    GRCh38 GRCm38 GRCz10 Rnor_6.0
 '''.split()
 
 LEVEL2_REFDB = '../level2/'

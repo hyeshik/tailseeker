@@ -70,6 +70,7 @@ GENOMES = {
     'WBcel235': 'Caenorhabditis elegans',
     'BDGP6': 'Drosophila melanogaster',
     'JGIxl91': 'Xenopus laevis',
+    'Rnor_6.0': 'Rattus norvegicus',
 }
 
 GENOME_SEQUENCE_SOURCES = {
@@ -79,6 +80,7 @@ GENOME_SEQUENCE_SOURCES = {
     'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/fasta/caenorhabditis_elegans/dna/Caenorhabditis_elegans.WBcel235.dna.toplevel.fa.gz',
     'BDGP6': 'ftp://ftp.ensembl.org/pub/release-84/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.dna.toplevel.fa.gz',
     'JGIxl91': 'ftp://ftp.xenbase.org/pub/Genomics/JGI/Xenla9.1/Xla.v91.repeatMasked.fa.gz',
+    'Rnor_6.0': 'ftp://ftp.ensembl.org/pub/release-84/fasta/rattus_norvegicus/dna/Rattus_norvegicus.Rnor_6.0.dna_rm.toplevel.fa.gz',
 }
 
 GENE_ANNOTATION_SOURCES = {
@@ -88,6 +90,7 @@ GENE_ANNOTATION_SOURCES = {
     'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/gtf/caenorhabditis_elegans/Caenorhabditis_elegans.WBcel235.84.gtf.gz',
     'BDGP6': 'ftp://ftp.ensembl.org/pub/release-84/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.84.gtf.gz',
     'JGIxl91': 'ftp://ftp.xenbase.org/pub/Genomics/JGI/Xenla9.1/XL9.1_annot_v1.8.1.gene.gff3.gz',
+    'Rnor_6.0': 'ftp://ftp.ensembl.org/pub/release-84/gtf/rattus_norvegicus/Rattus_norvegicus.Rnor_6.0.84.gtf.gz',
 }
 
 TARGETS = defaultdict(list)
