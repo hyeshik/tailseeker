@@ -38,7 +38,7 @@ EXPERIMENT_GROUPS = prepare_experiment_groups_view()
 
 rule contaminant_alignment:
     input: 'fastq/{sample}_R5.fastq.gz'
-    output: 'scratch/contaminants-unmapped/{sample}.txt'
+    output: temp('scratch/contaminants-unmapped/{sample}.txt')
     threads: THREADS_MAXIMUM_CORE
     params: scratch='scratch/contaminants-{sample}'
     run:
@@ -91,9 +91,9 @@ def inputs_for_STAR_alignment(wildcards):
 rule STAR_alignment:
     input: inputs_for_STAR_alignment
     output:
-        mapped='scratch/alignments/{sample}_STAR_{type,[^_.]+}.bam',
-        unmapped='scratch/unmapped-reads/{sample}-{type}-read1.fastq.gz',
-        transcriptome='scratch/tr-alignments/{sample}_{type}.bam'
+        mapped=temp('scratch/alignments/{sample}_STAR_{type,[^_.]+}.bam'),
+        unmapped=temp('scratch/unmapped-reads/{sample}-{type}-read1.fastq.gz'),
+        transcriptome=temp('scratch/tr-alignments/{sample}_{type}.bam')
     threads: THREADS_MAXIMUM_CORE
     params: scratch='scratch/STAR-{sample}-{type}'
     run:
@@ -149,10 +149,12 @@ rule STAR_alignment:
 
                 shell('rm -f {params.scratch}/Unmapped.out.mate{mateno}')
 
+        shutil.rmtree(params.scratch)
+
 
 rule GSNAP_alignment:
     input: 'scratch/unmapped-reads/{sample}-{type}-read1.fastq.gz'
-    output: 'scratch/alignments/{sample}_GSNAP_{type,[^_.]+}.bam.{part}'
+    output: temp('scratch/alignments/{sample}_GSNAP_{type,[^_.]+}.bam.{part}')
     threads: THREADS_MAXIMUM_CORE
     run:
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
@@ -172,7 +174,7 @@ if CONF['performance']['enable_gsnap']:
             gsnap=expand('scratch/alignments/{{sample}}_GSNAP_{{type}}.bam.{part}',
                          part=range(CONF['performance']['split_gsnap_jobs'])),
             taginfo=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
-        output: 'scratch/merged-alignments/{sample}_{type,[^_.]+}.bam'
+        output: temp('scratch/merged-alignments/{sample}_{type,[^_.]+}.bam')
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
         # samtools 1.3 merge does not respect `-n' option for paired alignments.
@@ -186,7 +188,7 @@ else:
         input:
             star='scratch/alignments/{sample}_STAR_{type}.bam',
             taginfo=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
-        output: 'scratch/merged-alignments/{sample}_{type,[^_.]+}.bam'
+        output: temp('scratch/merged-alignments/{sample}_{type,[^_.]+}.bam')
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
         shell: '{SAMTOOLS_CMD} sort -n -@ {threads} -T {params.sorttmp} -O sam {input.star} | \
@@ -269,7 +271,7 @@ def inputs_for_merge_polya_sites_list(wildcards):
 
 rule merge_polya_sites_list:
     input: inputs_for_merge_polya_sites_list
-    output: 'scratch/polya-sites/group-{group}.txt'
+    output: temp('scratch/polya-sites/group-{group}.txt')
     run:
         sample1 = EXPERIMENT_GROUPS[wildcards.group][0]
         genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
@@ -349,7 +351,7 @@ rule sort_alignments:
     input:
         bam='scratch/merged-alignments/{sample}_{type}.bam',
         taginfo='refined-taginfo/{sample}.all.txt.gz'
-    output: 'scratch/sorted-alignments/{sample}_{type,[^_.]+}.bam'
+    output: temp('scratch/sorted-alignments/{sample}_{type,[^_.]+}.bam')
     threads: THREADS_MAXIMUM_CORE
     params: sorttmp='scratch/merged-alignments/{sample}_{type}'
     shell: '{SAMTOOLS_CMD} view -h {input.bam} | \
@@ -358,14 +360,14 @@ rule sort_alignments:
 
 rule index_sorted_alignments:
     input: 'scratch/sorted-alignments/{name}.bam'
-    output: 'scratch/sorted-alignments/{name}.bam.bai'
+    output: temp('scratch/sorted-alignments/{name}.bam.bai')
     shell: '{SAMTOOLS_CMD} index -b {input} {output}'
 
 rule find_approximate_duplicates:
     input:
         bam='scratch/sorted-alignments/{sample}_single.bam',
         bamidx='scratch/sorted-alignments/{sample}_single.bam.bai',
-    output: 'scratch/approx-duplicates/{sample}.txt'
+    output: temp('scratch/approx-duplicates/{sample}.txt')
     threads: 6
     run:
         dedupopts = CONF['approximate_duplicate_elimination']
@@ -421,7 +423,7 @@ rule make_read5_position_dists:
         bam='scratch/tr-alignments/{sample}_single.bam',
         transcript_sizes=lambda wc: os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
                                         CONF['reference_set'][wc.sample], 'transcript-sizes')
-    output: 'scratch/read5-pos-dists/{sample}.csv'
+    output: temp('scratch/read5-pos-dists/{sample}.csv')
     script: SCRIPTSDIR + '/make-read5-positions-dist.py'
 
 

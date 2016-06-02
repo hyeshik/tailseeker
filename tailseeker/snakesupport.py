@@ -47,10 +47,6 @@ def lazy_clearing(arg):
     all_intermediate_files.add(arg)
     return arg
 
-def immediate_clearing(arg, sntemp=temp):
-    all_intermediate_files.add(arg)
-    return sntemp(arg)
-
 
 #========== Initializations ============
 from tailseeker.powersnake import *
@@ -72,14 +68,7 @@ CONF.export_paths(globals())
 create_scratch_link()
 
 if not CONF['clean_intermediate_files']:
-    nonfinal = temp = lazy_clearing
-elif CONF['clean_intermediate_files'] == 'some':
-    nonfinal, temp = lazy_clearing, immediate_clearing
-elif CONF['clean_intermediate_files'] == 'immediately':
-    nonfinal = temp = immediate_clearing
-else:
-    raise ValueError('Setting clean_intermediate_files should be one among immediately, some, '
-                     'or no.')
+    temp = lazy_clearing
 
 
 # Predefined constants
