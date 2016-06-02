@@ -1,0 +1,3 @@
+#!/bin/sh
+${BGZIP_CMD} ${BGZIP_OPT} $*
+exit $?

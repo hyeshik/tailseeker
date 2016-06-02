@@ -25,17 +25,20 @@
 #
 
 __all__ = [
-    'similarity_sort', 'sample_iterable', 'ReservoirSampler', 'smooth',
-    'savitzky_golay',
+    'similarity_sort', 'sample_iterable', 'ReservoirSampler',
+    'weighted_mean', 'weighted_geomean', 'weighted_mode',
+    'weighted_rmse', 'weighted_mae', 'weighted_median',
+    'weighted_quantile', 'smooth', 'savitzky_golay',
 ]
 
-from Bio.Cluster import cluster
 from scipy.spatial.distance import pdist, squareform, cdist
 from six import string_types
 import random
 import numpy as np
 
 def similarity_sort(data, dist='correlation'):
+    from Bio.Cluster import cluster
+
     #tree = cluster.treecluster(data, dist='c')
     if isinstance(dist, str):
         distmatrix = squareform(pdist(data, dist))
@@ -56,6 +59,33 @@ def similarity_sort(data, dist='correlation'):
         pushed[clsi] = resolve(node.left) + resolve(node.right)
 
     return next(iter(pushed.values()))
+
+
+def weighted_mean(vset):
+    return (vset.index.to_series() * vset).sum() / vset.sum()
+
+def weighted_geomean(vset):
+    return np.exp((np.log(vset.index.to_series()) * vset).sum() / vset.sum())
+
+def weighted_mode(vset):
+    return vset[vset == vset.max()].index.to_series().mean()
+
+def weighted_rmse(vset, center):
+    vsetindex = vset.index.to_series()
+    return ((((vsetindex - center) ** 2) * vset).sum() / vset.sum()) ** 0.5
+
+def weighted_mae(vset, center):
+    vsetindex = vset.index.to_series()
+    return (np.abs(vsetindex - center) * vset).sum() / vset.sum()
+
+from bisect import bisect_right
+def weighted_quantile(vset, quantile):
+    vset_sorted = vset.sort_index()
+    scum = vset_sorted.cumsum() / vset.sum()
+    return scum.index[bisect_right(list(scum), quantile)]
+
+def weighted_median(vset):
+    return weighted_quantile(vset, 0.5)
 
 
 class ReservoirSampler(object):

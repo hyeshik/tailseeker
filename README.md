@@ -1,4 +1,4 @@
-# Tailseeker 2
+# Tailseeker 3
 
 Tailseeker is the official pipeline for TAIL-seq, which measures poly(A) tail
 lengths and 3′-end modifications with Illumina SBS sequencers.
@@ -6,6 +6,20 @@ lengths and 3′-end modifications with Illumina SBS sequencers.
 It is not yet fully stable for generic uses. Please feel free to ask anything
 to Hyeshik Chang &lt;hyeshik@snu.ac.kr&gt; whenever you are stuck on a problem while
 using it. 
+
+
+## Analysis levels
+
+Users can choose the extent of analysis by Tailseeker to let Tailseeker do
+almost everything, or just minimal tail length measurement. The options and
+the list of supported genomes are as followed:
+
+| Level | Genomes | Features |
+| ----- | ------- | -------- |
+| 1 | Any | Poly(A) length measurement (≥ 5nt)<br>Non-A additions to poly(A) tails<br>PCR duplicate removal<br>Quality check for poly(A) length measurement |
+| 2 | BDGP6 *(D. melanogaster)*<br>JGIxl91 *(Xenopus laevis)* | All features from level 1<br>Poly(A) length refinement based on genome sequence<br>Non-templated 3′-end tails<br>Alignments to genome (BAM) |
+| 3 | GRCh38 *(Homo sapiens)*<br>GRCm38 *(Mus musculus)*<br>GRCz10 *(Danio rerio)*<br>WBcel235 *(C. elegans)* | All features from level 2<br>Gene-level statistics for poly(A) length and non-templated additions<br>Gene-level quantifications |
+
 
 ## Prerequisite tools
 
@@ -114,7 +128,7 @@ guide you to set configurations correctly. Please run:
 
 ## The tailseeker suite
 
-Copyright (c) 2013-2016 Institute for Basic Science
+Copyright (c) 2013-2016 Hyeshik Chang
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -135,7 +149,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
 
-## `strstr` implementation from the FreeBSD libc (src/retrieve-signals/my_strstr.c)
+## `strstr` implementation from the FreeBSD libc (`src/contrib/my_strstr.c`)
 
 Copyright (c) 1990, 1993
      The Regents of the University of California.  All rights reserved.
@@ -168,7 +182,7 @@ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 
 
-## SIMD Smith-Waterman Alignment Library (src/retrieve-signals/ssw.c and src/retrieve-signals/ssw.h)
+## SIMD Smith-Waterman alignment library (`src/contrib/ssw.c` and `src/contrib/ssw.h`)
 
 Copyright (c) 2012-2015 Boston College
 
@@ -190,3 +204,32 @@ OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
+
+
+## INIH configuration file parser (`src/contrib/ini.c` and `src/contrib/ini.h`)
+
+Copyright (c) 2009, Ben Hoyt
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+  * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+  * Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+  * Neither the name of Ben Hoyt nor the names of its contributors
+    may be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY BEN HOYT ''AS IS'' AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL BEN HOYT BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

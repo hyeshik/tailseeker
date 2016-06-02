@@ -1,0 +1,242 @@
+#
+# Copyright (c) 2016 Hyeshik Chang
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# - Hyeshik Chang <hyeshik@snu.ac.kr>
+#
+
+from collections import defaultdict
+import os
+import yaml
+
+def load_configuration(conffile):
+    conf = yaml.load(open(conffile))
+    for key, value in conf.items():
+        if isinstance(value, str) and value.startswith('/'):
+            setattr(snakemake.workflow, '{}_CMD'.format(key.upper()), value)
+    return conf
+
+TAILSEEKER_DIR = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), '../..'))
+pathconf = load_configuration(os.path.join(TAILSEEKER_DIR, 'conf', 'paths.conf'))
+
+# With the default k-mer size 15 of GMAP/GSNAP, 1-5% among tags with long
+# poly(A) tails are not aligned. The poly(A) length distribution is also
+# affected by the percentage of mapped reads due to this poly(A)-length
+# dependent biases. This is not generally a big problem in most cases
+# where the samples being compared are sequenced and analyzed together.
+# If you have enough computing resources, try a smaller k-mer size (12).
+# It will lessen the distortions by poly(A) tail lengths.
+if 'gsnap_sensitive_index' in pathconf and pathconf['gsnap_sensitive_index']:
+    GMAP_INDEX_KMER_SIZE = 12
+    GMAP_INDEX_INTERVAL = 1
+else:
+    GMAP_INDEX_KMER_SIZE = 15
+    GMAP_INDEX_INTERVAL = 3
+
+shell.executable(BASH_CMD)
+
+RFAM_FASTA_URL = 'ftp://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/fasta_files/{accession}.fa.gz'
+
+CONTAMINANTS_RFAM_ACCESSIONS = [
+    'RF00001', # 5S ribosomal RNA
+    'RF00002', # 5.8S ribosomal RNA
+    'RF01960', # Eukaryotic small subunit ribosomal RNA
+    'RF02543', # Eukaryotic large subunit ribosomal RNA
+    'RF00012', # Small nucleolar RNA U3
+    'RF00017', # Metazoan signal recognition particle RNA
+]
+
+GENOMES = {
+    'GRCh38': 'Homo sapiens',
+    'GRCm38': 'Mus musculus',
+    'GRCz10': 'Danio rerio',
+    'WBcel235': 'Caenorhabditis elegans',
+    'BDGP6': 'Drosophila melanogaster',
+    'JGIxl91': 'Xenopus laevis',
+}
+
+GENOME_SEQUENCE_SOURCES = {
+    'GRCh38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_24/GRCh38.p5.genome.fa.gz',
+    'GRCm38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M9/GRCm38.p4.genome.fa.gz',
+    'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/fasta/danio_rerio/dna/Danio_rerio.GRCz10.dna.toplevel.fa.gz',
+    'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/fasta/caenorhabditis_elegans/dna/Caenorhabditis_elegans.WBcel235.dna.toplevel.fa.gz',
+    'BDGP6': 'ftp://ftp.ensembl.org/pub/release-84/fasta/drosophila_melanogaster/dna/Drosophila_melanogaster.BDGP6.dna.toplevel.fa.gz',
+    'JGIxl91': 'ftp://ftp.xenbase.org/pub/Genomics/JGI/Xenla9.1/Xla.v91.repeatMasked.fa.gz',
+}
+
+GENE_ANNOTATION_SOURCES = {
+    'GRCh38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_24/gencode.v24.chr_patch_hapl_scaff.annotation.gtf.gz',
+    'GRCm38': 'ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M9/gencode.vM9.chr_patch_hapl_scaff.annotation.gtf.gz',
+    'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/gtf/danio_rerio/Danio_rerio.GRCz10.84.gtf.gz',
+    'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/gtf/caenorhabditis_elegans/Caenorhabditis_elegans.WBcel235.84.gtf.gz',
+    'BDGP6': 'ftp://ftp.ensembl.org/pub/release-84/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.84.gtf.gz',
+    'JGIxl91': 'ftp://ftp.xenbase.org/pub/Genomics/JGI/Xenla9.1/XL9.1_annot_v1.8.1.gene.gff3.gz',
+}
+
+TARGETS = defaultdict(list)
+
+def final_target(filename, genomes=None):
+    for genome in GENOMES if genomes is None else genomes:
+        TARGETS[genome].append(filename.format(genome=genome))
+    return filename
+
+rule default:
+    run:
+        if 'QUIET' not in os.environ:
+            print("Please specify name(s) of the genomes to build.")
+            print("Supported genomes:")
+
+        longest_name_length = max(map(len, GENOMES))
+        fmt = '  {{:<{len}s}}  {{}}'.format(len=longest_name_length)
+        for genome_name, species_name in sorted(GENOMES.items()):
+            print(fmt.format(genome_name, species_name))
+
+rule download_genome_fasta:
+    output: temp('{genome}/genome.fa.gz')
+    run:
+        url = GENOME_SEQUENCE_SOURCES[wildcards.genome]
+        shell('{WGET_CMD} -O {output} "{url}"')
+
+rule download_gene_annotation:
+    output: final_target('{genome}/genes-main.gtf.gz')
+    run:
+        url = GENE_ANNOTATION_SOURCES[wildcards.genome]
+        if url.endswith('gtf.gz'):
+            shell('{WGET_CMD} -O /dev/stdout "{url}" | gzip -cd - | \
+                   {BEDTOOLS_CMD} sort -header | gzip -c - > {output}')
+        elif url.endswith('gff3.gz'):
+            shell('{WGET_CMD} -O /dev/stdout "{{url}}" | gzip -cd - | \
+                   {PYTHON3_CMD} adopt_annotations_JGIxl91.py | \
+                   gzip -c - > {{output}}'.format(PYTHON_CMD=sys.executable))
+
+rule uncompress_genome_fasta:
+    input: '{genome}/genome.fa.gz'
+    output: final_target('{genome}/genome.fa')
+    shell: 'zcat {input} > {output}'
+
+rule index_genome_fasta:
+    input: '{genome}/genome.fa'
+    output: final_target('{genome}/genome.fa.fai')
+    shell: '{SAMTOOLS_CMD} faidx {input}'
+
+rule uncompress_gene_annotations:
+    input: '{genome}/genes-main.gtf.gz'
+    output: temp('{genome}/genes-main.gtf')
+    shell: 'zcat {input} > {output}'
+
+rule build_STAR_index:
+    input:
+        genomeseq='{genome}/genome.fa',
+        geneanno='{genome}/genes-main.gtf'
+    output: final_target('{genome}/index.star/SA')
+    threads: 32
+    params: output_dir='{genome}/index.star'
+    run:
+        additional_opts = ''
+        if wildcards.genome == 'JGIxl91':
+            # STAR requires >= 280 GB of RAM to build index for Xenopus laevis.
+            additional_opts += ' --limitGenomeGenerateRAM 300000000000'
+        shell('{STAR_CMD} --runThreadN {threads} --runMode genomeGenerate \
+                --genomeDir {params.output_dir} --genomeFastaFiles {input.genomeseq} \
+                --sjdbGTFfile {input.geneanno} --sjdbOverhang 50 {additional_opts}')
+
+if 'gsnap' in pathconf:
+    rule build_gmap_spliceindex:
+        input: '{genome}/genes-main.gtf.gz'
+        output: final_target('{genome}/index.gmap/splicesites.iit')
+        shell: 'zcat {input} | {GTF_SPLICESITES_CMD} | {IIT_STORE_CMD} -o {output}'
+
+    rule build_gmap_intronindex:
+        input: '{genome}/genes-main.gtf.gz'
+        output: final_target('{genome}/index.gmap/introns.iit')
+        shell: 'zcat {input} | {GTF_INTRONS_CMD} | {IIT_STORE_CMD} -o {output}'
+
+    rule build_gmap_index:
+        input: '{genome}/genome.fa'
+        output: final_target('{genome}/index.gmap/genome/genome.sarray')
+        params: output_prefix='{genome}/index.gmap'
+        shell: '{GMAP_BUILD_CMD} -D {params.output_prefix} -d genome -k {GMAP_INDEX_KMER_SIZE} \
+                    -q {GMAP_INDEX_INTERVAL} --circular=chrM,chrMT,M,MT {input}'
+
+rule measure_chrom_sizes:
+    input: '{genome}/genome.fa.fai'
+    output: final_target('{genome}/chrom-sizes')
+    shell: 'cut -f1,2 {input} > {output}'
+
+rule make_transcript_length_table:
+    input: '{genome}/genes-main.gtf.gz'
+    output: final_target('{genome}/transcript-sizes')
+    script: 'make_transcript_lengths.py'
+
+rule make_exon_gtf:
+    input: '{genome}/genes-main.gtf.gz'
+    output: final_target('{genome}/exons.gtf.gz')
+    shell: 'zcat {input} | awk -F\'\t\' \'/^#/; $3 == "exon"\' | \
+            gzip -c - > {output}'
+
+rule download_rfam_fasta:
+    output: temp('tmp/Rfam/{accession}.fa.gz')
+    run:
+        url = RFAM_FASTA_URL.format(accession=wildcards.accession)
+        shell('wget -O {output} {url}')
+
+rule rfam_contaminant_seq_names:
+    input: 'tmp/Rfam/{accession}.fa.gz'
+    output: temp('tmp/{species}/contaminants-ids-{accession}')
+    run:
+        species_w_space = wildcards.species.replace('_', ' ')
+        shell("zgrep '^>.*{species_w_space}' {input} | \
+                sed -e 's,^>\([^ ]*\).*,\\1,g' > {output}")
+
+rule make_contaminants_fasta:
+    input:
+        rfam_ids='tmp/{species}/contaminants-ids-{accession}',
+        rfam_fasta='tmp/Rfam/{accession}.fa.gz'
+    output: temp('tmp/{species}/contaminants-{accession}.fa')
+    shell: 'seqtk subseq {input.rfam_fasta} {input.rfam_ids} > {output}'
+
+rule merge_contaminants_fasta:
+    input:
+        lambda wc: expand('tmp/{species}/contaminants-{accession}.fa',
+                          accession=CONTAMINANTS_RFAM_ACCESSIONS,
+                          species=[GENOMES[wc.genome].replace(' ', '_')])
+    output: final_target('{genome}/contaminants.fa')
+    shell: 'cat {input} | awk \'/^>/ {{ print $0; }} \
+                                /^[^>]/ {{ gsub(/U/, "T"); print $0; }}\' > {output}'
+
+rule build_contaminant_STAR_index:
+    input: '{genome}/contaminants.fa'
+    output: final_target('{genome}/contaminants.star/SA')
+    threads: 32
+    params: output_dir='{genome}/contaminants.star'
+    shell: '{STAR_CMD} --runThreadN {threads} --runMode genomeGenerate \
+                --genomeChrBinNbits 14 --genomeSAindexNbases 10 \
+                --genomeDir {params.output_dir} \
+                --genomeFastaFiles {input}'
+
+# ===
+
+def donothing(*a, **k): pass
+for genome, targets in TARGETS.items():
+    shortcut = workflow.get_rule(workflow.add_rule(name=genome))
+    shortcut.set_input(targets)
+    shortcut.run_func = donothing
+
+# ex: syntax=snakemake

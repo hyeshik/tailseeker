@@ -23,163 +23,8 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-TOPDIR="$(pwd)"
-CONFDIR="$(pwd)/conf"
-PYTHON=python3
-
-executable() {
-  found="$(which $2 2>/dev/null)"
-
-  if [ ! -x "$found" ]; then
-    if [ -z "$3" ]; then
-      PROGNAME="$2"
-    else
-      PROGNAME="$3"
-    fi
-
-    if [ -z "$4" ]; then
-      MESSAGE="Please install $PROGNAME."
-    else
-      MESSAGE="$4"
-    fi
-
-    echo "> An executable \`$2' is not found. $MESSAGE"
-    return 2
-  fi
-
-  safename=$(echo $2 | sed -e 's,-,_,g')
-
-  echo "* $2 => ${found}"
-  echo "$safename: ${found}" >> "$1"
-}
-
-pkgconfig() {
-  if [ -z "$2" ]; then
-    MODNAME="$1"
-  else
-    MODNAME="$2"
-  fi
-
-  modversion=$(pkg-config --modversion $1)
-  if [ $? -ne 0 ]; then 
-    echo "> $MODNAME could not be found by pkg-config. $3"
-    return 2;
-  fi
-
-  echo "* $1 => ${modversion} installed."
-}
-
-python3mod() {
-  if [ -z "$2" ]; then
-    MODNAME="$1"
-  else
-    MODNAME="$2"
-  fi
-
-  if ! "$PYTHON" -c "import $1" >/dev/null 2>&1; then
-    echo "> A Python 3 module $MODNAME could not be found. $3"
-    return 2;
-  fi
-
-  modulepath="$($PYTHON -c 'import '$1'; print('$1'.__file__)')"
-  echo "* $1 => ${modulepath}"
-}
-
-check_requirements() {
-  echo "==> Checking required external programs ...\n"
-
-  PATHSCONFTMP="$CONFDIR/.paths.conf"
-
-  echo "tailseeker: $(pwd)" > "$PATHSCONFTMP"
-
-  if executable "$PATHSCONFTMP" "python3" "Python 3" && \
-     executable "$PATHSCONFTMP" "pkg-config" && \
-     executable "$PATHSCONFTMP" "bash" && \
-     executable "$PATHSCONFTMP" "wget" && \
-     executable "$PATHSCONFTMP" "make" && \
-     executable "$PATHSCONFTMP" "whiptail" && \
-     executable "$PATHSCONFTMP" "snakemake" && \
-     executable "$PATHSCONFTMP" "bgzip" "htslib" && \
-     executable "$PATHSCONFTMP" "tabix" "htslib" && \
-     executable "$PATHSCONFTMP" "AYB" "AYB (All Your Bases)"; then
-    EXTERNAL_PROGRAMS_READY=yes
-  else
-    return 2
-  fi
-
-  echo "\n==> Checking required external libraries ...\n"
-
-  if pkgconfig "htslib"; then
-    EXTERNAL_LIBRARIES_READY=yes
-  else
-    return 2
-  fi
-
-  echo "\n==> Checking required Python 3 modules ...\n"
-
-  if python3mod "ghmm" "GHMM" "Try running support/install-ghmm.sh."; then
-    GHMM_READY=yes
-  else
-    return 2
-  fi
-
-  if python3mod "numpy" "NumPy" && \
-     python3mod "scipy" "SciPy" && \
-     python3mod "Bio" "BioPython" && \
-     python3mod "sklearn" "scikit-learn" && \
-     python3mod "matplotlib" && \
-     python3mod "yaml" "PyYAML" && \
-     python3mod "snakemake"; then
-    PYTHON_MODULES_READY=yes
-  else
-    cat - <<END
-One or more required Python modules are not available. Consider running
-this command:
-
-  pip3 install -r src/requirements.txt
-
-If you are not a superuser in this machine, try this:
-
-  pip3 install --user -r src/requirements.txt
-
-END
-    return 2
-  fi
-
-  if [ "$EXTERNAL_PROGRAMS_READY" = "yes" -a \
-       "$GHMM_READY" = "yes" -a \
-       "$PYTHON_MODULES_READY" = "yes" ]; then
-    echo "\nAll prerequisites are ready.\n"
-    mv -f ${PATHSCONFTMP} ${CONFDIR}/paths.conf
-  else
-    return 2
-  fi
-}
-
-build_internal_programs()
-{
-  cd "$TOPDIR/src"
-
-  echo ""
-  rm -rf "$TOPDIR/bin"
-  make || return 1
-
-  distutils_args=$(echo "$1" | sed -e 's/--user//g')
-  $PYTHON setup.py build $distutils_args || return 1
-}
-
-install_internal_programs()
-{
-  cd "$TOPDIR/src"
-
-  echo ""
-  make clean || return 1
-  $PYTHON setup.py install $1 || return 1
-}
-
-
-# ----
-
+TOPDIR_REL=$(dirname $0)
+TOPDIR=$(cd $TOPDIR_REL; pwd)
 
 RED="[01;31m"
 WHITE="[1m"
@@ -198,44 +43,53 @@ cat - <<END
    Hyeshik Chang <hyeshik@snu.ac.kr>.
 
 
-Press enter to start to setup the package.
 END
 
+WHIPTAIL=$(which whiptail)
+if [ -z "$WHIPTAIL" ]; then
+  cat - <<END
+## ERROR ##
+
+\`whiptail' is required for the installation process. Please follow one
+of the following instructions:
+
+Debian/Ubuntu Linux:
+  apt-get install whiptail
+
+RedHat Linux or CentOS:
+  yum install -y whiptail
+
+Conda:
+  conda install -c bioconda newt
+
+END
+  exit 1
+fi
+
+BASH=$(which bash)
+if [ -z "$BASH" ]; then
+  cat - <<END
+## ERROR ##
+
+\`bash' is required for the installation process. Please follow one
+of the following instructions:
+
+Debian/Ubuntu Linux:
+  apt-get install bash
+
+RedHat Linux or CentOS:
+  yum install -y bash
+
+Conda:
+  conda install -c bioconda bash
+
+END
+  exit 1
+fi
+
+echo "Press enter to start to setup the package."
 read __
 
-if ! check_requirements; then
-  exit 2
-fi
-
-
-cat - <<END
-====================================================================
-We're going to build and install few small C programs and Python
-extension modules written in C. This process will require a compiler
-and development files like header files. Please specify additional
-arguments to Python distutils if you need. Generally, none is
-required for a superuser, but you'll need to add --user if you don't
-have write permissions to the system. You may need to add
-$HOME/.local/bin to your PATH when you are installing these
-in the "user" mode.
-
-END
-
-echo -n "command> $PYTHON setup.py install "
-
-read distutils_options
-
-if ! build_internal_programs "$distutils_options"; then
-  echo "\nFailed while building internal programs. Please find the error"
-  echo "messages above.\n"
-  return 2
-fi
-
-if ! install_internal_programs "$distutils_options"; then
-  echo "\nFailed while installing internal programs. Please find the error"
-  echo "messages above.\n"
-  return 2
-fi
-
+env "TOPDIR=$TOPDIR" "WHIPTAIL=$WHIPTAIL" "SHELL=$BASH" "$BASH" "$TOPDIR/install/configure.sh"
 
 # ex: ts=8 sw=2 sts=2 et

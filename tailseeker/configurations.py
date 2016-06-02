@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2015 Hyeshik Chang
+# Copyright (c) 2015-6 Hyeshik Chang
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,17 +28,12 @@ import glob
 
 class Configurations:
 
-    EXPANDABLE_CONF_KEYS = """
-        spikein_training_length umi_length umi_fixed_sequence delimiter
-        balance_check dupcheck_regions maximum_index_mismatches
-        species""".split()
-
     PATH_CONF_FILE = 'conf/paths.conf'
 
     def __init__(self, tailseeker_dir, settings_file):
         self.tailseeker_dir = tailseeker_dir
         self.confdata = self.load_config(settings_file)
-        self.expand_sample_settings()
+        self.confdata = self.expand_sample_settings(self.confdata)
 
     def load_config(self, settings_file):
         usersettings = yaml.load(settings_file)
@@ -52,12 +47,30 @@ class Configurations:
             for predfile in incfiles:
                 confpath = os.path.join(self.tailseeker_dir, 'conf', predfile)
                 predconf = self.load_config(open(confpath))
-                confdict.update(predconf)
+                confdict = self.merge_configs(confdict, predconf)
 
-            confdict.update(usersettings)
+            confdict = self.merge_configs(confdict, usersettings)
             return confdict
         else:
             return usersettings
+
+    def merge_configs(self, conf1, conf2):
+        merged = {}
+
+        for conf1only in set(conf1) - set(conf2):
+            merged[conf1only] = conf1[conf1only]
+        for conf2only in set(conf2) - set(conf1):
+            merged[conf2only] = conf2[conf2only]
+
+        for shared in set(conf1) & set(conf2):
+            if isinstance(conf1[shared], dict) != isinstance(conf1[shared], dict):
+                raise ValueError('Layout is different between overriding configurations.')
+            if isinstance(conf1[shared], dict):
+                merged[shared] = self.merge_configs(conf1[shared], conf2[shared])
+            else:
+                merged[shared] = conf2[shared] # conf2 is overriding conf1.
+
+        return merged
 
     def __getitem__(self, name):
         return self.confdata[name]
@@ -68,29 +81,27 @@ class Configurations:
     def get(self, name, default=None):
         return self.confdata.get(name, default)
 
-    def expand_sample_settings(self):
+    def expand_sample_settings(self, node):
         predefined = {
             '_all': self.all_samples,
             '_exp': self.exp_samples,
             '_spk': self.spikein_samples,
         }
 
-        for key in self.EXPANDABLE_CONF_KEYS:
-            if key not in self.confdata:
+        finalized = {}
+        for key, value in list(node.items()):
+            if key not in predefined:
+                finalized[key] = (node[key] if not isinstance(value, dict)
+                                  else self.expand_sample_settings(value))
                 continue
 
-            user_specified = self.confdata[key]
-            finalized = {}
+            for sample in predefined[key]:
+                finalized[sample] = value
 
-            for k, d in user_specified.items():
-                if k in predefined:
-                    for s in predefined[k]:
-                        finalized[s] = d
-                else:
-                    finalized[k] = d
+        node.clear()
+        node.update(finalized)
 
-            user_specified.clear()
-            user_specified.update(finalized)
+        return finalized
 
     def export_paths(self, namespace):
         pathconf = os.path.join(self.tailseeker_dir, self.PATH_CONF_FILE)

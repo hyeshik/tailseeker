@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2013-5 Institute for Basic Science
+# Copyright (c) 2016 Hyeshik Chang
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,20 +23,20 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailseeker.parsers import parse_polya_calls
-from tailseeker.powersnake import *
+from tailseeker.tabledefs import taginfo, refined_taginfo
 from io import BytesIO
 import subprocess as sp
 import pandas as pd
 import numpy as np
 
 
-def get_polya_length_hist(pacallsfile, maxpalen=236):
-    polya_column = parse_polya_calls.field2index['polya_len'] + 1
-
+def get_polya_length_hist(pacallsfile, badflagmask, maxpalen, columnno):
     freqoutput = sp.check_output(
-        'zcat {input_file} | cut -f{polya_column} | sort -n | uniq -c'.format(
-            input_file=pacallsfile, polya_column=polya_column), shell=True)
+        'zcat {input_file} | awk -F"\t" \
+            \'!and($3, {flagmask}) {{ print ${polya_column}; }}\' | \
+            sort -n | uniq -c'.format(
+            input_file=pacallsfile, polya_column=columnno,
+            flagmask=badflagmask), shell=True)
 
     pacounts = pd.read_table(BytesIO(freqoutput), skipinitialspace=True, sep=' ',
                              names=['count', 'polya'], dtype=np.int64).set_index('polya')
@@ -46,20 +46,23 @@ def get_polya_length_hist(pacallsfile, maxpalen=236):
     return pacounts['count']
 
 
-## XXX Implement the standalone interface.
+# ===
 
+inputfiles = list(zip(snakemake.params.samplenames, snakemake.input))
 
-if is_snakemake_child:
-    inputfiles = list(zip(params.samplenames, input))
+tableschema = refined_taginfo if snakemake.params.refined else taginfo
+columnno = tableschema['names'].index('polyA') + 1
 
-    pacounts = pd.DataFrame.from_items(
-        [(samplename, get_polya_length_hist(lencallfile, params.maxpalength))
-         for samplename, lencallfile in inputfiles])
+pacounts = pd.DataFrame.from_items(
+    [(samplename,
+      get_polya_length_hist(lencallfile, snakemake.params.badflagmask,
+                            snakemake.params.maxpalength, columnno))
+     for samplename, lencallfile in inputfiles])
 
-    # trim all-zero rows at the end of the list
-    effective_maximum_pa_len = np.where(pacounts.sum(axis=1) > 0)[0].max()
-    pacounts = pacounts[pacounts.index <= effective_maximum_pa_len]
+# trim all-zero rows at the end of the list
+effective_maximum_pa_len = np.where(pacounts.sum(axis=1) > 0)[0].max()
+pacounts = pacounts[pacounts.index <= effective_maximum_pa_len]
 
-    # write the output in csv format
-    pacounts.to_csv(output[0])
+# write the output in csv format
+pacounts.to_csv(snakemake.output[0])
 

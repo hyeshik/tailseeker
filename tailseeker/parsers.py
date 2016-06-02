@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2013-2015 Institute for Basic Science
+# Copyright (c) 2016 Hyeshik Chang
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,67 +23,59 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailseeker.fileutils import LineParser, open_gzip_buffered
-from tailseqext import decode_intensity
-from base64 import b64decode
-import numpy as np
-import sys
+from .fileutils import LineParser, open_gzip_buffered
 
-readid_key = lambda x: (x.tile, x.cluster)
-decode_ascii = lambda x: x.decode('ascii')
+decode_bytes = lambda x: x.decode()
 
-
-def unpack_readid(s):
-    tile, cluster = s.split(b':')
-    return tile, int(cluster)
-
-def pack_readid(tile, cluster):
-    return '{}:{:08d}'.format(tile, cluster)
-
-parse_readid_list = LineParser([
-    ('tile', decode_ascii),
+parse_taginfo = LineParser([
+    ('tile', None),
     ('cluster', int),
-], linefeed=b'\r\n', separator=b':')
+    ('pflags', int),
+    ('polyA', int),
+    ('mods', None),
+    ('clones', int)
+], linefeed=b'\n')
 
-parse_sqi_lite = LineParser([
-    ('tile', decode_ascii),
+parse_taginfo_internal = LineParser([
+    ('tile', None),
     ('cluster', int),
-    ('istart', int),
-    ('seq', decode_ascii),
+    ('pflags', int),
+    ('polyA', int),
+    ('mods', None),
+    ('umi', None)
+], linefeed=b'\n')
+
+parse_refined_taginfo = LineParser([
+    ('tile', None),
+    ('cluster', int),
+    ('pflags', int),
+    ('clones', int),
+    ('polyA', int),
+    ('U', int),
+    ('G', int),
+    ('C', int),
+    ('mods', None),
+], linefeed=b'\n')
+
+parse_sam = LineParser([
+    ('qname', None),
+    ('flag', int),
+    ('rname', None),
+    ('pos', int), # caution! A SAM file uses 1-based coordinate system.
+    ('mapq', int),
+    ('cigar', None),
+    ('rnext', None),
+    ('pnext', None),
+    ('tlen', int),
+    ('seq', None),
     ('qual', None),
-    ('intensity', None),
-], linefeed=b'\r\n')
+], comment=b'@')
 
-def decode_phred_quality(s, scale=33):
-    return np.fromstring(s, np.uint8) - scale
-
-parse_sqi = LineParser([
-    ('tile', decode_ascii),
-    ('cluster', int),
-    ('istart', int), # 0-based coordinate of insert start position
-    ('seq', decode_ascii),
-    ('qual', decode_phred_quality),
-    ('intensity', decode_intensity),
-], linefeed=b'\r\n')
-
-def decode_pascore(s):
-    return np.fromstring(b64decode(s), np.float32)
-
-parse_pascore = LineParser([
-    ('tile', decode_ascii),
-    ('cluster', int),
-    ('endmod_len', int),
-    ('seqbased_polya_len', int),
-    ('pascore', decode_pascore),
-], linefeed=b'\r\n')
-
-parse_polya_calls = LineParser([
-    ('tile', decode_ascii),
-    ('cluster', int),
-    ('start_pos', int), # 0-based, relative to the immediate next base to the delimiter
-    ('polya_len', int),
-    ('seqbased_len', int),
-    ('hmmbased_len', int),
-    ('naive_len', int),
-], linefeed=b'\r\n')
+def parse_fastq(filename):
+    linebuf = []
+    for line in open_gzip_buffered(filename, 'rb'):
+        linebuf.append(line)
+        if len(linebuf) >= 4:
+            yield (linebuf[0][1:-1], linebuf[1][:-1], linebuf[3][:-1])
+            del linebuf[:]
 

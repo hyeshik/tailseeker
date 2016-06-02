@@ -1,7 +1,0 @@
-numpy
-biopython
-scipy
-matplotlib
-scikit-learn
-PyYAML
-snakemake

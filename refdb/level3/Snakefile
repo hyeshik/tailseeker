@@ -1,0 +1,160 @@
+#
+# Copyright (c) 2016 Hyeshik Chang
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+# - Hyeshik Chang <hyeshik@snu.ac.kr>
+#
+
+from collections import defaultdict
+import os
+import yaml
+
+def load_configuration(conffile):
+    conf = yaml.load(open(conffile))
+    for key, value in conf.items():
+        if isinstance(value, str) and value.startswith('/'):
+            setattr(snakemake.workflow, '{}_CMD'.format(key.upper()), value)
+    return conf
+
+TAILSEEKER_DIR = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), '../..'))
+pathconf = load_configuration(os.path.join(TAILSEEKER_DIR, 'conf', 'paths.conf'))
+
+shell.executable(BASH_CMD)
+
+GENOMES = {
+    'GRCh38': 'Homo sapiens',
+    'GRCm38': 'Mus musculus',
+    'GRCz10': 'Danio rerio',
+    'WBcel235': 'Caenorhabditis elegans',
+}
+
+ENSEMBL_URLS = {
+    'GRCh38': 'ftp://ftp.ensembl.org/pub/release-84/mysql/homo_sapiens_core_84_38/',
+    'GRCm38': 'ftp://ftp.ensembl.org/pub/release-84/mysql/mus_musculus_core_84_38/',
+    'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/mysql/danio_rerio_core_84_10/',
+    'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/mysql/caenorhabditis_elegans_core_84_245/',
+}
+
+APPRIS_URLS = {
+    'GRCh38': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/homo_sapiens/GRCh38/appris_data.principal.txt',
+    'GRCm38': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/mus_musculus/GRCm38/appris_data.principal.txt',
+    'GRCz10': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/danio_rerio/GRCz10/appris_data.principal.txt',
+    'WBcel235': 'http://apprisws.bioinfo.cnio.es/pub/current_release/datafiles/caenorhabditis_elegans/WBcel235/appris_data.principal.txt',
+}
+
+HAVE_ID_CHANGE_HISTORY = '''
+    GRCh38 GRCm38 GRCz10
+'''.split()
+
+LEVEL2_REFDB = '../level2/'
+TARGETS = defaultdict(list)
+
+def final_target(filename, genomes=None):
+    for genome in GENOMES if genomes is None else genomes:
+        TARGETS[genome].append(filename.format(genome=genome))
+    return filename
+
+rule default:
+    run:
+        if 'QUIET' not in os.environ:
+            print("Please specify name(s) of the genomes to build.")
+            print("Supported genomes:")
+
+        longest_name_length = max(map(len, GENOMES))
+        fmt = '  {{:<{len}s}}  {{}}'.format(len=longest_name_length)
+        for genome_name, species_name in sorted(GENOMES.items()):
+            print(fmt.format(genome_name, species_name))
+
+rule download_ensembl_database:
+    output: temp('tmp/{genome}/ensembl-{table}.txt.gz')
+    run:
+        url = '{prefix}{table}.txt.gz'.format(prefix=ENSEMBL_URLS[wildcards.genome],
+                                              table=wildcards.table)
+        shell('{WGET_CMD} -O {output} "{url}"')
+
+rule download_appris_principal_database:
+    output: temp('tmp/{genome}/appris-principal.txt.gz')
+    run:
+        url = APPRIS_URLS[wildcards.genome]
+        shell('{WGET_CMD} -O - "{url}" | gzip -c - > {output}')
+
+rule make_xref_table:
+    input:
+        gene='tmp/{genome}/ensembl-gene.txt.gz',
+        transcript='tmp/{genome}/ensembl-transcript.txt.gz',
+        translation='tmp/{genome}/ensembl-translation.txt.gz',
+        external_db='tmp/{genome}/ensembl-external_db.txt.gz',
+        xref='tmp/{genome}/ensembl-xref.txt.gz',
+        identity_xref='tmp/{genome}/ensembl-identity_xref.txt.gz',
+        object_xref='tmp/{genome}/ensembl-object_xref.txt.gz',
+        ontology_xref='tmp/{genome}/ensembl-ontology_xref.txt.gz'
+    output:
+        internal_xrefs=final_target('{genome}/internal-xrefs.feather'),
+        identity_xrefs=final_target('{genome}/identity-xrefs.feather'),
+        ontology_xrefs=final_target('{genome}/ontology-xrefs.feather')
+    script: 'make_xref_table.py'
+
+rule make_geneinfo_tables:
+    input:
+        gtf=LEVEL2_REFDB + '{genome}/genes-main.gtf.gz',
+        database='tmp/{genome}/ensembl-gene.txt.gz',
+        appris='tmp/{genome}/appris-principal.txt.gz'
+    output:
+        CDS=final_target('{genome}/annotations-CDS.feather'),
+        exon=final_target('{genome}/annotations-exon.feather'),
+        five_prime_utr=final_target('{genome}/annotations-five_prime_utr.feather'),
+        gene=final_target('{genome}/annotations-gene.feather'),
+        start_codon=final_target('{genome}/annotations-start_codon.feather'),
+        stop_codon=final_target('{genome}/annotations-stop_codon.feather'),
+        three_prime_utr=final_target('{genome}/annotations-three_prime_utr.feather'),
+        transcript=final_target('{genome}/annotations-transcript.feather')
+    script: 'make_geneinfo_tables.py'
+
+rule make_old_id_conversion_table:
+    input: 'tmp/{genome}/ensembl-stable_id_event.txt.gz'
+    output:
+        versioned_table=final_target('{genome}/id_changes-versioned.feather',
+                                     HAVE_ID_CHANGE_HISTORY),
+        nonversioned_table=final_target('{genome}/id_changes-nonversioned.feather',
+                                        HAVE_ID_CHANGE_HISTORY)
+    script: 'make_id_changes.py'
+
+rule make_transcript_sequences:
+    input:
+        gene='{genome}/annotations-gene.feather',
+        fivep_utr='{genome}/annotations-five_prime_utr.feather',
+        threep_utr='{genome}/annotations-three_prime_utr.feather',
+        exon='{genome}/annotations-exon.feather',
+        transcript='{genome}/annotations-transcript.feather',
+        genome=LEVEL2_REFDB + '{genome}/genome.fa'
+    output:
+        fasta=final_target('{genome}/transcripts.fa.gz'),
+        threependtable=final_target('{genome}/transcripts-threep-end-sequences.txt')
+    script: 'make_transcript_seqs.py'
+
+# ===
+
+def donothing(*a, **k): pass
+for genome, targets in TARGETS.items():
+    shortcut = workflow.get_rule(workflow.add_rule(name=genome))
+    shortcut.set_input(targets)
+    shortcut.run_func = donothing
+
+# ex: syntax=snakemake

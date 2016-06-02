@@ -24,11 +24,9 @@
 import sys
 import os
 import shutil
+from collections import defaultdict
+from snakemake.io import limit
 
-
-def setdefault(name, value):
-    if name not in globals():
-        globals()[name] = value
 
 def make_scratch_dir(prefix):
     dirprefix = os.path.join(SCRATCHDIR, prefix)
@@ -55,7 +53,6 @@ def immediate_clearing(arg, sntemp=temp):
 
 
 #========== Initializations ============
-sys.path.append(TAILSEEKER_DIR)
 from tailseeker.powersnake import *
 
 # Load and parse configuration settings.
@@ -85,25 +82,14 @@ else:
                      'or no.')
 
 
-# XXX: move these parameters somewhere out
-SIGNAL_STABILIZER_TARGET_RANGE = 1, 50 # in 1-based inclusive coordinate
-SIGNAL_STABILIZER_REFERENCE_RANGE = 51, 55 # 1-based
-SIGNAL_STABILIZER_POLYA_DETECTION_RANGE = 51, 100 # 1-based
-
-PASIGNAL_CLIP_MIN = -0.3
-PASIGNAL_CLIP_MAX = 2.5
-
-MAXIMUM_DELIMITER_MISALIGNMENT = 1
-# XXX
-
 # Predefined constants
 inf = float('inf')
 nan = float('nan')
 
 # Commands needs to be run with bash with these options to terminate on errors correctly.
-shell.executable(os.popen('which bash').read().strip()) # pipefail is supported by bash only.
+shell.executable(BASH_CMD) # pipefail is supported by bash only.
 shell.prefix(('set -e; set -o pipefail; '
-              'export PYTHONPATH="{PYTHONPATH}" '
+              'export PYTHONPATH="{PYTHONPATH}" LC_ALL=C '
                      'BGZIP_CMD="{BGZIP_CMD}" '
                      'TABIX_CMD="{TABIX_CMD}" '
                      'TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}" '

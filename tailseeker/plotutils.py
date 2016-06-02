@@ -28,6 +28,7 @@ __all__ = [
     'prepare_cumulative',
     'colormap_lch',
     'estimate_2d_density',
+    'apply_dropped_spine',
 ]
 
 import numpy as np
@@ -60,4 +61,53 @@ def estimate_2d_density(x, y, bw=None):
     positions = np.vstack([x, y])
     kernel = gaussian_kde(positions, bw_method=bw)
     return kernel(positions)
+
+def apply_dropped_spine(ax, spines=('left', 'bottom'), xgrid=False, smart_bounds=False,
+                        drop=5):
+    if drop:
+        for sp in spines:
+            ax.spines[sp].set_position(('outward', drop))
+
+    for loc, spine in ax.spines.items():
+        if loc in spines:
+            spine.set_smart_bounds(smart_bounds)
+            spine.set_linewidth(0.8)
+        else:
+            spine.set_color('none') # don't draw spine
+
+    # turn off ticks where there is no spine
+    if 'left' in spines:
+        ax.yaxis.set_ticks_position('left')
+    elif 'right' in spines:
+        ax.yaxis.set_ticks_position('right')
+    else:
+        # no yaxis ticks
+        ax.yaxis.set_ticks([])
+
+    if 'bottom' in spines:
+        ax.xaxis.set_ticks_position('bottom')
+    elif 'top' in spines:
+        ax.xaxis.set_ticks_position('top')
+    else:
+        # no xaxis ticks
+        ax.xaxis.set_ticks([])
+
+    ax.yaxis.grid(True, linestyle='-', alpha=0.1, linewidth=1.5)
+    if xgrid:
+        ax.xaxis.grid(True, linestyle='-', alpha=0.1, linewidth=1.5)
+    else:
+        ax.xaxis.grid(False)
+
+    ax.tick_params('both', which='major', width=0.8, direction='out', pad=3)
+
+    leg = ax.get_legend()
+    if leg is not None:
+        ltext  = leg.get_texts()
+        llines = leg.get_lines()
+        frame  = leg.get_frame()
+
+        #frame.set_facecolor('0.80')
+        frame.set_linewidth(0.8)
+        plt.setp(ltext, fontsize='12')
+        plt.setp(llines, linewidth=1.5)
 

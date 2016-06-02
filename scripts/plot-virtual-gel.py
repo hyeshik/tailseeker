@@ -23,6 +23,7 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
+from tailseeker.stats import gaussian_kde
 from itertools import chain
 import pandas as pd
 import numpy as np
@@ -33,98 +34,99 @@ from matplotlib import cm
 from matplotlib.ticker import AutoMinorLocator
 
 
-POLYA_BIN_BREAKS = [
-    1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 28, 31, 34, 37, 40,
-    43, 46, 49, 52, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99,
-    104, 109, 114, 119, 124, 129, 134, 139, 144, 149, 154, 160, 166,
-    172, 178, 184, 190, 196, 202, 208, 214, 220, 226, 235,
-]
+# TODO: generate list of marker positions in adaptive way to the range.
+MARKER_POSITIONS = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 200, 235]
 
-MARKER_POSITIONS = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 200, 235]
-size2phys = lambda x: (x ** 0.5 - 1 ** 0.5) / (235 ** 0.5 - 1 ** 0.5)
-MINIMUM_POLYA_LENGTH = 3
-
-IMAGE_HEIGHT = 1000
-SMOOTHEDGE = [.25, .5, .85]
-LANE_WIDTH = 31
-LANE_SMOOTHEDGE = len(SMOOTHEDGE)
-LANE_SPACE = 2
-LANE_BODY = LANE_WIDTH - LANE_SMOOTHEDGE * 2 - LANE_SPACE
+LANE_WIDTH = 7
+LANE_SPACE = 1
+LANE_BODY = LANE_WIDTH - LANE_SPACE
 LANE_CONTROLGUIDE = 0.15
 
+IMAGE_HEIGHT = 200
 
-def construct_virtual_gel_image(tagcounts, controlsamples, expsamples, height=IMAGE_HEIGHT):
-    tagcounts = tagcounts[controlsamples + expsamples]
 
-    # Adjust intensities to make tag populations proportional to area*intensity.
-    adjusted_values = []
-    covering_ranges = []
 
-    for idx, row in tagcounts.iterrows():
-        low = int(size2phys(POLYA_BIN_BREAKS[idx]) * height)
-        high = int(size2phys(POLYA_BIN_BREAKS[idx+1]) * height)
-        density = row / (high - low)
+def construct_virtual_gel_image(tagdensities, controlsamples, expsamples, height=IMAGE_HEIGHT):
+    tagdensities = tagdensities[controlsamples + expsamples].copy()
+    #tagdensities = tagdensities[expsamples + controlsamples].copy()
 
-        covering_ranges.append((low, high))
-        adjusted_values.append(density)
+    is_control = tagdensities.columns.map(lambda x: x in controlsamples)
 
-    adjusted_values = np.array(adjusted_values)
-
-    is_control = tagcounts.columns.map(lambda x: x in controlsamples)
-
-    # Rescale the control samples to the maximum in each lane.
-    control_signals = adjusted_values[:, is_control]
-    adjusted_values[:, is_control] = control_signals / control_signals.max(axis=0)
+    if is_control.sum() > 0:
+        # Rescale the control samples to the maximum in each lane.
+        control_signals = tagdensities.loc[:, is_control]
+        tagdensities.loc[:, is_control] = control_signals / control_signals.max(axis=0)
 
     # Rescale the control samples to the total poly(A)+ tag count in each lane.
-    experimental_signals = adjusted_values[:, ~is_control]
-    adjusted_values[:, ~is_control] = experimental_signals / experimental_signals.max().max()
+    experimental_signals = tagdensities.loc[:, ~is_control]
+    tagdensities.loc[:, ~is_control] = experimental_signals / experimental_signals.max().max()
 
     # Pad the gel image with signals and spacings between lanes.
-    virtual_width = tagcounts.shape[1] * LANE_WIDTH + LANE_SPACE
+    virtual_width = tagdensities.shape[1] * LANE_WIDTH + LANE_SPACE
     imgdata = np.zeros((height, virtual_width), np.float64)
 
-    signalmask = np.array(SMOOTHEDGE + [1] * LANE_BODY + SMOOTHEDGE[::-1] +
-                          [0] * LANE_SPACE)
-    signalboost = [0] * LANE_WIDTH
-    signalboost[LANE_WIDTH // 2] = LANE_CONTROLGUIDE
+    pos = 0
+    for i, (vpos, td) in enumerate(tagdensities.items()):
+        if i == 0:
+            pos += LANE_SPACE # vertical spacing on the left
 
-    for idx, signals, (low, high) in zip(tagcounts.index, adjusted_values, covering_ranges):
-        densityrow = list(chain(*([[0.] * LANE_SPACE] +
-                                  [list(np.max([v * signalmask, signalboost], axis=0))
-                                   if is_ctl else list(v * signalmask)
-                                   for is_ctl, v in zip(is_control, signals)])))
-        imgdata[low:high] = densityrow
+        for j in range(LANE_BODY):
+            imgdata[:, pos] = td
+            pos += 1
+
+        pos += LANE_SPACE
 
     return imgdata
 
 
+def size2phys_fun(min_polya, max_polya):
+    migrfun = lambda x: x ** 0.5 - 1
+    phys_low = migrfun(min_polya)
+    phys_width = migrfun(max_polya) - phys_low
+
+    def size2phys(x):
+        return (migrfun(x) - phys_low) / phys_width
+
+    return size2phys
+
+
 def plot(options, controlsamples, expsamples):
+    # Load tag counts by poly(A) lengths
     tagcounts = pd.read_csv(options.tagcounts, index_col=0)
-    tagcounts_pa = tagcounts.iloc[MINIMUM_POLYA_LENGTH:]
+    tagcounts_pa = tagcounts.iloc[options.min_polya_len:]
     if options.normalize_by_total_tags:
         tagcounts_pa = tagcounts_pa.divide(tagcounts.sum(axis=0))
     else:
         tagcounts_pa = tagcounts_pa.divide(tagcounts_pa.sum(axis=0))
 
-    # Aggregate the tag counts in the fake gel bins.
-    binnedcounts = tagcounts_pa.copy()
-    binnedcounts['bin'] = pd.cut(tagcounts_pa.index, POLYA_BIN_BREAKS, right=False,
-                                 include_lowest=True, labels=False)
-    binnedcounts = binnedcounts.groupby('bin').agg(np.sum)
-    binnedcounts.index = list(map(int, binnedcounts.index))
+    if options.merge_controls and controlsamples:
+        ctlsum = tagcounts_pa[controlsamples].sum(axis=1)
+        newbc = tagcounts_pa[expsamples].copy()
+        newbc['ctl'] = ctlsum
+        tagcounts_pa = newbc
+        controlsamples = ['ctl']
 
     samples = controlsamples + expsamples
 
+    # Calculate kernel density estimates
+    max_polya_len = int(np.ceil(tagcounts_pa.index.max() / 5) * 5)
+    size2phys = size2phys_fun(options.min_polya_len, max_polya_len)
+    vpositions = np.linspace(size2phys(options.min_polya_len),
+                             size2phys(max_polya_len), IMAGE_HEIGHT)
+
+    kdes = pd.DataFrame({
+        name: gaussian_kde(
+                list(size2phys(np.array(cnts.index))),
+                weights=list(cnts),
+                bw_method=options.kde_bandwidth)(vpositions)
+        for name, cnts in tagcounts_pa.items()}, index=vpositions)
 
     # Construct the image and plot it.
-    imgdata = construct_virtual_gel_image(binnedcounts, controlsamples, expsamples)
+    imgdata = construct_virtual_gel_image(kdes, controlsamples, expsamples)
 
     figwidth = options.width if options.width is not None else (
                                        1.4 + 0.33 * len(samples))
-
-    fig = plt.figure(figsize=(figwidth, options.height))
-    ax = plt.gca()
+    fig, ax = plt.subplots(1, 1, figsize=(figwidth, options.height))
 
     ax.pcolor(imgdata, cmap='Greys', rasterized=True, vmin=0, vmax=1)
 
@@ -138,7 +140,9 @@ def plot(options, controlsamples, expsamples):
     ax.xaxis.tick_top()
 
     ax.set_ylabel('Poly(A) tail length (nt)')
-    ax.set_yticks([int(size2phys(m) * IMAGE_HEIGHT) for m in MARKER_POSITIONS])
+    ax.set_yticks([(size2phys(m) - size2phys(options.min_polya_len)) /
+                   (size2phys(max_polya_len) - size2phys(options.min_polya_len))
+                    * IMAGE_HEIGHT for m in MARKER_POSITIONS])
     ax.set_yticklabels(MARKER_POSITIONS)
 
     for spinepos in 'top bottom left right'.split():
@@ -149,7 +153,7 @@ def plot(options, controlsamples, expsamples):
     ax.tick_params(axis='y', direction='out')
 
     ax.set_xlim(0, imgdata.shape[1])
-    ax.set_ylim(size2phys(MINIMUM_POLYA_LENGTH) * IMAGE_HEIGHT, imgdata.shape[0])
+    ax.set_ylim(size2phys(options.min_polya_len) * IMAGE_HEIGHT, imgdata.shape[0])
 
     plt.tight_layout()
 
@@ -178,6 +182,14 @@ def parse_arguments():
     parser.add_argument('--by-total-tag-counts', dest='normalize_by_total_tags',
                         action='store_true', default=False,
                         help='Normalize tag counts by total (default: by poly(A)+ tags)')
+    parser.add_argument('--minimum-polya-length', dest='min_polya_len', type=int,
+                        default=5, help='Poly(A) length at the bottom of the gel')
+    parser.add_argument('--kde-bandwidth', dest='kde_bandwidth',
+                        metavar='VALUE', type=float, default=0.07,
+                        help='Bandwidth for the kernel density estimation')
+    parser.add_argument('--merge-controls', dest='merge_controls',
+                        action='store_true', default=False,
+                        help='Merge control lanes into one to form a ladder')
 
     options = parser.parse_args()
 

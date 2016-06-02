@@ -45,13 +45,22 @@ class CommandHandlers:
 
         sys.exit(main())
 
+    def check_configuration(self):
+        if not os.path.exists('tailseeker.yaml'):
+            print('ERROR: Configuration file "tailseeker.yaml" does '
+                  'not exist in the current directory.', file=sys.stderr)
+            sys.exit(1)
+
     def run(self):
+        self.check_configuration()
         return self.proxy_to_snakemake('run', None)
 
     def clean(self):
+        self.check_configuration()
         return self.proxy_to_snakemake('clean', 'clean')
 
     def clear(self):
+        self.check_configuration()
         return self.proxy_to_snakemake('clear', 'clear')
 
 
