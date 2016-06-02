@@ -169,7 +169,7 @@ def determine_inputs_demultiplex_signals(wildcards):
 rule process_signals:
     input: determine_inputs_demultiplex_signals
     output:
-        sigproc_conf = 'scratch/sigproc-conf/{tile}.ini',
+        sigproc_conf = temp('scratch/sigproc-conf/{tile}.ini'),
         seqqual = map(temp, expand('scratch/seqqual/{sample}_{{tile}}.txt.gz',
                                  sample=ALL_SAMPLES + ['Unknown', 'PhiX'])),
         taginfo = map(temp, expand('scratch/taginfo/{sample}_{{tile}}.txt.gz',
