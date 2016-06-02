@@ -14,6 +14,11 @@ experimental_samples:
     KD1:        ATGAGC
     KD2:        CAGGCG
 
+analysis_level: 3
+
+reference_set:
+    _exp:   GRCh38
+
 clean_intermediate_files: immediately
 
 # ex: sw=4 sts=4 et
