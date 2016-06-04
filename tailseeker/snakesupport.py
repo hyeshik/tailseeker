@@ -62,7 +62,7 @@ WRKDIR = os.getcwd()
 RESOURCESDIR = os.path.join(TAILSEEKER_DIR, 'resources')
 BINDIR = os.path.join(TAILSEEKER_DIR, 'bin')
 SCRATCHDIR = (CONF['scratch_dir'] if 'scratch_dir' in CONF
-                                  else os.path.join(TAILSEEKER_DIR, 'scratch'))
+                                  else os.path.join(WRKDIR, 'scratch'))
 SCRIPTSDIR = os.path.join(TAILSEEKER_DIR, 'scripts')
 CONF.export_paths(globals())
 create_scratch_link()
