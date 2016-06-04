@@ -191,6 +191,7 @@ rule process_signals:
         shell('{BINDIR}/tailseq-sigproc {output.sigproc_conf}')
 
 
+TARGETS.extend('stats/signal-processing.csv')
 rule merge_signal_processing_stats:
     input: expand('scratch/stats/signal-proc-{tile}.csv', tile=sorted(TILES))
     output: 'stats/signal-processing.csv'
