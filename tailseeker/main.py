@@ -155,7 +155,7 @@ rule basecall_ayb:
         shutil.rmtree(tempdir)
 
 
-def determine_inputs_demultiplex_signals(wildcards):
+def determine_inputs_process_signals(wildcards):
     inputs = []
 
     for readid, program in CONF.get('third_party_basecaller', {}).items():
@@ -166,15 +166,22 @@ def determine_inputs_demultiplex_signals(wildcards):
 
     return inputs
 
+optional_outputs_from_process_signals = [
+    'scratch/sigdumps/signaldump-{}-{{tile}}.dmp.gz'.format(sample)
+    for sample, dumping in CONF['debug']['dump_signals'].items()
+    if sample in ALL_SAMPLES and dumping
+]
+
 rule process_signals:
-    input: determine_inputs_demultiplex_signals
+    input: determine_inputs_process_signals
     output:
         sigproc_conf = temp('scratch/sigproc-conf/{tile}.ini'),
         seqqual = map(temp, expand('scratch/seqqual/{sample}_{{tile}}.txt.gz',
                                  sample=ALL_SAMPLES + ['Unknown', 'PhiX'])),
         taginfo = map(temp, expand('scratch/taginfo/{sample}_{{tile}}.txt.gz',
                                    sample=ALL_SAMPLES + ['Unknown', 'PhiX'])),
-        demuxstats = temp('scratch/stats/signal-proc-{tile}.csv')
+        demuxstats = temp('scratch/stats/signal-proc-{tile}.csv'),
+        signaldumps = map(temp, optional_outputs_from_process_signals)
     threads: THREADS_MAXIMUM_CORE
     params:
         tileinfo=TILES, conf=CONF.confdata,
@@ -182,6 +189,13 @@ rule process_signals:
     run:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/generate-signalproc-conf.py')
         shell('{BINDIR}/tailseq-sigproc {output.sigproc_conf}')
+
+
+rule merge_signal_processing_stats:
+    input: expand('scratch/stats/signal-proc-{tile}.csv', tile=sorted(TILES))
+    output: 'stats/signal-processing.csv'
+    params: tiles=sorted(TILES)
+    script: SCRIPTSDIR + '/stats-merge-demultiplexing-counts.py'
 
 
 TARGETS.extend(expand('taginfo/{sample}.txt.gz', sample=ALL_SAMPLES))
@@ -286,6 +300,91 @@ rule optimize_parameter:
                 --output-measurements-csv {output.measurement_csv} \
                 > {output.optimal_param}'
 
+
+rule optimize_parameter_single_tile:
+    input: 'scratch/sigdumps/signaldump-{sample}-{tile}.dmp.gz'
+    output:
+        signal_histogram='paramscan/signal-histogram/{sample}-{tile}.pdf',
+        likelihoodratio_plot='paramscan/likelihood-ratio/{sample}-{tile}.pdf',
+        signal_samples='paramscan/signal-samples/{sample}-{tile}.pdf',
+        measurement_cdf='paramscan/measurement-accuracy/{sample}-{tile}.pdf',
+        measurement_csv='paramscan/measurements/{sample}-{tile}.csv',
+        optimal_param='paramscan/optimal-param/{sample}-{tile}.txt'
+    run:
+        tmplinkdir = 'scratch/paramopt-single-link/{}'.format(wildcards.tile)
+        if os.path.isdir(tmplinkdir):
+            shutil.rmtree(tmplinkdir)
+        os.makedirs(tmplinkdir)
+        os.symlink(os.path.abspath(input[0]),
+                   os.path.join(tmplinkdir, wildcards.tile + '.dmp.gz'))
+
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/determine-optimal-parameter.py \
+                   --sigdump-files "{tmplinkdir}/%%TILE%%.dmp.gz" \
+                   --output-signal-histogram {output.signal_histogram} \
+                   --output-parameter-determination {output.likelihoodratio_plot} \
+                   --output-signal-samples {output.signal_samples} \
+                   --output-measurements-cdf-plot {output.measurement_cdf} \
+                   --output-measurements-csv {output.measurement_csv} \
+                   > {output.optimal_param}')
+
+        shutil.rmtree(tmplinkdir)
+
+rule evaluate_parameter_single_tile:
+    input: 'scratch/sigdumps/signaldump-{sample}-{tile}.dmp.gz'
+    output:
+        signal_histogram='paramscan/{cutoff,[0-9.]+}/signal-histogram/{sample}-{tile}.pdf',
+        likelihoodratio_plot='paramscan/{cutoff,[0-9.]+}/likelihood-ratio/{sample}-{tile}.pdf',
+        signal_samples='paramscan/{cutoff,[0-9.]+}/signal-samples/{sample}-{tile}.pdf',
+        measurement_cdf='paramscan/{cutoff,[0-9.]+}/measurement-accuracy/{sample}-{tile}.pdf',
+        measurement_csv='paramscan/{cutoff,[0-9.]+}/measurements/{sample}-{tile}.csv',
+        optimal_param='paramscan/{cutoff,[0-9.]+}/optimal-param/{sample}-{tile}.txt'
+    run:
+        tmplinkdir = 'scratch/paramopt-single-link/{}-{}'.format(wildcards.cutoff, wildcards.tile)
+        if os.path.isdir(tmplinkdir):
+            shutil.rmtree(tmplinkdir)
+        os.makedirs(tmplinkdir)
+        os.symlink(os.path.abspath(input[0]),
+                   os.path.join(tmplinkdir, wildcards.tile + '.dmp.gz'))
+
+        shell('{PYTHON3_CMD} {SCRIPTSDIR}/determine-optimal-parameter.py \
+                   --sigdump-files "{tmplinkdir}/%%TILE%%.dmp.gz" \
+                   --preset-threshold {wildcards.cutoff} \
+                   --output-signal-histogram {output.signal_histogram} \
+                   --output-parameter-determination {output.likelihoodratio_plot} \
+                   --output-signal-samples {output.signal_samples} \
+                   --output-measurements-cdf-plot {output.measurement_cdf} \
+                   --output-measurements-csv {output.measurement_csv} \
+                   > {output.optimal_param}')
+
+        shutil.rmtree(tmplinkdir)
+
+
+SKETCHY_TILES = sorted([
+    tilename for tilename, tileinfo in TILES.items()
+    if CONF['sketchy_analysis']['complete'] or
+       int(tileinfo['tile']) in CONF['sketchy_analysis']['tiles']
+])
+rule sketchy_optimal_parameter_scan:
+    input: expand('paramscan/optimal-param/{{sample}}-{tile}.txt', tile=SKETCHY_TILES)
+    output: 'stats/sigproc-parameter-scan-{sample,[^:]+}.csv'
+    run:
+        import pandas as pd
+        optparams = pd.DataFrame([(tile, float(open(fn).read().strip()))
+                                  for tile, fn in zip(SKETCHY_TILES, input)],
+                                 columns=['tile', 'optimal_value'])
+        optparams.to_csv(output[0])
+        print(optparams)
+
+rule sketchy_evaluate_parameter_scan:
+    input: expand('paramscan/{{cutoff}}/optimal-param/{{sample}}-{tile}.txt', tile=SKETCHY_TILES)
+    output: 'stats/sigproc-parameter-eval-{sample}-{cutoff,[0-9.]+}.csv'
+    run:
+        import pandas as pd
+        optparams = pd.DataFrame([(tile, float(open(fn).read().strip()))
+                                  for tile, fn in zip(SKETCHY_TILES, input)],
+                                 columns=['tile', 'optimal_value'])
+        optparams.to_csv(output[0])
+        print(optparams)
 
 rule evaluate_parameter:
     input: expand('scratch/sigdumps/signaldump-{{sample}}-{tile}.dmp.gz', tile=TILES)

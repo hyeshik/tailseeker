@@ -202,8 +202,9 @@ def try_measurements(sigdumps, cutoff_val, options):
         ax.set_xlim(0, sigdumps.shape[1])
         ax.set_xlabel('Poly(A) cycle')
         ax.set_ylabel('Spot samples')
-        ax.set_yticks(np.linspace(0, random_samples, 11))
+        ax.set_yticks(np.linspace(0, min(len(sigdumps), random_samples), 11))
         ax.set_yticklabels(np.arange(0, 101, 10))
+        ax.set_ylim(0, min(len(sigdumps), random_samples))
         ax.invert_yaxis()
 
         plt.setp(ax.get_yticklines(), visible=False)
@@ -286,7 +287,7 @@ def parse_arguments():
                         default=10, help='Distance from the design length to the begin of '
                                          'gene body region to be sampled')
     parser.add_argument('--pdf-smoothing-window', dest='pdf_smoothing', type=int,
-                        default=5, help='Window size for smoothing PDFs')
+                        default=11, help='Window size for smoothing PDFs')
     parser.add_argument('--expected-maximum', dest='expected_maximum', type=float,
                         default=0.5, help='Empirically expected maximum value for a threshold')
     parser.add_argument('--preset-threshold', dest='preset_threshold', type=float,

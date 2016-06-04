@@ -23,7 +23,6 @@
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
 
-from tailseeker.powersnake import *
 import pandas as pd
 
 
@@ -38,7 +37,10 @@ def process(tile_table_pairs, output):
         [load_tile_demux_table(tile, tablefile)
          for tile, tablefile in tile_table_pairs], axis=0)
 
-    SUM_FIELDS = 'cln_no_index_mm cln_1_index_mm cln_2+_index_mm cln_no_delim'.split()
+    SUM_FIELDS = '''
+        cln_no_index_mm cln_1_index_mm cln_2+_index_mm
+        cln_fp_mm cln_qc_fail cln_no_delim
+    '''.split()
     aggfuncs = {c: 'sum' for c in SUM_FIELDS}
     aggfuncs.update({c: 'first' for c in tilestats.columns
                      if c not in SUM_FIELDS and c != 'name'})
@@ -50,12 +52,9 @@ def process(tile_table_pairs, output):
                         tilestats.sort_values(by=['name', 'tile'])], axis=0)
     merged['cln_passed'] = (
         merged['cln_no_index_mm cln_1_index_mm cln_2+_index_mm'.split()].sum(axis=1) -
-        merged['cln_no_delim'])
+        merged['cln_no_delim cln_fp_mm cln_qc_fail'.split()].sum(axis=1))
     merged.to_csv(output, index=False)
 
 
-## XXX Implement the standalone interface.
-
-if is_snakemake_child:
-    inputfiles = list(zip(params.tiles, input))
-    process(inputfiles, output[0])
+inputfiles = list(zip(snakemake.params.tiles, snakemake.input))
+process(inputfiles, snakemake.output[0])
