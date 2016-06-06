@@ -43,10 +43,10 @@
 /* Set a temporary limit of clusters in buffer. This will be
  * removed again once I implement a scalable routine that works for
  * larger clusters. */
-#define XXX_TAGCLUSTER_LIMIT            256
+#define XXX_TAGCLUSTER_LIMIT            2048
 
-#define DEFAULT_TAGALN_BUFFER_LEN       65536
-#define DEFAULT_TAGCLUSTER_BUFFER_LEN   65536
+#define DEFAULT_TAGALN_BUFFER_LEN       8192
+#define DEFAULT_TAGCLUSTER_BUFFER_LEN   8192
 
 static inline int16_t
 calculate_tag_prority(int flags)
@@ -106,7 +106,7 @@ count_trimers(const char *seq, union trimer_composition *counts)
 
 static struct deduppool *
 deduppool_init(ssize_t tagaln_capacity, ssize_t tagcluster_capacity,
-                ssize_t cologroup_capacity)
+               ssize_t cologroup_capacity, int umi_length)
 {
     struct deduppool *pool;
 
@@ -133,6 +133,7 @@ deduppool_init(ssize_t tagaln_capacity, ssize_t tagcluster_capacity,
 
     pool->tagcluster_left = pool->tagcluster_right = -1;
     pool->tagclusters_live = 0;
+    pool->umi_length = umi_length;
 
     memset(pool->tagalns, 0, sizeof(struct tagaln) * tagaln_capacity);
     memset(pool->tagclusters, 0, sizeof(struct tagcluster) * tagcluster_capacity);
@@ -407,27 +408,59 @@ diffcount_trimer_compositions(union trimer_composition *a, union trimer_composit
 #endif
 }
 
-#define MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
+static inline int
+MIN3(int a, int b, int c)
+{
+    if (a < b)
+        if (a < c)
+            return a;
+        else
+            return c;
+    else
+        if (b < c)
+            return b;
+        else
+            return c;
+}
 
 static int
-edit_distance(const char *s1, const char *s2)
+edit_distance(const char *s1, const char *s2, int length, int maximum_distance)
 {
-    unsigned int s1len, s2len, x, y, lastdiag, olddiag;
-    s1len = strlen(s1);
-    s2len = strlen(s2);
-    unsigned int column[s1len+1];
-    for (y = 1; y <= s1len; y++)
+    int x, y, lastdiag, olddiag, left, right;
+    int column[length+1];
+
+    left = 1;
+    right = maximum_distance + 1;
+
+    for (y = left; y <= right; y++)
         column[y] = y;
-    for (x = 1; x <= s2len; x++) {
+
+    for (x = 1; x <= length; x++) {
+        int nleft, nright;
+
         column[0] = x;
-        for (y = 1, lastdiag = x-1; y <= s1len; y++) {
+        lastdiag = x - 1;
+        nleft = nright = -1;
+
+        for (y = left; y <= right; y++) {
             olddiag = column[y];
             column[y] = MIN3(column[y] + 1, column[y-1] + 1, lastdiag + (s1[y-1] == s2[x-1] ? 0 : 1));
             lastdiag = olddiag;
+            if (column[y] <= maximum_distance) {
+                if (nleft < 0)
+                    nleft = y;
+                nright = y;
+            }
         }
+
+        if (nleft < 0)
+            return maximum_distance + 1;
+
+        left = nleft;
+        right = (nright >= length ? length : nright + 1);
     }
 
-    return column[s1len];
+    return column[length];
 }
 
 static int
@@ -549,7 +582,8 @@ merge_similar_umi_clusters(struct deduppool *tpool, struct tagcluster *query,
                 &target->trimer_counts) >= trimercomp_threshold)
             dist = editdist_threshold;
         else
-            dist = edit_distance(query->umi_rep, target->umi_rep);
+            dist = edit_distance(query->umi_rep, target->umi_rep, tpool->umi_length,
+                                 editdist_threshold - 1);
 
 //        fprintf(stderr, "[%d] DISTANCE %s-%s = %d\n", (int)target_ix,
 //                query->umi_rep, target->umi_rep, dist);
@@ -729,6 +763,34 @@ deduplicate_tailseq_bam(struct taskpool *tasks, samFile *samf, hts_idx_t *bamidx
     return 0;
 }
 
+static int
+get_bam_umi_length(samFile *samf, bam_hdr_t *header)
+{
+    bam1_t *aln=bam_init1();
+    uint8_t *umiseq_aux;
+    int r;
+
+    if (aln == NULL)
+        return -1;
+
+    if (sam_read1(samf, header, aln) < 0) {
+        bam_destroy1(aln);
+        return -1;
+    }
+
+    umiseq_aux = bam_aux_get(aln, "ZM");
+    if (umiseq_aux == NULL) {
+        bam_destroy1(aln);
+        return -1;
+    }
+
+    r = strlen(bam_aux2Z(umiseq_aux));
+
+    bam_destroy1(aln);
+
+    return r;
+}
+
 static void
 process_deduplications(struct taskpool *tasks)
 {
@@ -763,7 +825,7 @@ process_deduplications(struct taskpool *tasks)
     }
 
     tpool = deduppool_init(DEFAULT_TAGALN_BUFFER_LEN, DEFAULT_TAGCLUSTER_BUFFER_LEN,
-                           tasks->coorddist_tolerance + 2);
+                           tasks->coorddist_tolerance + 2, tasks->umi_length);
     if (tpool == NULL) {
         perror("deduppool_init");
         set_error_and_exit(5);
@@ -820,6 +882,13 @@ load_sam_targets_count(struct taskpool *pool)
     header = sam_hdr_read(samf);
     if (header == NULL) {
         fprintf(stderr, "ERROR: Failed to read header from %s.\n", pool->bam_filename);
+        return -1;
+    }
+
+    pool->umi_length = get_bam_umi_length(samf, header);
+    if (pool->umi_length < 0) {
+        fprintf(stderr, "ERROR: Can't verify the length of UMI from from %s.\n",
+                pool->bam_filename);
         return -1;
     }
 

@@ -56,6 +56,7 @@ struct taskpool {
     const char *bam_filename;
     int coorddist_tolerance;
     int editdist_tolerance;
+    int umi_length;
 
     pthread_mutex_t poollock;
     pthread_mutex_t writelock;
@@ -105,6 +106,8 @@ struct deduppool {
     ssize_t tagcluster_left;
     ssize_t tagcluster_right;
     ssize_t tagclusters_live;
+
+    int umi_length;
 };
 
 /* tailseq-dedup-approx.c */
