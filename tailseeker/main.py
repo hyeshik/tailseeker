@@ -255,11 +255,15 @@ rule plot_global_polya_length_distributions:
     params:
         controls=','.join(name for length, name
                           in sorted((CONF['spikein_lengths'][s], s) for s in SPIKEIN_SAMPLES)
-                          if length > 0)
+                          if length > 0),
+        kde_bandwidth=CONF['qcstats']['virtual_gel_kde_bandwidth'],
+        minimum_polya_length=CONF['qcstats']['virtual_gel_minimum_polya']
     run:
         samples = '--samples ' + ','.join(EXP_SAMPLES) if EXP_SAMPLES else ''
         shell('{PYTHON3_CMD} {SCRIPTSDIR}/plot-virtual-gel.py \
                     --tagcounts {input} --controls {params.controls} \
+                    --minimum-polya-length {params.minimum_polya_length} \
+                    --kde-bandwidth {params.kde_bandwidth} \
                     {samples} --output-plot {output}')
 
 

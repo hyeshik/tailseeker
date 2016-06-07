@@ -183,9 +183,9 @@ def parse_arguments():
                         action='store_true', default=False,
                         help='Normalize tag counts by total (default: by poly(A)+ tags)')
     parser.add_argument('--minimum-polya-length', dest='min_polya_len', type=int,
-                        default=5, help='Poly(A) length at the bottom of the gel')
+                        default=7, help='Poly(A) length at the bottom of the gel')
     parser.add_argument('--kde-bandwidth', dest='kde_bandwidth',
-                        metavar='VALUE', type=float, default=0.07,
+                        metavar='VALUE', type=float, default=0.05,
                         help='Bandwidth for the kernel density estimation')
     parser.add_argument('--merge-controls', dest='merge_controls',
                         action='store_true', default=False,
