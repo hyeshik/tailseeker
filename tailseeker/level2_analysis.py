@@ -456,6 +456,18 @@ rule merge_read5_position_dists:
          .fillna(0).astype(numpy.int64).to_csv(output[0]))
 
 
+TARGETS.append('qcplots/global-polya-length-histogram-L2.pdf')
+rule plot_global_polya_length_histogram_level2:
+    input: 'stats/polya-length-distributions-L2.csv'
+    output: 'qcplots/global-polya-length-histogram-L2.pdf'
+    params:
+        exclude=SPIKEIN_SAMPLES,
+        kde_bandwidth=CONF['qcstats']['histogram_kde_bandwidth'],
+        minimum_polya_length=CONF['qcstats']['histogram_minimum_polya'],
+        x_transform_factor=CONF['qcstats']['histogram_xscale_factor']
+    script: SCRIPTSDIR + '/plot-polya-len-histogram.py'
+
+
 # ---
 # Associations to genes and gene-level statistics
 # ---

@@ -249,7 +249,7 @@ rule generate_polya_length_distribution_stats_level1:
 
 
 TARGETS.append('qcplots/global-polya-length.pdf')
-rule plot_global_polya_length_distributions:
+rule plot_global_polya_length_virtual_gel:
     input: 'stats/polya-length-distributions-L1.csv'
     output: 'qcplots/global-polya-length.pdf'
     params:
@@ -265,6 +265,18 @@ rule plot_global_polya_length_distributions:
                     --minimum-polya-length {params.minimum_polya_length} \
                     --kde-bandwidth {params.kde_bandwidth} \
                     {samples} --output-plot {output}')
+
+
+TARGETS.append('qcplots/global-polya-length-histogram-L1.pdf')
+rule plot_global_polya_length_histogram:
+    input: 'stats/polya-length-distributions-L1.csv'
+    output: 'qcplots/global-polya-length-histogram-L1.pdf'
+    params:
+        exclude=SPIKEIN_SAMPLES,
+        kde_bandwidth=CONF['qcstats']['histogram_kde_bandwidth'],
+        minimum_polya_length=CONF['qcstats']['histogram_minimum_polya'],
+        x_transform_factor=CONF['qcstats']['histogram_xscale_factor']
+    script: SCRIPTSDIR + '/plot-polya-len-histogram.py'
 
 
 if 'spikein_lengths' in CONF and len(CONF['spikein_lengths']) > 0:
