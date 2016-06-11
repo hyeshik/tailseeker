@@ -35,6 +35,9 @@ from tailseeker import sequencers
 
 # Variable settings
 TILES = sequencers.get_tiles(CONF)
+for badtile in CONF['input_filtering']['blacklisted_tiles']:
+    if badtile in TILES:
+        del TILES[badtile]
 
 EXP_SAMPLES = sorted(CONF['experimental_samples'].keys())
 SPIKEIN_SAMPLES = sorted(CONF['spikein_samples'].keys())
