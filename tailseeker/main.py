@@ -221,15 +221,20 @@ rule merge_and_deduplicate_taginfo:
             shell('{SCRIPTSDIR}/bgzf-merge.py --output {output} {sorted_input}')
 
 
-TARGETS.extend(expand('fastq/{sample}_{read}.fastq.gz', sample=EXP_SAMPLES,
-                      read=INSERT_READS))
+if CONF['analysis_level'] >= 2 and CONF['read_filtering']['contaminant_filtering']:
+    temp_primary_fastq = temp
+else:
+    temp_primary_fastq = lazy_clearing
+    TARGETS.extend(expand('fastq/{sample}_{read}.fastq.gz', sample=EXP_SAMPLES,
+                          read=INSERT_READS))
+
 rule produce_fastq_outputs:
     input:
         taginfo='taginfo/{sample}.txt.gz',
         seqquals=expand('scratch/seqqual/{{sample}}_{tile}.txt.gz', tile=TILES)
     output:
-        R5='fastq/{sample}_R5.fastq.gz',
-        R3='fastq/{sample}_R3.fastq.gz'
+        R5=temp_primary_fastq('fastq/{sample}_R5.fastq.gz'),
+        R3=temp_primary_fastq('fastq/{sample}_R3.fastq.gz')
     threads: THREADS_MAXIMUM_CORE
     params: seqqual_filename='scratch/seqqual/{sample}_@tile@.txt.gz'
     run:
