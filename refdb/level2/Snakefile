@@ -230,7 +230,7 @@ rule build_contaminant_STAR_index:
     threads: 32
     params: output_dir='{genome}/contaminants.star'
     shell: '{STAR_CMD} --runThreadN {threads} --runMode genomeGenerate \
-                --genomeChrBinNbits 14 --genomeSAindexNbases 10 \
+                --genomeChrBinNbits 14 --genomeSAindexNbases 6 \
                 --genomeDir {params.output_dir} \
                 --genomeFastaFiles {input}'
 
