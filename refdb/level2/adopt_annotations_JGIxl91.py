@@ -35,7 +35,8 @@ def quote_internal_trid(trid):
 def process(inputfile, outputfile):
     gff3 = pd.read_table(inputfile, comment='#',
                          names=['seqname', 'source', 'feature', 'start', 'end',
-                                'score', 'strand', 'frame', 'attribute'])
+                                'score', 'strand', 'frame', 'attribute'],
+                         keep_default_na=False, na_values=[])
     gff3['attrs'] = gff3['attribute'].apply(lambda x: dict(tok.split('=', 1)
                                                            for tok in x.split(';')))
 

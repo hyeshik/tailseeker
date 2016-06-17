@@ -89,7 +89,7 @@ GENE_ANNOTATION_SOURCES = {
     'GRCz10': 'ftp://ftp.ensembl.org/pub/release-84/gtf/danio_rerio/Danio_rerio.GRCz10.84.gtf.gz',
     'WBcel235': 'ftp://ftp.ensembl.org/pub/release-84/gtf/caenorhabditis_elegans/Caenorhabditis_elegans.WBcel235.84.gtf.gz',
     'BDGP6': 'ftp://ftp.ensembl.org/pub/release-84/gtf/drosophila_melanogaster/Drosophila_melanogaster.BDGP6.84.gtf.gz',
-    'JGIxl91': 'ftp://ftp.xenbase.org/pub/Genomics/JGI/Xenla9.1/XL9.1_annot_v1.8.1.gene.gff3.gz',
+    'JGIxl91': 'ftp://ftp.xenbase.org/pub/Genomics/JGI/Xenla9.1/1.8.3/XL9.1_v3.genes.gff3.gz',
     'Rnor_6.0': 'ftp://ftp.ensembl.org/pub/release-84/gtf/rattus_norvegicus/Rattus_norvegicus.Rnor_6.0.84.gtf.gz',
 }
 
@@ -125,9 +125,9 @@ rule download_gene_annotation:
             shell('{WGET_CMD} -O /dev/stdout "{url}" | gzip -cd - | \
                    {BEDTOOLS_CMD} sort -header | gzip -c - > {output}')
         elif url.endswith('gff3.gz'):
-            shell('{WGET_CMD} -O /dev/stdout "{{url}}" | gzip -cd - | \
-                   {PYTHON3_CMD} adopt_annotations_JGIxl91.py | \
-                   gzip -c - > {{output}}'.format(PYTHON_CMD=sys.executable))
+            shell('{WGET_CMD} -O /dev/stdout "{url}" | gzip -cd - | \
+                   tar -xO | {PYTHON3_CMD} adopt_annotations_JGIxl91.py | \
+                   gzip -c - > {output}')
 
 rule uncompress_genome_fasta:
     input: '{genome}/genome.fa.gz'
