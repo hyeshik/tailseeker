@@ -66,6 +66,8 @@ struct TagInfoQueue { /* a circular queue */
 
     int num_duplicates;
     int highest_priority;
+
+    FILE *statsout;
 };
 
 
@@ -122,6 +124,7 @@ tqueue_new(ssize_t size)
     queue->rear = 0;
     queue->num_duplicates = 0;
     queue->highest_priority = -1;
+    queue->statsout = NULL;
 
     return queue;
 }
@@ -130,6 +133,8 @@ static void
 tqueue_free(struct TagInfoQueue *queue)
 {
     free(queue->el);
+    if (queue->statsout != NULL)
+        fclose(queue->statsout);
     free(queue);
 }
 
@@ -258,9 +263,16 @@ process_tag_duplicates(struct TagInfoQueue *queue)
 
     length = tqueue_length(queue);
     if (length == 0)
-        /* pass */;
-    else if (length == 1)
+        return 0;
+
+    if (length == 1) {
         printf("%s\t%d\n", tqueue_tail(queue).line, queue->num_duplicates);
+        if (queue->statsout != NULL) {
+            struct TagInfo *taginfo=&tqueue_tail(queue);
+            fprintf(queue->statsout, "%s\t%d\t%d\t%d\n", taginfo->tilename, taginfo->clusterno,
+                    taginfo->polyA_len, taginfo->polyA_len);
+        }
+    }
     else {
         int polyA_len_sum, nearest_ptr;
         float mean_polyA_len, nearest_dist;
@@ -287,12 +299,24 @@ process_tag_duplicates(struct TagInfoQueue *queue)
         /* Output the representative tag with the mean poly(A) length. */
         {
             struct TagInfo *rep;
+            int final_polyA;
 
             rep = &queue->el[nearest_ptr];
+            final_polyA = rep->polyA_len >= 0 ? (int)roundf(mean_polyA_len) : -1;
             printf("%s\t%d\t%d\t%d\t%s\t%d\n",
-                rep->tilename, rep->clusterno, rep->flags,
-                rep->polyA_len >= 0 ? (int)roundf(mean_polyA_len) : -1,
+                rep->tilename, rep->clusterno, rep->flags, final_polyA,
                 rep->modifications, queue->num_duplicates);
+
+            /* Output poly(A) length calls for accuracy assessments of clones */
+            if (queue->statsout != NULL) {
+                fprintf(queue->statsout, "%s\t%d\t%d", rep->tilename, rep->clusterno,
+                        final_polyA);
+
+                for (ptr = tqueue_next(queue, queue->rear);
+                        ptr != queue->front; ptr = tqueue_next(queue, ptr))
+                    fprintf(queue->statsout, "\t%d", queue->el[ptr].polyA_len);
+                fprintf(queue->statsout, "\n");
+            }
         }
     }
 
@@ -301,7 +325,7 @@ process_tag_duplicates(struct TagInfoQueue *queue)
 
 
 int
-main(void)
+main(int argc, char *argv[])
 {
     struct TagInfoQueue *queue;
     int lineno;
@@ -310,6 +334,14 @@ main(void)
     if (queue == NULL) {
         perror("tqueue_new");
         goto onError;
+    }
+
+    if (argc >= 2) {
+        queue->statsout = fopen(argv[1], "w");
+        if (queue->statsout == NULL) {
+            fprintf(stderr, "ERROR: Cannot open %s.", argv[1]);
+            goto onError;
+        }
     }
 
     for (lineno = 0;
