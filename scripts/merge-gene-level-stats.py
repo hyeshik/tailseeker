@@ -57,12 +57,13 @@ for alias in GENETYPE_ALIASES:
 genes = genes.set_index('gene_id')[GENEINFO_COLUMNS]
 
 # Determine orders of columns and rows
-cols_order = sorted(alldatatbl.columns, key=column_sortkey)
+cols_order = GENEINFO_COLUMNS + sorted(alldatatbl.columns, key=column_sortkey)
 alldatatbl['__total_tags'] = alldatatbl[[c for c in alldatatbl.columns
                                         if c.endswith(':polyA_tag_count')]].sum(axis=1)
-sorteddatatbl = alldatatbl.sort_values(by='__total_tags', ascending=False)[cols_order]
-finaltbl = pd.concat([genes, sorteddatatbl], join='inner', axis=1)
-del sorteddatatbl, alldatatbl, genes
+finaltbl = pd.merge(genes, alldatatbl, how='right', left_index=True,
+                    right_index=True).sort_values(
+                    by='__total_tags', ascending=False)[cols_order]
+del alldatatbl, genes
 
 # Write out in the csv format
 print("Writing to " + sm.output.csv)
