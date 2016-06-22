@@ -72,21 +72,32 @@ class TailGroupSummarizer:
         pa_error = t * pa_sem
         return np.exp(pa_mean), n, np.exp(pa_mean - pa_error), np.exp(pa_mean + pa_error)
 
-    def polya_length_stats(self, tails):
-        cnt_by_pa = tails.sum(axis=2)
+    def polya_length_stats(self, canonicaltags, noncanonicaltags):
+        cnt_by_pa = canonicaltags.sum(axis=2)
         mean_pa_packed = cnt_by_pa.apply(self.mean_pa_length)
+        polyA_tag_count = mean_pa_packed.apply(itemgetter(1))
+
+        # Count short or non-poly(A) tails mapped near polyadenylation sites
+        nonpolyA_tag_count = cnt_by_pa.loc[cnt_by_pa.index < self.polya_min_len].sum(axis=0)
+
+        # Count short or non-poly(A) tails not mapped near polyadenylation sites
+        noncanonical_tag_count = noncanonicaltags.sum(axis=2).sum(axis=0)
+
         return pd.DataFrame({
             'polyA_mean': mean_pa_packed.apply(itemgetter(0)),
-            'polyA_tag_count': mean_pa_packed.apply(itemgetter(1)),
+            'polyA_tag_count': polyA_tag_count,
             'polyA_mean_ci_lo': mean_pa_packed.apply(itemgetter(2)),
             'polyA_mean_ci_hi': mean_pa_packed.apply(itemgetter(3)),
-            'polyA_median': cnt_by_pa.apply(weighted_median)
+            'polyA_median': cnt_by_pa.apply(weighted_median),
+            'nonpolyA_tag_count': nonpolyA_tag_count,
+            'noncanonical_tag_count': noncanonical_tag_count,
+            'total_tag_count': polyA_tag_count + nonpolyA_tag_count + noncanonical_tag_count,
         })
 
-    def polya_count_stats(self, tails):
+    def polya_count_stats(self, tags):
         coldata = {}
         for left, right in self.POLYA_WINDOWS:
-            modcounts = tails.ix[:, range(left, right)].sum(axis=1)
+            modcounts = tags.ix[:, range(left, right)].sum(axis=1)
             coldata['polyA_tag_count_{}-{}'.format(left, right-1)] = modcounts.sum(axis=0)
         return pd.DataFrame(coldata)
 
@@ -97,6 +108,15 @@ class TailGroupSummarizer:
             modsum = modcounts.multiply(np.array(modcounts.index), axis=0).sum(axis=0)
             avgmod = modsum / modcounts.sum(axis=0)
             coldata['average_mods_{}-{}'.format(left, right-1)] = avgmod
+
+        return pd.DataFrame(coldata)
+
+    def polya_mods_stats_full(self, tails, suffix):
+        coldata = {}
+        modcounts = tails.sum(axis=1)
+        modsum = modcounts.multiply(np.array(modcounts.index), axis=0).sum(axis=0)
+        avgmod = modsum / modcounts.sum(axis=0)
+        coldata['average_mods_{}'.format(suffix)] = avgmod
 
         return pd.DataFrame(coldata)
 
@@ -112,23 +132,33 @@ class TailGroupSummarizer:
 confidence_interval = snakemake.params.confidence_interval_span
 
 tgsum = TailGroupSummarizer(confidence_interval)
-tailcounts = {
-    'U': pd.read_msgpack(lzma.open(snakemake.input.U, 'rb')),
-    'G': pd.read_msgpack(lzma.open(snakemake.input.G, 'rb')),
-    'C': pd.read_msgpack(lzma.open(snakemake.input.C, 'rb')),
+tailcounts_canonical = {
+    'U': pd.read_msgpack(lzma.open(snakemake.input.Uc, 'rb')),
+    'G': pd.read_msgpack(lzma.open(snakemake.input.Gc, 'rb')),
+    'C': pd.read_msgpack(lzma.open(snakemake.input.Cc, 'rb')),
+}
+tailcounts_noncanonical = {
+    'U': pd.read_msgpack(lzma.open(snakemake.input.Unc, 'rb')),
+    'G': pd.read_msgpack(lzma.open(snakemake.input.Gnc, 'rb')),
+    'C': pd.read_msgpack(lzma.open(snakemake.input.Cnc, 'rb')),
 }
 
 stats = [
-    tgsum.polya_length_stats(tailcounts['U']),
-    tgsum.polya_count_stats(tailcounts['U']),
+    tgsum.polya_length_stats(tailcounts_canonical['U'], tailcounts_noncanonical['U']),
+    tgsum.polya_count_stats(tailcounts_canonical['U']),
 ]
 
-for modtype, tailcnt in tailcounts.items():
+for modtype, tailcnt in tailcounts_canonical.items():
     tbl = tgsum.polya_mods_stats(tailcnt)
     tbl.columns = [col.replace('_mods_', '_{}_'.format(modtype)) for col in tbl.columns]
     stats.append(tbl)
 
+for modtype, tailcnt in tailcounts_noncanonical.items():
+    tbl = tgsum.polya_mods_stats_full(tailcnt, 'noncanonical')
+    tbl.columns = [col.replace('_mods_', '_{}_'.format(modtype)) for col in tbl.columns]
+    stats.append(tbl)
+
 (pd.concat(stats, axis=1)
-   .sort_values(by='polyA_tag_count', ascending=False)
+   .sort_values(by='total_tag_count', ascending=False)
    .to_csv(snakemake.output[0]))
 

@@ -292,9 +292,11 @@ rule merge_polya_sites_list:
 
         shell('cat {input} | {BEDTOOLS_CMD} sort -i - | \
                {BEDTOOLS_CMD} merge -s -i - -c 4,5,6 -o first | \
+               cut -f 1,2,3,5,6,7 | \
                {BEDTOOLS_CMD} slop -s -l {polya_site_window} \
                     -r {polya_site_window} -i - -g {genomedir}/chrom-sizes | \
-               {BEDTOOLS_CMD} merge -i - -s -c 4,5,6 -o first > {output}')
+               {BEDTOOLS_CMD} merge -i - -s -c 4,5,6 -o first | \
+               cut -f 1,2,3,5,6,7 > {output}')
 
 def inputs_for_apply_short_polya_filter(wildcards):
     return 'scratch/polya-sites/group-{group}.txt'.format(
@@ -318,7 +320,7 @@ rule apply_short_polya_filter:
                awk -F '\t' '($2 < $3) {{ print $0; }}' | \
                {BEDTOOLS_CMD} slop -s -l 1 -r -1 -g {genomedir}/chrom-sizes | \
                {BEDTOOLS_CMD} intersect -nonamecheck -u -s -a - -b {input.pasitelist} | \
-               cut -f4 | cut -d: -f1-2 | uniq > {params.tmplist}")
+               cut -f4 | cut -d/ -f1 | cut -d: -f1-2 | uniq > {params.tmplist}")
 
         import pandas as pd
         import numpy as np
@@ -503,54 +505,24 @@ rule count_multiple_associations:
             {BGZIP_CMD} -@ {threads} -c > {output}'
 
 
-TARGETS.extend(expand('tagcounts/{sample}-{ambigtype}-{modtype}.msgpack.xz',
+TARGETS.extend(expand('tagcounts/{sample}-{ambigtype}-{modtype}-{tailtype}.msgpack.xz',
                       sample=EXP_SAMPLES, ambigtype=['single', 'multi'],
-                      modtype=['U', 'C', 'G']))
+                      modtype=['U', 'C', 'G'], tailtype=['canonical', 'noncanonical']))
 
 rule make_gene_level_counts:
     input:
         taginfo='refined-taginfo/{sample}.mapped.txt.gz',
         associations='associations/{sample}.txt.gz'
-    output: 'tagcounts/{sample}-{ambigtype}-{modtype}.msgpack.xz'
-    run:
-        from tailseeker import tabledefs
-        import pandas as pd
-        import numpy as np
-        import lzma
-
-        assoctbl = pd.read_table(input.associations, **tabledefs.associations)
-        taginfotbl = pd.read_table(input.taginfo, **tabledefs.refined_taginfo)
-
-        tbl = pd.merge(assoctbl, taginfotbl, how='inner', left_on=['tile', 'cluster'],
-                       right_on=['tile', 'cluster'])
-
-        bad_flags = CONF['gene_level_stats']['bad_flags_filter']
-        max_modcount = CONF['gene_level_stats']['maximum_nonA_mod_count']
-        delim_settings = CONF['delimiter'][wildcards.sample]
-        min_preamble_length = delim_settings[0] - 1 + len(delim_settings[1]) - 1
-        R3 = CONF['read_cycles']['R3']
-        max_polya = R3[1] - R3[0] + 1 - min_preamble_length
-        mod_of_interest = wildcards.modtype
-
-        tbl[mod_of_interest] = tbl[mod_of_interest].clip_upper(max_modcount)
-        if wildcards.ambigtype == 'single':
-            tbl = tbl[tbl['ambig'] <= 1]
-        filtered_tbl = tbl[(tbl['pflags'] & bad_flags) == 0]
-
-        polya_axis = np.arange(max_polya + 1).astype(np.int32)
-        modcount_axis = np.arange(max_modcount + 1).astype(np.int32)
-
-        counts_dfs = {}
-        for geneid, tags in filtered_tbl.groupby('gene'):
-            tagcounts = tags.groupby(['polyA', mod_of_interest]).agg('count').reset_index()
-            countsgrid = (pd.pivot_table(tagcounts, index='polyA', columns=mod_of_interest,
-                                          values='cluster', fill_value=0).astype(np.uint32)
-                                   .reindex_axis(polya_axis, axis=0, fill_value=0)
-                                   .reindex_axis(modcount_axis, axis=1, fill_value=0))
-            counts_dfs[geneid] = countsgrid
-
-        counts_dfs = pd.Panel(counts_dfs)
-        counts_dfs.to_msgpack(lzma.open(output[0], 'wb'))
+    output:
+        canonical='tagcounts/{sample}-{ambigtype}-{modtype}-canonical.msgpack.xz',
+        noncanonical='tagcounts/{sample}-{ambigtype}-{modtype}-noncanonical.msgpack.xz',
+    params:
+        bad_flags=CONF['gene_level_stats']['bad_flags_filter'],
+        max_modcount=CONF['gene_level_stats']['maximum_nonA_mod_count'],
+        delim_settings=lambda wc: CONF['delimiter'][wc.sample],
+        polyA_assume_intact=CONF['gene_level_stats']['polyA_len_assuming_intact'],
+        R3=CONF['read_cycles']['R3']
+    script: SCRIPTSDIR + '/make-gene-level-tagcounts.py'
 
 
 TARGETS.extend(expand('stats/genelevelstats-{sample}-{ambigtype}.csv',
@@ -558,9 +530,12 @@ TARGETS.extend(expand('stats/genelevelstats-{sample}-{ambigtype}.csv',
 
 rule make_gene_level_statistics:
     input:
-        U='tagcounts/{sample}-{ambigtype}-U.msgpack.xz',
-        G='tagcounts/{sample}-{ambigtype}-G.msgpack.xz',
-        C='tagcounts/{sample}-{ambigtype}-C.msgpack.xz'
+        Uc='tagcounts/{sample}-{ambigtype}-U-canonical.msgpack.xz',
+        Gc='tagcounts/{sample}-{ambigtype}-G-canonical.msgpack.xz',
+        Cc='tagcounts/{sample}-{ambigtype}-C-canonical.msgpack.xz',
+        Unc='tagcounts/{sample}-{ambigtype}-U-noncanonical.msgpack.xz',
+        Gnc='tagcounts/{sample}-{ambigtype}-G-noncanonical.msgpack.xz',
+        Cnc='tagcounts/{sample}-{ambigtype}-C-noncanonical.msgpack.xz'
     output: limit('stats/genelevelstats-{sample}-{{ambigtype}}.csv', sample=EXP_SAMPLES)
     params: confidence_interval_span=CONF['gene_level_stats']['polyA_len_confidence_interval']
     script: SCRIPTSDIR + '/stats-gene-level-tailing.py'

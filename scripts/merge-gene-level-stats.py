@@ -31,6 +31,8 @@ sm = snakemake
 
 GENELEVEL_STATS_COLUMN_ORDER = {name: format(i, '08d') for i, name in enumerate("""
     polyA_mean polyA_mean_ci_lo polyA_mean_ci_hi polyA_median polyA_tag_count
+    nonpolyA_tag_count noncanonical_tag_count total_tag_count
+    average_C_noncanonical average_G_noncanonical average_U_noncanonical
 """.split())}
 
 GENEINFO_COLUMNS = "gene_name gene_type gene_description".split()
@@ -87,7 +89,13 @@ EXCEL_FORMAT_OPTS = {
     ':polyA_median': [6.2,
         {'align': 'right', 'num_format': '0.0'}],
     ':polyA_tag_count': [6.2,
-        {'align': 'right', 'bg_color': '#e2efda', 'num_format': '0.0'}],
+        {'align': 'right', 'bg_color': '#e2efda', 'num_format': '0'}],
+    ':nonpolyA_tag_count': [6.2,
+        {'align': 'right', 'bg_color': '#eeeeee', 'num_format': '0'}],
+    ':noncanonical_tag_count': [6.2,
+        {'align': 'right', 'bg_color': '#ffffff', 'num_format': '0'}],
+    ':total_tag_count': [6.2,
+        {'align': 'right', 'bg_color': '#eeeeee', 'num_format': '0'}],
 }
 EXCEL_HEADER_FORMAT = {'align': 'left', 'text_wrap': True, 'bold': True,
                        'valign': 'top', 'bg_color': '#d9d9d9'}
