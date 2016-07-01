@@ -57,7 +57,7 @@ rule contaminant_alignment:
                 --outFileNamePrefix {params.scratch}/')
 
         shell('split -n r/1/4 {params.scratch}/Unmapped.out.mate1 | \
-               colrm 1 1 | sort > {output}')
+               colrm 1 1 | cut -d/ -f1 | sort > {output}')
         shutil.rmtree(params.scratch)
 
 
