@@ -179,7 +179,8 @@ struct BalancerParameters {
 };
 
 struct PolyAFinderParameters {
-    int weights[256];
+    short weights_nonA[256];
+    short weights_polyA[256];
     size_t max_terminal_modifications;
     size_t min_polya_length;
     size_t sigproc_trigger_polya_length;

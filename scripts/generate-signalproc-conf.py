@@ -131,11 +131,16 @@ num-negative-samples = {conf[negative_signal_samples]}
 def generate_polyA_finder_section(outf):
     print("""\
 [polyA_finder]
-weight-T = {conf[weights][T]}
-weight-A = {conf[weights][A]}
-weight-C = {conf[weights][C]}
-weight-G = {conf[weights][G]}
-weight-N = {conf[weights][N]}
+polyA-weight-T = {conf[polyA_weights][T]}
+polyA-weight-A = {conf[polyA_weights][A]}
+polyA-weight-C = {conf[polyA_weights][C]}
+polyA-weight-G = {conf[polyA_weights][G]}
+polyA-weight-N = {conf[polyA_weights][N]}
+nonA-weight-T = {conf[nonA_weights][T]}
+nonA-weight-A = {conf[nonA_weights][A]}
+nonA-weight-C = {conf[nonA_weights][C]}
+nonA-weight-G = {conf[nonA_weights][G]}
+nonA-weight-N = {conf[nonA_weights][N]}
 minimum-polya-length = {conf[minimum_polya_length]}
 maximum-modifications = {conf[maximum_modifications]}
 signal-analysis-trigger = {conf[signal_analysis_trigger]}

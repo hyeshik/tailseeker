@@ -37,51 +37,49 @@
 uint32_t
 find_polya(const char *seq, size_t seqlen, struct PolyAFinderParameters *params)
 {
-    int max_term_mod, *weights;
-    int longest_i, longest_j, longest_length;
+    short *polyA_weights, *nonA_weights;
+    int max_term_mod, nonA_score;
+    int best_i, best_j, best_length, best_score;
     int i, j;
 
     max_term_mod = params->max_terminal_modifications;
-    weights = params->weights;
+    polyA_weights = params->weights_polyA;
+    nonA_weights = params->weights_nonA;
 
     if (seqlen < max_term_mod)
         max_term_mod = seqlen;
 
-    longest_i = longest_j = seqlen + 1;
-    longest_length = -1;
+    best_i = best_j = -1;
+    best_length = best_score = -1;
+    nonA_score = 0;
 
     /* calculate match scores for all possible [i, j] */
     for (i = 0; i < max_term_mod; i++) {
         int curlength, scoresum;
 
-        scoresum = weights[(int)seq[i]];
-        if (longest_length < 1 && scoresum > 0) {
-            longest_length = 1;
-            longest_i = longest_j = i;
+        scoresum = nonA_score + polyA_weights[(int)seq[i]];
+        if (scoresum > best_score) {
+            best_i = best_j = i;
+            best_length = 1;
+            best_score = scoresum;
         }
 
         for (j = i + 1, curlength = 2; j < seqlen; j++, curlength++) {
-            scoresum += weights[(int)seq[j]];
+            scoresum += polyA_weights[(int)seq[j]];
 
-            if (scoresum > 0 && curlength > longest_length) {
-                longest_i = i;
-                longest_j = j;
-                longest_length = curlength;
+            if (scoresum > best_score && curlength > best_length) {
+                best_i = i;
+                best_j = j;
+                best_length = curlength;
+                best_score = scoresum;
             }
         }
+
+        nonA_score += nonA_weights[(int)seq[i]];
     }
 
-    if (longest_length < 0)
-        return 0;
-
-    while (seq[longest_i] != 'T' && longest_i <= longest_j)
-        longest_i++;
-
-    while (seq[longest_j] != 'T' && longest_j >= longest_i)
-        longest_j--;
-
-    if (longest_j + 1 - longest_i < params->min_polya_length)
+    if (best_length < (int)params->min_polya_length || best_score < 1)
         return 0;
     else
-        return ((uint32_t)longest_i << 16) | (longest_j + 1);
+        return ((uint32_t)best_i << 16) | (best_j + 1);
 }

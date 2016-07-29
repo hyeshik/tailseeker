@@ -235,16 +235,26 @@ static int
 feed_polyA_finder_entry(struct TailseekerConfig *cfg,
                         const char *name, const char *value)
 {
-    if (MATCH("weight-T"))
-        cfg->finderparams.weights[(int)'T'] = atoi(value);
-    else if (MATCH("weight-A"))
-        cfg->finderparams.weights[(int)'A'] = atoi(value);
-    else if (MATCH("weight-C"))
-        cfg->finderparams.weights[(int)'C'] = atoi(value);
-    else if (MATCH("weight-G"))
-        cfg->finderparams.weights[(int)'G'] = atoi(value);
-    else if (MATCH("weight-N"))
-        cfg->finderparams.weights[(int)'N'] = atoi(value);
+    if (MATCH("polyA-weight-T"))
+        cfg->finderparams.weights_polyA[(int)'T'] = atoi(value);
+    else if (MATCH("polyA-weight-A"))
+        cfg->finderparams.weights_polyA[(int)'A'] = atoi(value);
+    else if (MATCH("polyA-weight-C"))
+        cfg->finderparams.weights_polyA[(int)'C'] = atoi(value);
+    else if (MATCH("polyA-weight-G"))
+        cfg->finderparams.weights_polyA[(int)'G'] = atoi(value);
+    else if (MATCH("polyA-weight-N"))
+        cfg->finderparams.weights_polyA[(int)'N'] = atoi(value);
+    else if (MATCH("nonA-weight-T"))
+        cfg->finderparams.weights_nonA[(int)'T'] = atoi(value);
+    else if (MATCH("nonA-weight-A"))
+        cfg->finderparams.weights_nonA[(int)'A'] = atoi(value);
+    else if (MATCH("nonA-weight-C"))
+        cfg->finderparams.weights_nonA[(int)'C'] = atoi(value);
+    else if (MATCH("nonA-weight-G"))
+        cfg->finderparams.weights_nonA[(int)'G'] = atoi(value);
+    else if (MATCH("nonA-weight-N"))
+        cfg->finderparams.weights_nonA[(int)'N'] = atoi(value);
     else if (MATCH("minimum-polya-length"))
         cfg->finderparams.min_polya_length = atoi(value);
     else if (MATCH("maximum-modifications"))
@@ -470,14 +480,19 @@ set_default_configuration(struct TailseekerConfig *cfg)
     cfg->balancerparams.min_quality = 25;
     cfg->balancerparams.min_fraction_passes = .70f;
 
-    cfg->finderparams.max_terminal_modifications = 10;
+    cfg->finderparams.max_terminal_modifications = 20;
     cfg->finderparams.min_polya_length = 5;
     cfg->finderparams.sigproc_trigger_polya_length = 10;
     cfg->finderparams.naive_ruler_trigger_polya_length = 60;
-    cfg->finderparams.weights[(int)'T'] = 1;
-    cfg->finderparams.weights[(int)'A'] = cfg->finderparams.weights[(int)'C'] =
-        cfg->finderparams.weights[(int)'G'] = -10;
-    cfg->finderparams.weights[(int)'N'] = -5;
+    cfg->finderparams.weights_polyA[(int)'T'] = 2;
+    cfg->finderparams.weights_polyA[(int)'A'] = cfg->finderparams.weights_polyA[(int)'C'] =
+        cfg->finderparams.weights_polyA[(int)'G'] = -9;
+    cfg->finderparams.weights_polyA[(int)'N'] = -1;
+    cfg->finderparams.weights_nonA[(int)'A'] = 0;
+    cfg->finderparams.weights_nonA[(int)'T'] = -1;
+    cfg->finderparams.weights_nonA[(int)'C'] =
+        cfg->finderparams.weights_nonA[(int)'G'] = -4;
+    cfg->finderparams.weights_nonA[(int)'N'] = 0;
 
     cfg->rulerparams.dark_cycles_threshold = 10;
     cfg->rulerparams.max_dark_cycles = 5;

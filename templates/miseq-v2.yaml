@@ -1,7 +1,8 @@
-include:    defaults-miseq.conf
+include:
+    - defaults-miseq.conf
+    - spikeins-standard.conf
 
 run_id:         ms054
-scratch_dir:    /scratch/hyeshik/tailseeker/ms054
 sources:
     - id:       a
       type:     MiSeq-V2
@@ -19,6 +20,6 @@ analysis_level: 3
 reference_set:
     _exp:   GRCh38
 
-clean_intermediate_files: immediately
+clean_intermediate_files: yes
 
 # ex: sw=4 sts=4 et
