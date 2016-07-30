@@ -23,40 +23,45 @@ the list of supported genomes are as followed:
 
 ## Prerequisite tools
 
-  * Python 3.3 or higher
-  * Generic build tools
+  * Essential dependencies
+    * Python 3.3 or higher
     * pkg-config
     * bash
     * wget
-    * make and a C compiler toolchain
+    * make and a C compilation toolchain
     * whiptail
-  * Command line tools for bioinformatics
-    * [htslib](http://www.htslib.org)
-    * [All Your Bases](http://www.ebi.ac.uk/goldman-srv/AYB/) - requires
-      [my patch](https://github.com/hyeshik/AYB2) to work with the recent Illumina
-      sequencers.
-  * Python modules
     * [Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home) - 3.5 or higher
-    * [GHMM](http://ghmm.org) – use
-      [my helper script](https://github.com/hyeshik/tailseeker/blob/master/support/install-ghmm.sh) to
-      install it for Python 3.
+    * [htslib](http://www.htslib.org)
+    * [colormath](https://pypi.python.org/pypi/colormath/)
+    * [matplotlib](http://matplotlib.org)
     * [NumPy](http://numpy.org)
     * [SciPy](http://www.scipy.org)
     * [pandas](http://pandas.pydata.org)
-    * [BioPython](http://biopython.org/wiki/Main_Page)
-    * [scikit-learn](http://scikit-learn.org/stable/)
-    * [matplotlib](http://matplotlib.org)
     * [PyYAML](http://pyyaml.org)
+  * Required only for optional gene-level statistics
+    * [STAR](https://github.com/alexdobin/STAR)
+    * [samtools](https://github.com/samtools/samtools)
+    * [bedtools](https://github.com/arq5x/bedtools2)
+    * [seqtk](https://github.com/lh3/seqtk)
+    * [GNU parallel](http://www.gnu.org/software/parallel/)
+    * [feather](https://pypi.python.org/pypi/feather-format)
+    * [Python lzma module](https://docs.python.org/3/library/lzma.html)
+    * [XlsxWriter](https://pypi.python.org/pypi/XlsxWriter)
+  * Optional for more sensitive analysis
+    * [All Your Bases](http://www.ebi.ac.uk/goldman-srv/AYB/) - requires
+      [my patch](https://github.com/hyeshik/AYB2) to work with the recent Illumina
+      sequencers.
+    * [GSNAP](http://research-pub.gene.com/gmap/)
 
 The toolchains and generic command line utilities can be installed if
 you're managing a Ubuntu box:
 
-    sudo apt-get install whiptail pkg-config gcc wget make
+    sudo apt install whiptail pkg-config gcc wget make
 
 You can install the Python modules in the list with this command from the
 top source directory:
 
-    pip3 install --user -r src/requirements.txt
+    pip3 install --user -r install/requirements.txt
 
 
 ## Installing
@@ -65,6 +70,15 @@ A script in the top directory will check the paths of prerequisite tools and
 guide you to set configurations correctly. Please run:
 
     ./setup.sh
+
+Then, build reference databases unless you're going to run `tailseeker` in
+genome-independent mode, or the level 1 analysis.
+
+    cd refdb/level2 && snakemake -j -- {genome}
+    cd refdb/level3 && snakemake -j -- {genome}
+
+Type the identifier of the genome to be used in place of `{genome}`. List of
+the available genomes are shown in the first section of this tutorial.
 
 
 ## Running the pipeline
@@ -86,14 +100,14 @@ guide you to set configurations correctly. Please run:
      ```sh
      # In case you have an access to a job queuing system of a cluster. Change 150 to the
      # maximum number of jobs that you can put into the queue at a time.
-     tailseeker run -c qsub -j 150
+     tseek run -c qsub -j 150
 
      # In case you have a single multi-core machine,
-     tailseeker run -j
+     tseek run -j
      ```
 
      All [Snakemake options](https://bitbucket.org/snakemake/snakemake/wiki/Documentation#markdown-header-all-options)
-     can be used in `tailseeker run`, too.
+     can be used in `tseek run`, too.
 
   7. Take a look at the `qcplots/` on the work directory. The plots there show how
      poly(A) length calling was accurate.

@@ -335,6 +335,14 @@ script_mode=$(printf "%04o\n" $((0777 & ~$(umask))))
 chmod $script_mode $install_dir/tseek
 
 
+# =======================================================
+# Compile C programs
+# =======================================================
+
+echo "==> Compiling programs"
+(cd $TOPDIR/src; make) || exit 1
+
+
 # ============================
 # Show the final instructions
 # ============================
