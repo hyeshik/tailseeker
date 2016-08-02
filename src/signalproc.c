@@ -607,19 +607,10 @@ dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
     struct BalancerParameters *balancer_params;
     float signal_range_bandwidth[NUM_CHANNELS];
     float signal_range_low[NUM_CHANNELS];
-    int polya_start, polya_end, polya_len, balancer_len;
-    int insert_len, dumping_len;
-    uint32_t polya_ret;
+    int balancer_len, insert_len, dumping_len;
 
     balancer_params = &cfg->balancerparams;
 
-    /* Locate the starting position of poly(A) tail if available */
-    polya_ret = find_polya(sequence_formatted + delimiter_end,
-                           cfg->threep_start + cfg->threep_length -
-                           delimiter_end, &cfg->finderparams);
-    polya_start = polya_ret >> 16;
-    polya_end = polya_ret & 0xffff;
-    polya_len = polya_end - polya_start;
     balancer_len = delimiter_end - cfg->threep_start;
     if (balancer_len > balancer_params->length)
         balancer_len = balancer_params->length;
@@ -649,7 +640,7 @@ dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
         dumping_len = insert_len;
 
     /* Process the signals */
-    if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
+    {
         struct IntensitySet spot_intensities[dumping_len];
         float scores[dumping_len * (NUM_CHANNELS + 1)];
         ssize_t padding;
@@ -664,18 +655,23 @@ dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
             return 0;
 
         pthread_mutex_lock(&bc->statslock);
-        if (bgzf_write(bc->stream_signal_dump, scores, sizeof(scores)) < 0) {
+        if (bgzf_write(bc->stream_signal_data_dump, scores, sizeof(scores)) < 0) {
             pthread_mutex_unlock(&bc->statslock);
             return -1;
         }
 
         padding = (bc->dump_signals - dumping_len) * (NUM_CHANNELS + 1);
         for (; padding > 0; padding -= ZEROPAD_BLOCK) {
-            if (bgzf_write(bc->stream_signal_dump, zeropad,
+            if (bgzf_write(bc->stream_signal_data_dump, zeropad,
                     sizeof(float) * (padding < ZEROPAD_BLOCK ? padding : ZEROPAD_BLOCK)) < 0) {
                 pthread_mutex_unlock(&bc->statslock);
                 return -1;
             }
+        }
+
+        if (bgzf_write(bc->stream_signal_spotids_dump, &clusterno, sizeof(clusterno)) < 0) {
+            pthread_mutex_unlock(&bc->statslock);
+            return -1;
         }
         pthread_mutex_unlock(&bc->statslock);
     }

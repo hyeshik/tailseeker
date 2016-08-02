@@ -170,7 +170,8 @@ def determine_inputs_process_signals(wildcards):
     return inputs
 
 optional_outputs_from_process_signals = [
-    'scratch/sigdumps/signaldump-{}-{{tile}}.dmp.gz'.format(sample)
+    'scratch/sigdumps/{}-{}-{{tile}}.dmp.gz'.format(filetype, sample)
+    for filetype in ['signals', 'spotids']
     for sample, dumping in CONF['debug']['dump_signals'].items()
     if sample in ALL_SAMPLES and dumping
 ]
@@ -307,7 +308,7 @@ if 'spikein_lengths' in CONF and len(CONF['spikein_lengths']) > 0:
 
 
 rule optimize_parameter:
-    input: expand('scratch/sigdumps/signaldump-{{sample}}-{tile}.dmp.gz', tile=TILES)
+    input: expand('scratch/sigdumps/signals-{{sample}}-{tile}.dmp.gz', tile=TILES)
     output:
         signal_histogram='paramopt/signal-histogram-{sample}.pdf',
         likelihoodratio_plot='paramopt/likelihood-ratio-{sample}.pdf',
@@ -317,7 +318,7 @@ rule optimize_parameter:
         optimal_param='paramopt/optimal-param-{sample}.txt'
     shell: '{PYTHON3_CMD} {SCRIPTSDIR}/determine-optimal-parameter.py \
                 --sigdump-files \
-                    "scratch/sigdumps/signaldump-{wildcards.sample}-%%TILE%%.dmp.gz" \
+                    "scratch/sigdumps/signals-{wildcards.sample}-%%TILE%%.dmp.gz" \
                 --output-signal-histogram {output.signal_histogram} \
                 --output-parameter-determination {output.likelihoodratio_plot} \
                 --output-signal-samples {output.signal_samples} \
@@ -327,7 +328,7 @@ rule optimize_parameter:
 
 
 rule optimize_parameter_single_tile:
-    input: 'scratch/sigdumps/signaldump-{sample}-{tile}.dmp.gz'
+    input: 'scratch/sigdumps/signals-{sample}-{tile}.dmp.gz'
     output:
         signal_histogram='paramscan/signal-histogram/{sample}-{tile}.pdf',
         likelihoodratio_plot='paramscan/likelihood-ratio/{sample}-{tile}.pdf',
@@ -355,7 +356,7 @@ rule optimize_parameter_single_tile:
         shutil.rmtree(tmplinkdir)
 
 rule evaluate_parameter_single_tile:
-    input: 'scratch/sigdumps/signaldump-{sample}-{tile}.dmp.gz'
+    input: 'scratch/sigdumps/signals-{sample}-{tile}.dmp.gz'
     output:
         signal_histogram='paramscan/{cutoff,[0-9.]+}/signal-histogram/{sample}-{tile}.pdf',
         likelihoodratio_plot='paramscan/{cutoff,[0-9.]+}/likelihood-ratio/{sample}-{tile}.pdf',
@@ -412,7 +413,7 @@ rule sketchy_evaluate_parameter_scan:
         print(optparams)
 
 rule evaluate_parameter:
-    input: expand('scratch/sigdumps/signaldump-{{sample}}-{tile}.dmp.gz', tile=TILES)
+    input: expand('scratch/sigdumps/signals-{{sample}}-{tile}.dmp.gz', tile=TILES)
     output:
         signal_histogram='parameval/{cutoff,[0-9.]+}/signal-histogram-{sample}.pdf',
         likelihoodratio_plot='parameval/{cutoff,[0-9.]+}/likelihood-ratio-{sample}.pdf',
@@ -423,7 +424,7 @@ rule evaluate_parameter:
     shell: '{PYTHON3_CMD} {SCRIPTSDIR}/determine-optimal-parameter.py \
                 --preset-threshold {wildcards.cutoff} \
                 --sigdump-files \
-                    "scratch/sigdumps/signaldump-{wildcards.sample}-%%TILE%%.dmp.gz" \
+                    "scratch/sigdumps/signals-{wildcards.sample}-%%TILE%%.dmp.gz" \
                 --output-signal-histogram {output.signal_histogram} \
                 --output-parameter-determination {output.likelihoodratio_plot} \
                 --output-signal-samples {output.signal_samples} \

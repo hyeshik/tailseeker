@@ -139,8 +139,10 @@ feed_output_entry(struct TailseekerConfig *cfg,
         cfg->stats_output = strdup(value);
     else if (MATCH("length-dists"))
         cfg->length_dists_output = strdup(value);
-    else if (MATCH("signal-dump"))
-        cfg->signal_dump_output = strdup(value);
+    else if (MATCH("signal-dump-data"))
+        cfg->signal_dump_data_output = strdup(value);
+    else if (MATCH("signal-dump-spotids"))
+        cfg->signal_dump_spotids_output = strdup(value);
     else {
         fprintf(stderr, "Unknown key \"%s\" in [output].\n", name);
         return -1;
@@ -679,7 +681,8 @@ free_config(struct TailseekerConfig *cfg)
     free_if_not_null(cfg->taginfo_output);
     free_if_not_null(cfg->stats_output);
     free_if_not_null(cfg->length_dists_output);
-    free_if_not_null(cfg->signal_dump_output);
+    free_if_not_null(cfg->signal_dump_spotids_output);
+    free_if_not_null(cfg->signal_dump_data_output);
     free_if_not_null(cfg->threep_colormatrix_filename);
 
     free_if_not_null(cfg->controlinfo.control_seq);

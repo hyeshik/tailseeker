@@ -459,7 +459,7 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
             return -1;
         }
 
-        if (bc->stream_signal_dump != NULL &&
+        if (bc->stream_signal_data_dump != NULL &&
                 dump_spot_signals(cfg, bc, intensities, sequence_formatted,
                                   clusterno, delimiter_end) < 0) {
             perror("process_spots");

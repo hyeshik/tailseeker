@@ -114,7 +114,8 @@ struct SampleInfo {
 
     BGZF *stream_seqqual;       /* use wsync_* locking for theses two */
     BGZF *stream_taginfo;
-    BGZF *stream_signal_dump;   /* use statslock */
+    BGZF *stream_signal_spotids_dump;   /* use statslock */
+    BGZF *stream_signal_data_dump;      /* use statslock */
 
     struct WriteHandleSync wsync_seqqual;
     struct WriteHandleSync wsync_taginfo;
@@ -229,7 +230,8 @@ struct TailseekerConfig {
     char *taginfo_output;
     char *stats_output;
     char *length_dists_output;
-    char *signal_dump_output;
+    char *signal_dump_spotids_output;
+    char *signal_dump_data_output;
 
     /* section alternative_calls */
     struct AlternativeCallInfo *altcalls;

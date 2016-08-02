@@ -86,7 +86,8 @@ seqqual = scratch/seqqual/{{name}}_{tile}.txt.gz
 taginfo = scratch/taginfo/{{name}}_{tile}.txt.gz
 stats = scratch/stats/signal-proc-{tile}.csv
 length-dists = scratch/stats/length-dist-{tile}.csv
-signal-dump = scratch/sigdumps/signaldump-{{name}}-{tile}.dmp.gz
+signal-dump-data = scratch/sigdumps/signals-{{name}}-{tile}.dmp.gz
+signal-dump-spotids = scratch/sigdumps/spotids-{{name}}-{tile}.dmp.gz
 """.format(tile=wildcards.tile), file=outf)
 
     for subdir in 'scratch/seqqual scratch/taginfo scratch/stats scratch/sigdumps'.split():

@@ -73,11 +73,11 @@ open_writers(struct TailseekerConfig *cfg)
             free(filename);
         }
 
-        if (cfg->signal_dump_output != NULL && sample->dump_signals) {
-            filename = replace_placeholder(cfg->signal_dump_output,
+        if (cfg->signal_dump_data_output != NULL && sample->dump_signals) {
+            filename = replace_placeholder(cfg->signal_dump_data_output,
                                            "{name}", sample->name);
-            sample->stream_signal_dump = bgzf_open(filename, "w");
-            if (sample->stream_signal_dump == NULL) {
+            sample->stream_signal_data_dump = bgzf_open(filename, "w");
+            if (sample->stream_signal_data_dump == NULL) {
                 perror("open_writers");
                 fprintf(stderr, "Failed to write to %s\n", filename);
                 free(filename);
@@ -98,11 +98,24 @@ open_writers(struct TailseekerConfig *cfg)
             sigdumpheader[0] = sample->dump_signals;
             sigdumpheader[1] = NUM_CHANNELS + 1;
             sigdumpheader[2] = sizeof(float);
-            if (bgzf_write(sample->stream_signal_dump, (void *)sigdumpheader,
+            if (bgzf_write(sample->stream_signal_data_dump, (void *)sigdumpheader,
                            sizeof(sigdumpheader)) < 0) {
                 perror("open_writers");
                 return -1;
             }
+        }
+
+        if (cfg->signal_dump_spotids_output != NULL && sample->dump_signals) {
+            filename = replace_placeholder(cfg->signal_dump_spotids_output,
+                                           "{name}", sample->name);
+            sample->stream_signal_spotids_dump = bgzf_open(filename, "w");
+            if (sample->stream_signal_spotids_dump == NULL) {
+                perror("open_writers");
+                fprintf(stderr, "Failed to write to %s\n", filename);
+                free(filename);
+                return -1;
+            }
+            free(filename);
         }
     }
 
@@ -124,9 +137,14 @@ close_writers(struct SampleInfo *sample)
             sample->stream_taginfo = NULL;
         }
 
-        if (sample->stream_signal_dump != NULL) {
-            bgzf_close(sample->stream_signal_dump);
-            sample->stream_signal_dump = NULL;
+        if (sample->stream_signal_data_dump != NULL) {
+            bgzf_close(sample->stream_signal_data_dump);
+            sample->stream_signal_data_dump = NULL;
+        }
+
+        if (sample->stream_signal_spotids_dump != NULL) {
+            bgzf_close(sample->stream_signal_spotids_dump);
+            sample->stream_signal_spotids_dump = NULL;
         }
     }
 }
