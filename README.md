@@ -85,17 +85,14 @@ the available genomes are shown in the first section of this tutorial.
 
   1. Copy the full output hierarchy from MiSeq or HiSeq to somewhere in
      your machine.
-  2. Create an empty scratch directory. This is used for storing temporary files
-     which is accessed by usually heavily I/O-bound tasks. It is recommended
-     to locate this in a SSD or a mirrored RAID volume.
-  3. Create an empty work directory. This is used for storing the final result
+  2. Create an empty work directory. This is used for storing the final result
      files and the intermediate files which you may want to look into when
      something went wrong.
-  4. Copy `templates/miseq-v2.yaml` to the work directory as a new name `tailseeker.yaml`.
-  5. Edit the copied setting file, `tailseeker.yaml`, to change the options and
+  3. Copy `templates/miseq-v2.yaml` to the work directory as a new name `tailseeker.yaml`.
+  4. Edit the copied setting file, `tailseeker.yaml`, to change the options and
      paths to the directories. More options are specified in `conf/default-miseq.conf` and
      `conf/defaults.conf`. They are overridden if you put lines in your `tailseeker.yaml`.
-  6. Run the pipeline with one of these commands:
+  5. Run the pipeline with one of these commands:
  
      ```sh
      # In case you have an access to a job queuing system of a cluster. Change 150 to the
@@ -112,30 +109,54 @@ the available genomes are shown in the first section of this tutorial.
   7. Take a look at the `qcplots/` on the work directory. The plots there show how
      poly(A) length calling was accurate.
 
-  8. Use FASTQ files in `fastq/` for the subsequent analyses. It will contain
-     `_R5.fastq.gz` and `_R3.fastq.gz` files for each sample. `_R5` includes
-     the sequences from the 5′-end of the RNA fragments, which is generally
-     sequenced by read 1. `_R3` is from the other end. Each sequence entry
-     has the identifier names in the following structure:
+  8. Perform the downstream analyses using the output files.
+
+
+## Read name format (analysis level 1 only)
+
+In an analysis level 1 output, FASTQ files are fulfilled with nucleotide
+sequences, quality scores as well as poly(A) tail information in read name.
+For the higher analysis levels, read names only include minimal identifiers.
+Use `refined-taginfo/*.txt.gz` for tailing status of each read this case.
+
+FASTQ files are located in `fastq/` in the level 1 analysis. It will contain
+`_R5.fastq.gz` and `_R3.fastq.gz` files for each sample. `_R5` includes
+the sequences from the 5′-end of the RNA fragments, which is generally
+sequenced by read 1. `_R3` is from the other end.
+     
+Each sequence entry has the identifier names in the following structure:
 
     ```
-      +------------------------- Tile number with an internal lane identifier.
-      |       +----------------- Serial number of the sequence, which is unique
-      |       |                  in the tile.
-    a1101:00003863:010:002
-                    |   |
-                    |   +------- Length of additions modifications to poly(A).
-                    +----------- Length of poly(A) tail.
-                    
-    When a sequence AATTTTTTTTTTGTACGGAT is found in the _R3 file with the name
-    above, it can be understood that:
-     - Poly(A) length is 10 nt.
-     - There is a two nt-long U tail to the poly(A) tail.
-       (_R3 is in its reverse complement form.)
-     - The 3′-end sequence of 3′ UTR or a transcript body is ATCCGTAC. This is
-       usually not reliable when poly(A) tail is longer than ~12 nt due to
-       the untrackable phasing issues in long homopolymers.
+    (1)   (2)      (3) (4) (5)(6)
+    a1101:00003863:0012:17:10:TT
+
+    (1) Tile number with an internal lane identifier.
+    (2) Serial number of the sequence, which is unique in the tile.
+    (3) Flags in hexadecimal representing data processing procedure of the read.
+    (4) Length of poly(A) tail.
+    (5) Length of additions modifications to poly(A).
+    (6) Post-poly(A) nucleotide additions.
     ```
+
+Flags on the third field are encoded by combinations of the following bits:
+
+| Bit (decimal) | Bit (hexadecimal) | Description |
+| ------------- | ----------------- | ----------- |
+|       1       |      0x0001       | Have a post-poly(A) modification |
+|       2       |      0x0002       | Poly(A) length is measured using fluorescence signal |
+|       4       |      0x0004       | Poly(A) length is measured using naive consecutive T counter |
+|       8       |      0x0008       | Delimiter sequence is found at a shifted position |
+|      16       |      0x0010       | Index sequence is matched to a sample with one or more mismatches |
+|      32       |      0x0020       | One or more cycle in 3′-read are dark (no fluorescence signal) |
+|      64       |      0x0040       | Delimiter sequence is not found |
+|     128       |      0x0080       | Delimiter sequence is matched with one or more mismatch |
+|     256       |      0x0100       | Basecalling quality of balancer region is bad |
+|     512       |      0x0200       | Nucleotide composition of balancer region is biased |
+|    1024       |      0x0400       | Fluorescence signal in balancer region is irregular or too dark |
+|    2048       |      0x0800       | Number of dark cycle in read 2 exceeds the threshold |
+|    4096       |      0x1000       | No poly(A) tail is detected |
+|    8192       |      0x2000       | (level 2) 5′-read and 3′-read are aligned to two very distant positions in the genome |
+|   16384       |      0x4000       | (level 2) 3′-read is aligned to a position adjacent to an expected polyadenylation site |
 
 
 # Software licenses
