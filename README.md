@@ -30,7 +30,7 @@ the list of supported genomes are as followed:
     * wget
     * make and a C compilation toolchain
     * whiptail
-    * [htslib](http://www.htslib.org)
+    * [htslib](http://www.htslib.org) – `htslib` depends on `zlib` 1.2.4 or later. If you are using an old system released before 2010, you may need to upgrade `zlib` first.
     * Python packages that can be easily installed using `pip` (see below)
       * [Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home) - 3.5 or higher
       * [colormath](https://pypi.python.org/pypi/colormath/)
