@@ -30,14 +30,15 @@ the list of supported genomes are as followed:
     * wget
     * make and a C compilation toolchain
     * whiptail
-    * [Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home) - 3.5 or higher
     * [htslib](http://www.htslib.org)
-    * [colormath](https://pypi.python.org/pypi/colormath/)
-    * [matplotlib](http://matplotlib.org)
-    * [NumPy](http://numpy.org)
-    * [SciPy](http://www.scipy.org)
-    * [pandas](http://pandas.pydata.org)
-    * [PyYAML](http://pyyaml.org)
+    * Python packages that can be easily installed using `pip` (see below)
+      * [Snakemake](https://bitbucket.org/snakemake/snakemake/wiki/Home) - 3.5 or higher
+      * [colormath](https://pypi.python.org/pypi/colormath/)
+      * [matplotlib](http://matplotlib.org)
+      * [NumPy](http://numpy.org)
+      * [SciPy](http://www.scipy.org)
+      * [pandas](http://pandas.pydata.org)
+      * [PyYAML](http://pyyaml.org)
   * Required only for optional gene-level statistics
     * [STAR](https://github.com/alexdobin/STAR)
     * [samtools](https://github.com/samtools/samtools)
@@ -129,7 +130,7 @@ Each sequence entry has the identifier names in the following structure:
     ```
     (1)   (2)      (3) (4) (5)(6)
     a1101:00003863:0012:17:10:TT
-
+    
     (1) Tile number with an internal lane identifier.
     (2) Serial number of the sequence, which is unique in the tile.
     (3) Flags in hexadecimal representing data processing procedure of the read.
