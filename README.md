@@ -55,7 +55,7 @@ the list of supported genomes are as followed:
     * [GSNAP](http://research-pub.gene.com/gmap/)
 
 The toolchains and generic command line utilities can be installed if
-you're managing a Ubuntu box:
+you're an administrator on a Debian or Ubuntu system:
 
     sudo apt install whiptail pkg-config gcc wget make
 
