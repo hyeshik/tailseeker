@@ -51,10 +51,9 @@ parse_refined_taginfo = LineParser([
     ('pflags', int),
     ('clones', int),
     ('polyA', int),
-    ('U', int),
-    ('G', int),
-    ('C', int),
+    ('unaligned_polyA', int),
     ('mods', None),
+    ('unaligned_mods', None),
 ], linefeed=b'\n')
 
 parse_sam = LineParser([

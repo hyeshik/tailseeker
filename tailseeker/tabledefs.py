@@ -56,10 +56,10 @@ taginfo = {
 refined_taginfo = {
     'compression': 'gzip',
     'names': ['tile', 'cluster', 'pflags', 'clones',
-              'polyA', 'U', 'G', 'C', 'mods'],
+              'polyA', 'unaligned_polyA', 'mods', 'unaligned_mods'],
     'dtype': {'tile': str, 'cluster': np.uint32, 'pflags': np.uint32,
-              'clones': np.int32, 'polyA': np.int32, 'U': np.int32, 'G': np.int32,
-              'C': np.int32, 'mods': str},
+              'clones': np.int32, 'polyA': np.int32, 'mods': str,
+              'unaligned_polyA': np.int32, 'unaligned_mods': str},
     'keep_default_na': False,
 }
 

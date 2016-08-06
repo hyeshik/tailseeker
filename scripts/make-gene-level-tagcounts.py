@@ -24,6 +24,7 @@
 from tailseeker import tabledefs
 import pandas as pd
 import numpy as np
+import re
 import lzma
 
 sm = snakemake
@@ -40,8 +41,25 @@ min_preamble_length = sm.params.delim_settings[0] - 1 + len(sm.params.delim_sett
 max_polya = sm.params.R3[1] - sm.params.R3[0] + 1 - min_preamble_length
 mod_of_interest = sm.wildcards.modtype
 
+def count_mods(mods, max_modcount):
+    findmods = re.compile(mod_of_interest.replace('U', 'T') + '*$')
+
+    modtypes = mods.value_counts().keys()
+    modcounts = {mod: min(max_modcount, len(findmods.findall(mod)[0]))
+                 for mod in modtypes}
+    return mods.apply(modcounts.__getitem__)
+
+print("Re-processing terminal modifications...")
+# Split out short poly(A) tails that need template-based refinements
+needs_refinement = (tbl['unaligned_mods'].apply(len) > 0) & (tbl['polyA'] <= 0)
+
+# Reprocess modification counts
+tbl[mod_of_interest] = count_mods(tbl['mods'], sm.params.max_modcount)
+tbl.loc[needs_refinement, mod_of_interest] = count_mods(
+    tbl.loc[needs_refinement, 'unaligned_mods'], sm.params.max_modcount)
+tbl.loc[needs_refinement, 'polyA'] = tbl.loc[needs_refinement, 'unaligned_polyA']
+
 print("Filtering out bad tags...")
-tbl[mod_of_interest] = tbl[mod_of_interest].clip_upper(sm.params.max_modcount)
 if sm.wildcards.ambigtype == 'single':
     tbl = tbl[tbl['ambig'] <= 1]
 filtered_tbl = tbl[(tbl['pflags'] & sm.params.bad_flags) == 0]

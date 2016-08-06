@@ -43,7 +43,7 @@
 /* Set a temporary limit of clusters in buffer. This will be
  * removed again once I implement a scalable routine that works for
  * larger clusters. */
-#define XXX_TAGCLUSTER_LIMIT            2048
+#define XXX_TAGCLUSTER_LIMIT            4096
 
 #define DEFAULT_TAGALN_BUFFER_LEN       8192
 #define DEFAULT_TAGCLUSTER_BUFFER_LEN   8192
@@ -189,7 +189,7 @@ tagaln_new(struct deduppool *pool)
 
 static inline ssize_t
 tagaln_create(struct deduppool *pool, const char *qname, uint32_t flags,
-              uint32_t ndups, int16_t polya_len)
+              uint32_t ndups, int16_t polya_len_1, int16_t polya_len_2)
 {
     ssize_t idx;
     struct tagaln *aln;
@@ -202,7 +202,8 @@ tagaln_create(struct deduppool *pool, const char *qname, uint32_t flags,
     strcpy(aln->qname, qname);
     aln->flags = flags;
     aln->ndups = ndups;
-    aln->polya_len = polya_len;
+    aln->polya_len_1 = polya_len_1;
+    aln->polya_len_2 = polya_len_2;
     aln->priority = calculate_tag_prority(flags);
     aln->next = -1;
 
@@ -467,10 +468,12 @@ static int
 write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
                  pthread_mutex_t *lock)
 {
+#define polya_len_ref       polya_len_2
+#define mean_polya_len_ref  mean_polya_len_2
     struct tagaln *tag;
     ssize_t tag_ix, bestprio_tag_ix, bestmatching_ix;
-    int64_t total_dups, bestprio_polya_sum, bestprio_polya_pos_dups;
-    float mean_polya_len, bestmatching_residual;
+    int64_t total_dups, bestprio_polya_sum_1, bestprio_polya_sum_2, bestprio_polya_pos_dups;
+    float mean_polya_len_1, mean_polya_len_2, bestmatching_residual;
     int best_priority, bestprio_tags;
 
 //    fprintf(stderr, "----- FLUSHING group %d %s --------------\n", (int)group_ix, grp->umi_rep);
@@ -484,7 +487,7 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
 
     best_priority = -1;
     bestprio_tag_ix = -1;
-    bestprio_polya_sum = bestprio_polya_pos_dups = 0;
+    bestprio_polya_sum_1 = bestprio_polya_sum_2 = bestprio_polya_pos_dups = 0;
     total_dups = 0;
     bestprio_tags = 0;
 
@@ -500,17 +503,19 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
             bestprio_tag_ix = tag_ix;
             bestprio_tags = 1;
 
-            if (tag->polya_len > 0) {
-                bestprio_polya_sum = tag->polya_len * tag->ndups;
+            if (tag->polya_len_ref > 0) {
+                bestprio_polya_sum_1 = tag->polya_len_1 * tag->ndups;
+                bestprio_polya_sum_2 = tag->polya_len_2 * tag->ndups;
                 bestprio_polya_pos_dups = tag->ndups;
             }
             else
-                bestprio_polya_sum = bestprio_polya_pos_dups = 0;
+                bestprio_polya_sum_1 = bestprio_polya_sum_2 = bestprio_polya_pos_dups = 0;
         }
         else {
             bestprio_tags++;
-            if (tag->polya_len > 0) {
-                bestprio_polya_sum += tag->polya_len * tag->ndups;
+            if (tag->polya_len_ref > 0) {
+                bestprio_polya_sum_1 += tag->polya_len_1 * tag->ndups;
+                bestprio_polya_sum_2 += tag->polya_len_2 * tag->ndups;
                 bestprio_polya_pos_dups += tag->ndups;
             }
         }
@@ -519,7 +524,8 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
     if (bestprio_polya_pos_dups <= 0 || bestprio_tags <= 1) {
         /* If a single tag is the best, show it as a final representation. */
         pthread_mutex_lock(lock);
-        printf("%d\t%ld\t%s\n", pool->tagalns[bestprio_tag_ix].polya_len,
+        printf("%d\t%d\t%ld\t%s\n", pool->tagalns[bestprio_tag_ix].polya_len_1,
+               pool->tagalns[bestprio_tag_ix].polya_len_2,
                total_dups, pool->tagalns[bestprio_tag_ix].qname);
         pthread_mutex_unlock(lock);
 
@@ -528,11 +534,13 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
 
     /* Choose the most similar tag to the mean poly(A) length having the highest
      * priority. */
-    mean_polya_len = (float)bestprio_polya_sum / (float)bestprio_polya_pos_dups;
+    mean_polya_len_1 = (float)bestprio_polya_sum_1 / (float)bestprio_polya_pos_dups;
+    mean_polya_len_2 = (float)bestprio_polya_sum_2 / (float)bestprio_polya_pos_dups;
 //    fprintf(stderr, " -- poly(A) mean: %.2f nt.\n", mean_polya_len);
 
     bestmatching_ix = bestprio_tag_ix;
-    bestmatching_residual = fabsf(mean_polya_len - pool->tagalns[bestprio_tag_ix].polya_len);
+    bestmatching_residual = fabsf(mean_polya_len_ref -
+                                  pool->tagalns[bestprio_tag_ix].polya_len_ref);
 
 //    fprintf(stderr, " -- bestprio(%d) residual = %.2f nt\n", (int)bestmatching_ix,
 //            bestmatching_residual);
@@ -544,7 +552,7 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
         if (tag->priority != best_priority)
             continue;
 
-        residual = fabsf(mean_polya_len - tag->polya_len);
+        residual = fabsf(mean_polya_len_ref - tag->polya_len_ref);
         if (residual < bestmatching_residual) {
             bestmatching_ix = tag_ix;
             bestmatching_residual = residual;
@@ -552,7 +560,9 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
     }
 
     pthread_mutex_lock(lock);
-    printf("%d\t%ld\t%s\n", (int)roundf(mean_polya_len),
+    printf("%d\t%d\t%ld\t%s\n",
+           mean_polya_len_1 >= 0.f ? (int)roundf(mean_polya_len_1) : -1,
+           mean_polya_len_2 >= 0.f ? (int)roundf(mean_polya_len_2) : -1,
            total_dups, pool->tagalns[bestmatching_ix].qname);
     pthread_mutex_unlock(lock);
 
@@ -676,7 +686,7 @@ deduplicate_tailseq_bam(struct taskpool *tasks, samFile *samf, hts_idx_t *bamidx
 
     while ((ret = bam_itr_next(samf, bamiter, bamentry)) >= 0) {
         struct tagaln *newtag;
-        uint8_t *umiseq_aux, *flags_aux, *palen_aux, *ndups_aux;
+        uint8_t *umiseq_aux, *flags_aux, *palen1_aux, *palen2_aux, *ndups_aux;
         ssize_t tag_ix, cluster_ix;
 
         if (bamentry->core.flag & BAM_FUNMAP)
@@ -684,9 +694,11 @@ deduplicate_tailseq_bam(struct taskpool *tasks, samFile *samf, hts_idx_t *bamidx
 
         umiseq_aux = bam_aux_get(bamentry, "ZM");
         flags_aux = bam_aux_get(bamentry, "ZF");
-        palen_aux = bam_aux_get(bamentry, "Za");
+        palen1_aux = bam_aux_get(bamentry, "ZA");
+        palen2_aux = bam_aux_get(bamentry, "Za");
         ndups_aux = bam_aux_get(bamentry, "ZD");
-        if (umiseq_aux == NULL || flags_aux == NULL || palen_aux == NULL || ndups_aux == NULL)
+        if (umiseq_aux == NULL || flags_aux == NULL || palen1_aux == NULL ||
+                palen2_aux == NULL || ndups_aux == NULL)
             continue; /* Keep non-TAIL-seq entries untouched */
 
         if (bamentry->core.l_qname > QNAME_LEN_MAX) {
@@ -722,7 +734,7 @@ deduplicate_tailseq_bam(struct taskpool *tasks, samFile *samf, hts_idx_t *bamidx
         /* Create a tag and a cluster entries. */
         tag_ix = tagaln_create(tpool, (const char *)bamentry->data,
                                bam_aux2i(flags_aux), bam_aux2i(ndups_aux),
-                               bam_aux2i(palen_aux));
+                               bam_aux2i(palen1_aux), bam_aux2i(palen2_aux));
         if (tag_ix < 0) {
             perror("tagaln_create");
             return -1;
@@ -739,7 +751,7 @@ deduplicate_tailseq_bam(struct taskpool *tasks, samFile *samf, hts_idx_t *bamidx
 
 //        fprintf(stderr, "\ntid=%d pos=%d qname=%s ZM=%s Za=%d ZF=%d ZD=%d\n",
 //                (int)bamentry->core.tid, (int)bamentry->core.pos,
-//                newtag->qname, newcluster->umi_rep, (int)newtag->polya_len,
+//                newtag->qname, newcluster->umi_rep, (int)newtag->polya_len_1,
 //                (int)newtag->flags, (int)newtag->ndups);
     }
 

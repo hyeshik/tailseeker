@@ -44,8 +44,8 @@ def parse_sam_options(samline):
 def load_duplicates(duplicates_file):
     r = {}
     for line in open(duplicates_file):
-        polya_len, clones, readid = line.split()
-        r[readid.encode()] = int(polya_len), int(clones)
+        polya_len_1, polya_len_2, clones, readid = line.split()
+        r[readid.encode()] = int(polya_len_1), int(polya_len_2), int(clones)
     return r
 
 def main(options):
@@ -53,7 +53,7 @@ def main(options):
     duplicates = load_duplicates(options.duplicates_file)
     output = os.fdopen(sys.stdout.fileno(), 'wb')
 
-    tags_being_processed = [b'Za', b'ZD']
+    tags_being_processed = [b'ZA', b'Za', b'ZD']
 
     for row in parse_sam(samproc.stdout):
         if isinstance(row, ParsedLineComment) or row.flag & F_UNMAPPED:
@@ -72,8 +72,9 @@ def main(options):
 
         samfields = row.line[:-1].split(b'\t')
         samfields = [f for f in samfields if f[:2] not in tags_being_processed]
-        samfields.append(b'Za:i:' + str(dupinfo[0]).encode())
-        samfields.append(b'ZD:i:' + str(dupinfo[1]).encode() + b'\n')
+        samfields.append(b'ZA:i:' + str(dupinfo[0]).encode())
+        samfields.append(b'Za:i:' + str(dupinfo[1]).encode())
+        samfields.append(b'ZD:i:' + str(dupinfo[2]).encode() + b'\n')
         output.write(b'\t'.join(samfields))
 
 def parse_arguments():

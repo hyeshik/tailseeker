@@ -388,7 +388,7 @@ rule find_approximate_duplicates:
         shell('{BINDIR}/tailseq-dedup-approx {input.bam} \
                 {dedupopts[mapped_position_tolerance]} \
                 {dedupopts[umi_edit_dist_tolenrance]} {threads} | \
-               sort -k3,3 | uniq -f 2 > {output}')
+               sort -k4,4 | uniq -f 3 > {output}')
 
 rule filter_approximate_duplicates:
     input:
@@ -412,9 +412,10 @@ rule update_refined_taginfo_for_mapped:
         import io
         from tailseeker import tabledefs
 
-        dupinfo = pd.read_table(input.dupinfo, names=['polyA', 'clones', 'readid'],
-                                dtype={'polyA': np.int32, 'clones': np.uint32,
-                                       'readid': str})
+        dupinfo = pd.read_table(input.dupinfo, names=['polyA', 'unaligned_polyA',
+                                                      'clones', 'readid'],
+                                dtype={'polyA': np.int32, 'unaligned_polyA': np.int32,
+                                       'clones': np.uint32, 'readid': str})
         dupinfo['tile'] = dupinfo['readid'].apply(lambda x: x.split(':')[0])
         dupinfo['cluster'] = dupinfo['readid'].apply(lambda x: int(x.split(':')[1]))
 

@@ -30,20 +30,6 @@ import sys
 import gzip
 import os
 
-"""
- 48 parse_refined_taginfo = LineParser([
- 49     ('tile', None),
- 50     ('cluster', int),
- 51     ('pflags', int),
- 52     ('clones', int),
- 53     ('polyA', int),
- 54     ('U', int),
- 55     ('G', int),
- 56     ('C', int),
- 57     ('mods', None),
- 58 ], linefeed=b'\n')
-"""
-
 
 def process(taginfo_file):
     taginfo_input = gzip.open(taginfo_file, 'rb')
@@ -63,7 +49,7 @@ def process(taginfo_file):
 
     joined_it = MultiJoinIterator([samit, taginfoit], [parse_readid_from_sam, taginfokey])
     output = os.fdopen(sys.stdout.fileno(), 'wb')
-    tagformat = '\tZF:i:{}\tZD:i:{}\tZU:i:{}\tZG:i:{}\tZC:i:{}\tZa:i:{}\n'
+    tagformat = '\tZF:i:{}\tZD:i:{}\tZa:i:{}\tZs:Z:_{}\n'
 
     for (tile, cluster), samrows, taginforows in joined_it:
         samrows = list(samrows)
@@ -76,8 +62,9 @@ def process(taginfo_file):
             continue
 
         taginfo = taginforows[0]
-        tags_formatted = tagformat.format(taginfo.pflags, taginfo.clones, taginfo.U,
-                                          taginfo.G, taginfo.C, taginfo.polyA)
+        tags_formatted = tagformat.format(taginfo.pflags, taginfo.clones,
+                                          taginfo.unaligned_polyA,
+                                          taginfo.unaligned_mods.decode())
 
         for row in samrows:
             output.write(row.line[:-1])

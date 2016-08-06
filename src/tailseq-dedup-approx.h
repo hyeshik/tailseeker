@@ -72,7 +72,8 @@ struct tagaln {
     char qname[QNAME_LEN_MAX];
     uint32_t flags;
     uint32_t ndups;
-    int16_t polya_len;
+    int16_t polya_len_1;
+    int16_t polya_len_2;
     int16_t priority;
     ssize_t next; /* in a tagcluster */
     ssize_t __pad;

@@ -51,7 +51,8 @@ def get_polya_length_hist(pacallsfile, badflagmask, maxpalen, columnno):
 inputfiles = list(zip(snakemake.params.samplenames, snakemake.input))
 
 tableschema = refined_taginfo if snakemake.params.refined else taginfo
-columnno = tableschema['names'].index('polyA') + 1
+columnname = 'unaligned_polyA' if snakemake.params.refined else 'polyA'
+columnno = tableschema['names'].index(columnname) + 1
 
 pacounts = pd.DataFrame.from_items(
     [(samplename,

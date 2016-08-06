@@ -253,8 +253,7 @@ def process_tile(options, tile, taginfo_input, output):
                 reev_mods[nontmplmods[0]] = len(nontmplmods)
 
         print(tile.decode(), cluster, taginfo.pflags | rflags, taginfo.clones,
-              reev_mods['A'] if taginfo.polyA >= 0 else -1,
-              reev_mods['T'], reev_mods['G'], reev_mods['C'],
+              taginfo.polyA, reev_mods['A'], taginfo.mods.decode(),
               nontmplmods, sep='\t', file=outfile)
 
     return output
