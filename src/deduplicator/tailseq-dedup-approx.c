@@ -37,7 +37,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include "htslib/sam.h"
-#include "sigproc-flags.h"
+#include "../sigproc-flags.h"
 #include "tailseq-dedup-approx.h"
 
 /* Set a temporary limit of clusters in buffer. This will be

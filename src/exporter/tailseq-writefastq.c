@@ -32,7 +32,7 @@
 #include <getopt.h>
 #include <zlib.h>
 #include <htslib/bgzf.h>
-#include "utils.h"
+#include "../utils.h"
 
 #define GZIP_READ_BUFFER_SIZE   1024*1024
 

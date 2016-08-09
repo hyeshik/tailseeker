@@ -32,8 +32,8 @@
 #include <zlib.h>
 #include <pthread.h>
 #include "htslib/bgzf.h"
-#include "sigproc-flags.h"
-#include "utils.h"
+#include "../sigproc-flags.h"
+#include "../utils.h"
 
 
 #define NUM_CHANNELS        4

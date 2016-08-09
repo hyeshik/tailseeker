@@ -31,8 +31,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include "contrib/ini.h"
-#include "tailseq-sigproc.h"
+#include "../contrib/ini.h"
+#include "tailseq-import.h"
 
 
 #define MATCH(n) strcasecmp(name, n) == 0

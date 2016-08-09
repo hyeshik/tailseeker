@@ -33,7 +33,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <assert.h>
-#include "sigproc-flags.h"
+#include "../sigproc-flags.h"
 
 #define DEFAULT_BUFFER_SIZE     1024
 #define MAX_TILENAME_LEN        63
