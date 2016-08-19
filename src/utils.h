@@ -29,5 +29,6 @@
 
 extern char *replace_placeholder(const char *format, const char *old,
                                  const char *new);
+extern int bgzf_printf(BGZF *fp, const char *format, ...);
 
 #endif

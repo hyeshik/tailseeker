@@ -1,5 +1,5 @@
 /*
- * tailseq-common.h
+ * tailseq-import.h
  *
  * Copyright (c) 2015 Hyeshik Chang
  *
@@ -24,8 +24,8 @@
  * - Hyeshik Chang <hyeshik@snu.ac.kr>
  */
 
-#ifndef _TAILSEQ_COMMON_H_
-#define _TAILSEQ_COMMON_H_
+#ifndef _TAILSEQ_IMPORT_H_
+#define _TAILSEQ_IMPORT_H_
 
 #include <stdio.h>
 #include <stdint.h>
@@ -37,6 +37,9 @@
 
 
 #define NUM_CHANNELS        4
+
+typedef uint32_t cluster_count_t;
+
 
 #define BCLREADER_OVERRIDDEN    ((struct BCLReader *)1)
                                 /* placeholder for overridden cycles by an alternative call */
@@ -81,6 +84,17 @@ struct UMIInterval {
     int length;
 };
 
+struct SignalRecordHeader {
+    uint32_t clusterno;
+    uint32_t flags;
+    int16_t first_cycle;            /* left-most cycle number */
+    int16_t valid_cycle_count;      /* cycle count with valid signals */
+    int16_t polya_start;            /* poly(A) start position
+                                     * (1-based absolute cycle number) or -1 */
+    int16_t prelim_change_point;    /* rough estimation of poly(A) length or -1 */
+    float polya_detection_score;    /* poly(A) detection score (float) */
+};
+
 struct WriteHandleSync {
     int jobs_written;
     pthread_mutex_t lock;
@@ -110,15 +124,13 @@ struct SampleInfo {
     int umi_total_length;
 
     int limit_threep_processing;
-    int dump_signals;
+    int signal_dump_length;
 
-    BGZF *stream_seqqual;       /* use wsync_* locking for theses two */
-    BGZF *stream_taginfo;
-    BGZF *stream_signal_spotids_dump;   /* use statslock */
-    BGZF *stream_signal_data_dump;      /* use statslock */
+    BGZF *stream_seqqual;
+    BGZF *stream_signal;
 
     struct WriteHandleSync wsync_seqqual;
-    struct WriteHandleSync wsync_taginfo;
+    struct WriteHandleSync wsync_signal;
 
     pthread_mutex_t statslock;
     uint32_t clusters_mm0;
@@ -179,6 +191,16 @@ struct BalancerParameters {
     int num_negative_samples;
 };
 
+struct PolyASeederParameters {
+    size_t seed_trigger_polya_length;
+    size_t negative_sample_polya_length;
+    int max_cctr_scan_left_space;
+    int max_cctr_scan_right_space;
+    float required_cdf_contrast;
+    int polya_boundary_pos;
+    int dist_sampling_bins;
+};
+
 struct PolyAFinderParameters {
     short weights_nonA[256];
     short weights_polyA[256];
@@ -216,7 +238,7 @@ struct TailseekerConfig {
     int fivep_start, fivep_length;
     int index_start, index_length;
     int threep_start, threep_length;
-    int threep_output_length;
+    int threep_seqqual_output_length;
 
     /* section options */
     int keep_no_delimiter;
@@ -227,11 +249,10 @@ struct TailseekerConfig {
 
     /* section output */
     char *seqqual_output;
-    char *taginfo_output;
+    char *signal_output;
+    char *signal_dists_output;
     char *stats_output;
     char *length_dists_output;
-    char *signal_dump_spotids_output;
-    char *signal_dump_data_output;
 
     /* section alternative_calls */
     struct AlternativeCallInfo *altcalls;
@@ -241,6 +262,9 @@ struct TailseekerConfig {
 
     /* section balancer */
     struct BalancerParameters balancerparams;
+
+    /* section polyA_seeder */
+    struct PolyASeederParameters seederparams;
 
     /* section polyA_finder */
     struct PolyAFinderParameters finderparams;
@@ -255,7 +279,6 @@ struct TailseekerConfig {
 
     /* calculated values */
     size_t max_bufsize_seqqual;
-    size_t max_bufsize_taginfo;
 };
 
 
@@ -270,7 +293,11 @@ struct ParallelJob {
 
 struct WriteBuffer {
     char *buf_seqqual;
-    char *buf_taginfo;
+};
+
+struct GloballyAggregatedOutput {
+    cluster_count_t *pos_score_counts;
+    cluster_count_t *neg_score_counts;
 };
 
 struct ParallelJobPool {
@@ -286,7 +313,8 @@ struct ParallelJobPool {
     uint32_t firstclusterno;
 
     size_t bufsize_seqqual;
-    size_t bufsize_taginfo;
+
+    struct GloballyAggregatedOutput global_stats;
 
     struct ParallelJob jobs[1];
 };
@@ -360,20 +388,26 @@ extern uint32_t find_polya(const char *seq, size_t seqlen,
 
 /* signalproc.c */
 extern int load_color_matrix(float *mtx, const char *filename);
-extern int measure_polya_length(struct TailseekerConfig *cfg,
-                struct CIFData **intensities, const char *sequence_formatted,
-                uint32_t clusterno, int delimiter_end, int *procflags,
-                int *terminal_mods, int insert_len);
 extern void precalc_score_tables(struct PolyARulerParameters *params,
                                  float t_score_k, float t_score_center);
-extern int dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
-                struct CIFData **intensities, const char *sequence_formatted,
-                uint32_t clusterno, int delimiter_end);
+extern int check_balancer(float *signal_range_low, float *signal_range_bandwidth,
+               struct IntensitySet *intensities, const float *colormatrix,
+               const char *seq, struct BalancerParameters *params,
+               int balancer_len, int *flags);
+extern int compute_polya_score(struct IntensitySet *intensities, int ncycles,
+                const float *signal_range_low,
+                const float *signal_range_bandwidth,
+                struct PolyARulerParameters *params,
+                float *scores, int *procflags);
+extern int find_max_cumulative_contrast(const float *scores, int length,
+                int leftspace, int rightspace, float *pmax_score);
 
 /* spotanalyzer.c */
 extern int process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                          struct CIFData **intensities, struct BCLData **basecalls,
                          struct WriteBuffer *wbuf0, struct WriteBuffer *wbuf,
+                         cluster_count_t *pos_score_counts,
+                         cluster_count_t *neg_score_counts,
                          int jobid, uint32_t cln_start, uint32_t cln_end);
 
 /* misc.c */

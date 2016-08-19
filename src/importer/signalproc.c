@@ -203,7 +203,7 @@ probe_signal_ranges(float *signal_range_low, float *signal_range_bandwidth,
 }
 
 
-static int
+int
 check_balancer(float *signal_range_low, float *signal_range_bandwidth,
                struct IntensitySet *intensities,
                const float *colormatrix, const char *seq,
@@ -268,6 +268,7 @@ normalize_signals(float *normalized, const float *signals,
 }
 
 
+#if 0
 static int
 process_polya_signal(struct IntensitySet *intensities, int ncycles,
                      const float *signal_range_low,
@@ -371,17 +372,17 @@ process_polya_signal(struct IntensitySet *intensities, int ncycles,
     return score_argmax_cycle + 1 +
            (int)roundf(downhill_ext_width * params->downhill_extension_weight);
 }
+#endif
 
 
-static int
-dump_polya_score(struct IntensitySet *intensities, int ncycles,
-                 const float *signal_range_low,
-                 const float *signal_range_bandwidth,
-                 struct PolyARulerParameters *params,
-                 float *scores)
+int
+compute_polya_score(struct IntensitySet *intensities, int ncycles,
+                    const float *signal_range_low,
+                    const float *signal_range_bandwidth,
+                    struct PolyARulerParameters *params,
+                    float *scores, int *procflags)
 {
     int cycle, chan, ndarkcycles;
-    int i;
 
     ndarkcycles = 0;
 
@@ -402,8 +403,7 @@ dump_polya_score(struct IntensitySet *intensities, int ncycles,
 
         if (signal_sum < params->dark_cycles_threshold) {
             ndarkcycles++;
-            for (i = -1; i < NUM_CHANNELS; i++)
-                *scores++ = NAN;
+            *scores++ = NAN;
             continue;
         }
 
@@ -415,21 +415,12 @@ dump_polya_score(struct IntensitySet *intensities, int ncycles,
              * all channels are zero or negative after normalization.
              * It is treated as a dark cycle in this case. */
             ndarkcycles++;
-            for (i = -1; i < NUM_CHANNELS; i++)
-                *scores++ = NAN;
+            *scores++ = NAN;
             continue;
         }
-#if NUM_CHANNELS == 4
-        *scores++ = normsignals[0];
-        *scores++ = normsignals[1];
-        *scores++ = normsignals[2];
-        *scores++ = normsignals[3];
-#else
-#error Unsupported signal channel count.
-#endif
 
-        entropy_score = params->maximum_entropy -
-                        shannon_entropy(normsignals);
+        entropy_score = 1.f - shannon_entropy(normsignals) /
+                        params->maximum_entropy;
 #if NUM_CHANNELS == 4
 #define CHANNEL_T   3
         t_intensity_score = params->t_intensity_score[
@@ -442,8 +433,13 @@ dump_polya_score(struct IntensitySet *intensities, int ncycles,
         *scores++ = entropy_score * t_intensity_score;
     }
 
-    if (ndarkcycles >= params->max_dark_cycles)
-        return -1;
+    if (ndarkcycles > 0) {
+        *procflags |= PAFLAG_DARKCYCLE_EXISTS;
+        if (ndarkcycles >= params->max_dark_cycles) {
+            *procflags |= PAFLAG_DARKCYCLE_OVER_THRESHOLD;
+            return -1;
+        }
+    }
 
     return 0;
 }
@@ -482,6 +478,44 @@ load_color_matrix(float *mtx, const char *filename)
 }
 
 
+int
+find_max_cumulative_contrast(const float *scores, int length, int leftspace,
+                             int rightspace, float *pmax_score)
+{
+    double score_cumsum[length], score_total;
+    double max_score, score;
+    int i, max_contrast_boundary, right;
+
+    score_total = 0.;
+    for (i = 0; i < length; i++) {
+        score_total += scores[i];
+        score_cumsum[i] = score_total;
+    }
+
+    assert(leftspace >= 1 && rightspace >= 1);
+    if (leftspace + rightspace >= length)
+        return -1;
+
+    max_contrast_boundary = leftspace - 1;
+    max_score = score_cumsum[max_contrast_boundary] / max_contrast_boundary -
+                (score_total - score_cumsum[max_contrast_boundary]) /
+                (length - max_contrast_boundary);
+
+    right = length - rightspace;
+    for (i = leftspace; i <= right; i++) {
+        score = score_cumsum[i] / i - (score_total - score_cumsum[i]) / (length - i);
+        if (score > max_score) {
+            max_contrast_boundary = i;
+            max_score = score;
+        }
+    }
+
+    *pmax_score = max_score;
+    return max_contrast_boundary + 1;
+}
+
+
+#if 0
 int
 measure_polya_length(struct TailseekerConfig *cfg,
                      struct CIFData **intensities,
@@ -595,7 +629,6 @@ measure_polya_length(struct TailseekerConfig *cfg,
     return polya_len;
 }
 
-
 int
 dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
                   struct CIFData **intensities, const char *sequence_formatted,
@@ -642,10 +675,11 @@ dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
     /* Process the signals */
     {
         struct IntensitySet spot_intensities[dumping_len];
+        //struct SignalRecordHeader header;
         float scores[dumping_len * (NUM_CHANNELS + 1)];
-        ssize_t padding;
+        //ssize_t padding;
         #define ZEROPAD_BLOCK   20
-        static const float zeropad[ZEROPAD_BLOCK]={};
+        //static const float zeropad[ZEROPAD_BLOCK]={};
 
         fetch_intensity(spot_intensities, intensities, delimiter_end - cfg->threep_start,
                         dumping_len, clusterno);
@@ -654,27 +688,40 @@ dump_spot_signals(struct TailseekerConfig *cfg, struct SampleInfo *bc,
                              signal_range_bandwidth, &cfg->rulerparams, scores) < 0)
             return 0;
 
+        //header.clusterno = clusterno;
+        //header.flags = 
+
+ 85     uint32_t clusterno;
+ 86     uint32_t flags;
+ 87     int16_t first_cycle;            /* left-most cycle number */
+ 88     int16_t valid_cycle_count;      /* cycle count with valid signals */
+ 89     int16_t polya_start;            /* poly(A) start position
+ 90                                      * (1-based absolute cycle number) or -1 */
+ 91     int16_t prelim_change_point;    /* rough estimation of poly(A) length or -1 */
+ 92     float polya_detection_score;    /* poly(A) detection score (float) */
+
         pthread_mutex_lock(&bc->statslock);
-        if (bgzf_write(bc->stream_signal_data_dump, scores, sizeof(scores)) < 0) {
-            pthread_mutex_unlock(&bc->statslock);
-            return -1;
-        }
+//        if (bgzf_write(bc->stream_signal_data_dump, scores, sizeof(scores)) < 0) {
+//            pthread_mutex_unlock(&bc->statslock);
+//            return -1;
+//        }
 
-        padding = (bc->dump_signals - dumping_len) * (NUM_CHANNELS + 1);
-        for (; padding > 0; padding -= ZEROPAD_BLOCK) {
-            if (bgzf_write(bc->stream_signal_data_dump, zeropad,
-                    sizeof(float) * (padding < ZEROPAD_BLOCK ? padding : ZEROPAD_BLOCK)) < 0) {
-                pthread_mutex_unlock(&bc->statslock);
-                return -1;
-            }
-        }
-
-        if (bgzf_write(bc->stream_signal_spotids_dump, &clusterno, sizeof(clusterno)) < 0) {
-            pthread_mutex_unlock(&bc->statslock);
-            return -1;
-        }
+//        padding = (bc->signal_dump_length - dumping_len) * (NUM_CHANNELS + 1);
+//        for (; padding > 0; padding -= ZEROPAD_BLOCK) {
+//            if (bgzf_write(bc->stream_signal_data_dump, zeropad,
+//                    sizeof(float) * (padding < ZEROPAD_BLOCK ? padding : ZEROPAD_BLOCK)) < 0) {
+//                pthread_mutex_unlock(&bc->statslock);
+//                return -1;
+//            }
+//        }
+//
+//        if (bgzf_write(bc->stream_signal_spotids_dump, &clusterno, sizeof(clusterno)) < 0) {
+//            pthread_mutex_unlock(&bc->statslock);
+//            return -1;
+//        }
         pthread_mutex_unlock(&bc->statslock);
     }
 
     return 0;
 }
+#endif

@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 #include "tailseq-import.h"
 
 
@@ -199,70 +200,6 @@ write_seqqual_entry(char **pbuffer, uint32_t clusterno,
 }
 
 
-static void
-get_modification_sequence(char *dest, const char *seq, int delimiter_end,
-                          int terminal_mods)
-{
-    if (terminal_mods >= 1) {
-        const char *seqptr;
-        int i;
-
-        seqptr = seq + delimiter_end + terminal_mods - 1;
-        for (i = 0; i < terminal_mods; i++, seqptr--)
-            switch (*seqptr) {
-            case 'A': *dest++ = 'T'; break;
-            case 'C': *dest++ = 'G'; break;
-            case 'G': *dest++ = 'C'; break;
-            case 'T': *dest++ = 'A'; break;
-            default:  *dest++ = 'N'; break;
-            }
-    }
-
-    *dest = '\0';
-}
-
-
-static int
-write_taginfo_entry(char **pbuffer, struct TailseekerConfig *cfg,
-                    struct SampleInfo *sample, uint32_t clusterno,
-                    const char *sequence, int delimiter_end,
-                    int procflags, int polya_len, int terminal_mods)
-{
-    ssize_t written;
-    char *buf;
-    int i;
-
-    buf = *pbuffer;
-
-    sprintf(buf, "%s%04d\t%u\t%d\t%d\t",
-             cfg->laneid, cfg->tile, (unsigned int)clusterno,
-             procflags, polya_len);
-    buf += strlen(buf);
-
-    if (terminal_mods > 0) {
-        get_modification_sequence(buf, sequence, delimiter_end,
-                                  terminal_mods);
-        buf += terminal_mods;
-    }
-    *buf++ = '\t';
-
-    for (i = 0; i < sample->umi_ranges_count; i++) {
-        struct UMIInterval *umi;
-
-        umi = &sample->umi_ranges[i];
-        memcpy(buf, sequence + umi->start, umi->length);
-        buf += umi->length;
-    }
-
-    *buf++ = '\n';
-
-    written = buf - *pbuffer;
-    *pbuffer = buf;
-
-    return written;
-}
-
-
 static int
 write_measurements_to_buffers(struct TailseekerConfig *cfg,
                               struct WriteBuffer *wbuf,
@@ -288,8 +225,8 @@ write_measurements_to_buffers(struct TailseekerConfig *cfg,
             length_3p = cfg->threep_length;
         }
 
-        if (length_3p > cfg->threep_output_length)
-            length_3p = cfg->threep_output_length;
+        if (length_3p > cfg->threep_seqqual_output_length)
+            length_3p = cfg->threep_seqqual_output_length;
 
         if (write_seqqual_entry(&wb->buf_seqqual, clusterno,
                                 sequence_formatted, quality_formatted,
@@ -297,12 +234,6 @@ write_measurements_to_buffers(struct TailseekerConfig *cfg,
                                 start_3p, length_3p) < 0)
             return -1;
     }
-
-    if (sample->stream_taginfo != NULL &&
-        write_taginfo_entry(&wb->buf_taginfo, cfg, sample,
-                            clusterno, sequence_formatted, delimiter_end,
-                            procflags, polya_len, terminal_mods) < 0)
-        return -1;
 
     return 0;
 }
@@ -342,10 +273,149 @@ sync_write_out_buffer(BGZF *stream, const char *content, size_t size,
 }
 
 
+static void
+add_polya_score_sample(cluster_count_t *samplecounts, float *scores,
+                       int length, int firstcycle, int sampling_bins)
+{
+    cluster_count_t *sptr;
+    int i, binno;
+
+    sptr = samplecounts + (firstcycle * sampling_bins);
+    for (i = 0; i < length; i++, scores++, sptr += sampling_bins)
+        if (isfinite(*scores)) {
+            binno = *scores * sampling_bins;
+            if (binno >= sampling_bins)
+                binno = sampling_bins - 1;
+
+            sptr[binno]++;
+        }
+}
+
+
+static int
+process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
+                     struct SampleInfo *sample,
+                     const char *sequence, const char *quality,
+                     struct CIFData **intensities, int delimiter_end,
+                     int *terminal_mods, int *polya_status,
+                     cluster_count_t *pos_score_counts,
+                     cluster_count_t *neg_score_counts,
+                     int *procflags)
+{
+    int polya_start, polya_end, polya_len, balancer_len, insert_len;
+    uint32_t polya_ret;
+    float signal_range_bandwidth[NUM_CHANNELS];
+    float signal_range_low[NUM_CHANNELS];
+    struct PolyASeederParameters params;
+
+    /* Check basecalling quality scores in the balancer in 3'-side read.
+     * This will represent how good the signal quality is. Using any
+     * among other regions leads to a biased sampling against long poly(A)
+     * tails. */
+    if (sample->umi_ranges_count > 0 &&
+            check_balancer_basecall_quality(cfg, sample, quality,
+                                            procflags) < 0)
+        return -1;
+
+    memcpy(&params, &cfg->seederparams, sizeof(params));
+
+    /* Locate the starting position of poly(A) tail if available */
+    polya_ret = find_polya(sequence + delimiter_end,
+                           cfg->threep_start + cfg->threep_length - delimiter_end,
+                           &cfg->finderparams);
+    polya_start = polya_ret >> 16;
+    polya_end = polya_ret & 0xffff;
+    polya_len = polya_end - polya_start;
+    *terminal_mods = polya_start;
+
+    balancer_len = delimiter_end - cfg->threep_start;
+    if (balancer_len > cfg->balancerparams.length)
+        balancer_len = cfg->balancerparams.length;
+
+    if (polya_start > 0)
+        *procflags |= PAFLAG_HAVE_3P_MODIFICATION;
+    if (polya_len == 0)
+        *procflags |= PAFLAG_NO_POLYA_DETECTED;
+
+    /* Check balancer region for all spots including non-poly(A)
+     * ones. This can be used to suppress the biased filtering of
+     * low-quality spots with poly(A)+ tags against poly(A)- tags.
+     */
+    {
+        struct IntensitySet spot_intensities[balancer_len];
+
+        fetch_intensity(spot_intensities, intensities, 0, balancer_len, clusterno);
+
+        if (check_balancer(signal_range_low, signal_range_bandwidth,
+                           spot_intensities, cfg->rulerparams.colormatrix,
+                           sequence + cfg->threep_start,
+                           &cfg->balancerparams, balancer_len, procflags) < 0)
+            return -1;
+    }
+
+    insert_len = cfg->threep_start + cfg->threep_length - delimiter_end;
+    if (sample->limit_threep_processing > 0 &&
+            sample->limit_threep_processing < insert_len)
+        insert_len = sample->limit_threep_processing;
+
+    {
+        struct IntensitySet spot_intensities[insert_len];
+        float scores[insert_len], contrast_score;
+        int max_contrast_pos, scan_len;
+
+        /* Fetch signal intensities and calculate poly(A) scores. */
+        fetch_intensity(spot_intensities, intensities,
+                        delimiter_end - cfg->threep_start,
+                        insert_len, clusterno);
+
+        if (compute_polya_score(spot_intensities, insert_len,
+                                signal_range_low, signal_range_bandwidth,
+                                &cfg->rulerparams, scores, procflags) < 0)
+            return -1;
+
+        scan_len = insert_len - polya_start;
+        if (scan_len <= 0)
+            /* nothing */;
+        else if (polya_len >= params.seed_trigger_polya_length) {
+            max_contrast_pos = find_max_cumulative_contrast(scores + polya_start,
+                                    scan_len, params.max_cctr_scan_left_space,
+                                    params.max_cctr_scan_right_space,
+                                    &contrast_score);
+
+            if (max_contrast_pos >= params.polya_boundary_pos &&
+                    contrast_score >= params.required_cdf_contrast) {
+                /* positive sampling */
+                fprintf(stderr, "[%s] %d+%d P=%d CMaxPos=%d CScore=(%.3f)\n",
+                            sample->name, delimiter_end, polya_start,
+                            polya_len, max_contrast_pos, (double)contrast_score);
+                add_polya_score_sample(pos_score_counts, scores + polya_start,
+                                       scan_len, delimiter_end + polya_start,
+                                       params.dist_sampling_bins);
+            }
+        }
+        else if (polya_len <= params.negative_sample_polya_length)
+            add_polya_score_sample(neg_score_counts, scores + polya_start,
+                                   scan_len, delimiter_end + polya_start,
+                                   params.dist_sampling_bins);
+
+        *polya_status = 0;
+    }
+/*
+    *polya_status = measure_polya_length(cfg, intensities,
+                    sequence, clusterno,
+                    delimiter_end, procflags,
+                    terminal_mods, insert_len);*/
+
+    return 0;
+}
+
+
 int
 process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
               struct CIFData **intensities, struct BCLData **basecalls,
               struct WriteBuffer *wbuf0, struct WriteBuffer *wbuf,
+              cluster_count_t *pos_score_counts,
+              cluster_count_t *neg_score_counts,
               int jobid, uint32_t cln_start, uint32_t cln_end)
 {
     uint32_t clusterno;
@@ -363,26 +433,26 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
     mismatches = 0;
 
     for (clusterno = cln_start; clusterno < cln_end; clusterno++) {
-        struct SampleInfo *bc;
+        struct SampleInfo *sample;
         int delimiter_end, procflags=0;
-        int polya_len, terminal_mods=-1;
+        int polya_status, terminal_mods=-1;
 
         format_basecalls(sequence_formatted, quality_formatted, basecalls,
                          cfg->total_cycles, clusterno);
 
-        bc = assign_barcode(sequence_formatted + cfg->index_start, cfg->index_length,
-                            noncontrol_samples, &mismatches);
-        if (bc != NULL)
+        sample = assign_barcode(sequence_formatted + cfg->index_start, cfg->index_length,
+                                noncontrol_samples, &mismatches);
+        if (sample != NULL)
             /* barcode is assigned to a regular sample. do nothing here. */;
         else if (cfg->controlinfo.name[0] == '\0') /* no control sequence is given. treat it Unknown. */
-            bc = cfg->samples; /* the first samples in the list is "Unknown". */
+            sample = cfg->samples; /* the first samples in the list is "Unknown". */
         else
             switch (try_alignment_to_control(&cfg->controlinfo, sequence_formatted)) {
                 case 0: /* not aligned to control, set as Unknown. */
-                    bc = cfg->samples;
+                    sample = cfg->samples;
                     break;
                 case 1: /* aligned. set as control. */
-                    bc = cfg->controlinfo.barcode; /* set as control */
+                    sample = cfg->controlinfo.barcode; /* set as control */
                     break;
                 case -1: /* error */
                 default:
@@ -390,79 +460,59 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                     return -1;
             }
 
-        pthread_mutex_lock(&bc->statslock);
+        pthread_mutex_lock(&sample->statslock);
         if (mismatches <= 0) /* no mismatches or falling back to PhiX/Unknown. */
-            bc->clusters_mm0++;
+            sample->clusters_mm0++;
         else {
             procflags |= PAFLAG_BARCODE_HAS_MISMATCHES;
 
             if (mismatches == 1)
-                bc->clusters_mm1++;
+                sample->clusters_mm1++;
             else
-                bc->clusters_mm2plus++;
+                sample->clusters_mm2plus++;
         }
-        pthread_mutex_unlock(&bc->statslock);
+        pthread_mutex_unlock(&sample->statslock);
 
         /* Check fingerprint sequences with defined allowed mismatches. */
-        if (bc->fingerprint_length > 0) {
+        if (sample->fingerprint_length > 0) {
             mismatches = count_fingerprint_mismatches(sequence_formatted,
-                                                      bc->fingerprint_pos, bc);
-            if (mismatches > bc->maximum_fingerprint_mismatches) {
-                pthread_mutex_lock(&bc->statslock);
-                bc->clusters_fpmismatch++;
-                pthread_mutex_unlock(&bc->statslock);
+                                                      sample->fingerprint_pos, sample);
+            if (mismatches > sample->maximum_fingerprint_mismatches) {
+                pthread_mutex_lock(&sample->statslock);
+                sample->clusters_fpmismatch++;
+                pthread_mutex_unlock(&sample->statslock);
                 continue;
             }
         }
 
-        /* Check basecalling quality scores in the balancer in 3'-side read.
-         * This will represent how good the signal quality is. Using any
-         * among other regions leads to a biased sampling against long poly(A)
-         * tails. */
-        if (bc->umi_ranges_count > 0 &&
-                check_balancer_basecall_quality(cfg, bc, quality_formatted,
-                                                &procflags) < 0)
-            continue;
-
-        if (bc->delimiter_length <= 0)
-            polya_len = delimiter_end = -1;
+        if (sample->delimiter_length <= 0)
+            polya_status = delimiter_end = -1;
         else {
             delimiter_end = find_delimiter_end_position(sequence_formatted,
-                                                        bc, &procflags);
+                                                        sample, &procflags);
             if (delimiter_end < 0) {
-                pthread_mutex_lock(&bc->statslock);
-                bc->clusters_nodelim++;
-                pthread_mutex_unlock(&bc->statslock);
+                pthread_mutex_lock(&sample->statslock);
+                sample->clusters_nodelim++;
+                pthread_mutex_unlock(&sample->statslock);
                 if (!cfg->keep_no_delimiter)
                     continue;
 
-                polya_len = -1;
+                polya_status = -1;
             }
-            else {
-                int insert_len=cfg->threep_start + cfg->threep_length - delimiter_end;
-
-                if (bc->limit_threep_processing > 0 && bc->limit_threep_processing < insert_len)
-                    insert_len = bc->limit_threep_processing;
-
-                polya_len = measure_polya_length(cfg, intensities,
-                                sequence_formatted, clusterno,
-                                delimiter_end, &procflags,
-                                &terminal_mods, insert_len);
-            }
+            else if (process_polya_signal(cfg, clusterno, sample,
+                                          sequence_formatted, quality_formatted,
+                                          intensities, delimiter_end,
+                                          &terminal_mods, &polya_status,
+                                          pos_score_counts, neg_score_counts,
+                                          &procflags) < 0)
+                continue;
         }
 
-        if (write_measurements_to_buffers(cfg, wbuf, bc,
+        if (write_measurements_to_buffers(cfg, wbuf, sample,
                 firstclusterno + clusterno, sequence_formatted, quality_formatted,
-                procflags, delimiter_end, polya_len, terminal_mods) < 0) {
+                procflags, delimiter_end, polya_status, terminal_mods) < 0) {
             perror("process_spots");
 
-            return -1;
-        }
-
-        if (bc->stream_signal_data_dump != NULL &&
-                dump_spot_signals(cfg, bc, intensities, sequence_formatted,
-                                  clusterno, delimiter_end) < 0) {
-            perror("process_spots");
             return -1;
         }
     }
@@ -470,21 +520,13 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
     {
         struct SampleInfo *sample;
 
-        for (sample = cfg->samples; sample != NULL; sample = sample->next) {
+        for (sample = cfg->samples; sample != NULL; sample = sample->next)
             if (sync_write_out_buffer(sample->stream_seqqual,
                                       wbuf0[sample->numindex].buf_seqqual,
                                       (size_t)(wbuf[sample->numindex].buf_seqqual -
                                                wbuf0[sample->numindex].buf_seqqual),
                                       &sample->wsync_seqqual, jobid) < 0)
                 return -1;
-
-            if (sync_write_out_buffer(sample->stream_taginfo,
-                                      wbuf0[sample->numindex].buf_taginfo,
-                                      (size_t)(wbuf[sample->numindex].buf_taginfo -
-                                               wbuf0[sample->numindex].buf_taginfo),
-                                      &sample->wsync_taginfo, jobid) < 0)
-                return -1;
-        }
     }
 
     return 0;
