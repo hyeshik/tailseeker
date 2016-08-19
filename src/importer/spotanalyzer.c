@@ -273,6 +273,44 @@ sync_write_out_buffer(BGZF *stream, const char *content, size_t size,
 }
 
 
+static int
+write_polya_score(struct SampleInfo *sample, const float *score, int length,
+                  uint32_t clusterno, int first_cycle)
+{
+    static const float zeropad[256] = {0.f};
+    struct SignalRecordHeader header;
+
+    if (length > sample->signal_dump_length)
+        length = sample->signal_dump_length;
+
+    header.clusterno = clusterno;
+    header.first_cycle = first_cycle;
+    header.valid_cycle_count = length;
+
+    pthread_mutex_lock(&sample->signal_writer_lock);
+
+    if (bgzf_write(sample->stream_signal, (void *)&header,
+                sizeof(header)) < 0 ||
+            bgzf_write(sample->stream_signal, (void *)score,
+                    sizeof(float) * length) < 0) {
+        perror("write_polya_score");
+        return -1;
+    }
+
+    if (length < sample->signal_dump_length &&
+            bgzf_write(sample->stream_signal, (void *)zeropad,
+                       sizeof(float) *
+                       (sample->signal_dump_length - length)) < 0) {
+        perror("write_polya_score");
+        return -1;
+    }
+
+    pthread_mutex_unlock(&sample->signal_writer_lock);
+
+    return 0;
+}
+
+
 static void
 add_polya_score_sample(cluster_count_t *samplecounts, float *scores,
                        int length, int firstcycle, int sampling_bins)
@@ -377,21 +415,26 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
         if (scan_len <= 0)
             /* nothing */;
         else if (polya_len >= params.seed_trigger_polya_length) {
+            /* Write computed poly(A) scores of long poly(A) candidates
+             * for later evaluation. */
+            if (write_polya_score(sample, scores + polya_start, scan_len,
+                                  clusterno,
+                                  delimiter_end + polya_start) < 0)
+                return -1;
+
+            /* Evaluate the signal trends if it stems from a poly(A) tail.
+             * A poly(A) tail has a great contrast among score values
+             * divided by a certain point. */
             max_contrast_pos = find_max_cumulative_contrast(scores + polya_start,
                                     scan_len, params.max_cctr_scan_left_space,
                                     params.max_cctr_scan_right_space,
                                     &contrast_score);
 
             if (max_contrast_pos >= params.polya_boundary_pos &&
-                    contrast_score >= params.required_cdf_contrast) {
-                /* positive sampling */
-                fprintf(stderr, "[%s] %d+%d P=%d CMaxPos=%d CScore=(%.3f)\n",
-                            sample->name, delimiter_end, polya_start,
-                            polya_len, max_contrast_pos, (double)contrast_score);
+                    contrast_score >= params.required_cdf_contrast)
                 add_polya_score_sample(pos_score_counts, scores + polya_start,
                                        scan_len, delimiter_end + polya_start,
                                        params.dist_sampling_bins);
-            }
         }
         else if (polya_len <= params.negative_sample_polya_length)
             add_polya_score_sample(neg_score_counts, scores + polya_start,

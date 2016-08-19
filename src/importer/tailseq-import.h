@@ -86,13 +86,8 @@ struct UMIInterval {
 
 struct SignalRecordHeader {
     uint32_t clusterno;
-    uint32_t flags;
-    int16_t first_cycle;            /* left-most cycle number */
+    int16_t first_cycle;            /* left-most cycle number of polyA start */
     int16_t valid_cycle_count;      /* cycle count with valid signals */
-    int16_t polya_start;            /* poly(A) start position
-                                     * (1-based absolute cycle number) or -1 */
-    int16_t prelim_change_point;    /* rough estimation of poly(A) length or -1 */
-    float polya_detection_score;    /* poly(A) detection score (float) */
 };
 
 struct WriteHandleSync {
@@ -130,8 +125,8 @@ struct SampleInfo {
     BGZF *stream_signal;
 
     struct WriteHandleSync wsync_seqqual;
-    struct WriteHandleSync wsync_signal;
 
+    pthread_mutex_t signal_writer_lock;
     pthread_mutex_t statslock;
     uint32_t clusters_mm0;
     uint32_t clusters_mm1;

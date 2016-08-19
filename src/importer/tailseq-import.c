@@ -74,11 +74,9 @@ open_writers(struct TailseekerConfig *cfg)
         }
 
         {   /* Write header for signal dumps */
-            uint32_t sigdumpheader[4];
-            sigdumpheader[0] = 1;
-            sigdumpheader[1] = sample->umi_total_length;
-            sigdumpheader[2] = sample->signal_dump_length;
-            sigdumpheader[3] = sizeof(float);
+            uint32_t sigdumpheader[2];
+            sigdumpheader[0] = sizeof(float);
+            sigdumpheader[1] = sample->signal_dump_length;
             if (bgzf_write(sample->stream_signal, (void *)sigdumpheader,
                            sizeof(sigdumpheader)) < 0) {
                 perror("open_writers");
@@ -334,13 +332,8 @@ prepare_split_jobs(struct TailseekerConfig *cfg, uint32_t nclusters, int cluster
 
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
         sample->wsync_seqqual.jobs_written = 0;
-        sample->wsync_signal.jobs_written = 0;
-
         pthread_cond_init(&sample->wsync_seqqual.wakeup, NULL);
-        pthread_cond_init(&sample->wsync_signal.wakeup, NULL);
-
         pthread_mutex_init(&sample->wsync_seqqual.lock, NULL);
-        pthread_mutex_init(&sample->wsync_signal.lock, NULL);
     }
 
     return pool;
@@ -356,10 +349,7 @@ free_parallel_jobs(struct ParallelJobPool *pool, struct SampleInfo *samples)
 
     for (; samples != NULL; samples = samples->next) {
         pthread_cond_destroy(&samples->wsync_seqqual.wakeup);
-        pthread_cond_destroy(&samples->wsync_signal.wakeup);
-
         pthread_mutex_destroy(&samples->wsync_seqqual.lock);
-        pthread_mutex_destroy(&samples->wsync_signal.lock);
     }
 }
 
