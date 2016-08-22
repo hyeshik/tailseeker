@@ -60,6 +60,19 @@ open_writers(struct TailseekerConfig *cfg)
 
         free(filename);
 
+        if (cfg->taginfo_output != NULL) {
+            filename = replace_placeholder(cfg->taginfo_output,
+                                           "{name}", sample->name);
+            sample->stream_taginfo = bgzf_open(filename, "w");
+            if (sample->stream_taginfo == NULL) {
+                perror("open_writers");
+                fprintf(stderr, "Failed to write to %s\n", filename);
+                free(filename);
+                return -1;
+            }
+            free(filename);
+        }
+
         filename = replace_placeholder(cfg->signal_output, "{name}",
                                        sample->name);
         if (filename == NULL)
@@ -98,6 +111,11 @@ close_writers(struct SampleInfo *sample)
         if (sample->stream_seqqual != NULL) {
             bgzf_close(sample->stream_seqqual);
             sample->stream_seqqual = NULL;
+        }
+
+        if (sample->stream_taginfo != NULL) {
+            bgzf_close(sample->stream_taginfo);
+            sample->stream_taginfo = NULL;
         }
 
         if (sample->stream_signal != NULL) {
@@ -257,7 +275,7 @@ write_signal_samples_dists(const char *filename_format, const char *type,
     bgzf_write(fp, header_elements, sizeof(header_elements));
     bgzf_write(fp, counts, sizeof(cluster_count_t) * total_cycles * sampling_bins);
     bgzf_close(fp);
-    
+
     return 0;
 }
 
@@ -332,8 +350,13 @@ prepare_split_jobs(struct TailseekerConfig *cfg, uint32_t nclusters, int cluster
 
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
         sample->wsync_seqqual.jobs_written = 0;
+        sample->wsync_taginfo.jobs_written = 0;
+
         pthread_cond_init(&sample->wsync_seqqual.wakeup, NULL);
+        pthread_cond_init(&sample->wsync_taginfo.wakeup, NULL);
+
         pthread_mutex_init(&sample->wsync_seqqual.lock, NULL);
+        pthread_mutex_init(&sample->wsync_taginfo.lock, NULL);
     }
 
     return pool;
@@ -349,7 +372,10 @@ free_parallel_jobs(struct ParallelJobPool *pool, struct SampleInfo *samples)
 
     for (; samples != NULL; samples = samples->next) {
         pthread_cond_destroy(&samples->wsync_seqqual.wakeup);
+        pthread_cond_destroy(&samples->wsync_taginfo.wakeup);
+
         pthread_mutex_destroy(&samples->wsync_seqqual.lock);
+        pthread_mutex_destroy(&samples->wsync_taginfo.lock);
     }
 }
 
@@ -366,7 +392,8 @@ run_spot_processing(struct ParallelJobPool *pool)
     buf = buf0 = NULL;
     wbuf = wbuf0 = NULL;
 
-    memsize = pool->bufsize_seqqual * pool->cfg->num_samples;
+    memsize = (pool->bufsize_seqqual + pool->bufsize_taginfo) *
+              pool->cfg->num_samples;
     buf = buf0 = malloc(memsize);
     if (buf == NULL)
         goto onError;
@@ -386,6 +413,8 @@ run_spot_processing(struct ParallelJobPool *pool)
     for (i = 0; i < pool->cfg->num_samples; i++) {
         wbuf0[i].buf_seqqual = buf;
         buf += pool->bufsize_seqqual;
+        wbuf0[i].buf_taginfo = buf;
+        buf += pool->bufsize_taginfo;
     }
 
     while (1) {
@@ -485,6 +514,7 @@ distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities
     pool->basecalls = basecalls;
     pool->firstclusterno = firstclusterno;
     pool->bufsize_seqqual = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_seqqual;
+    pool->bufsize_taginfo = NUM_CLUSTERS_PER_JOB * cfg->max_bufsize_taginfo;
 
     for (i = 0; i < cfg->threads; i++)
         pthread_create(&threads[i], NULL, (void *)run_spot_processing, (void *)pool);

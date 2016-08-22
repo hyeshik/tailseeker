@@ -122,9 +122,11 @@ struct SampleInfo {
     int signal_dump_length;
 
     BGZF *stream_seqqual;
+    BGZF *stream_taginfo;
     BGZF *stream_signal;
 
     struct WriteHandleSync wsync_seqqual;
+    struct WriteHandleSync wsync_taginfo;
 
     pthread_mutex_t signal_writer_lock;
     pthread_mutex_t statslock;
@@ -244,6 +246,7 @@ struct TailseekerConfig {
 
     /* section output */
     char *seqqual_output;
+    char *taginfo_output;
     char *signal_output;
     char *signal_dists_output;
     char *stats_output;
@@ -274,6 +277,7 @@ struct TailseekerConfig {
 
     /* calculated values */
     size_t max_bufsize_seqqual;
+    size_t max_bufsize_taginfo;
 };
 
 
@@ -288,6 +292,7 @@ struct ParallelJob {
 
 struct WriteBuffer {
     char *buf_seqqual;
+    char *buf_taginfo;
 };
 
 struct GloballyAggregatedOutput {
@@ -308,6 +313,7 @@ struct ParallelJobPool {
     uint32_t firstclusterno;
 
     size_t bufsize_seqqual;
+    size_t bufsize_taginfo;
 
     struct GloballyAggregatedOutput global_stats;
 

@@ -98,7 +98,7 @@ calculate_tag_prority(int flags)
         NOTSET(flags, PAFLAG_BALANCER_SIGNAL_BAD) * 16 +
         NOTSET(flags, PAFLAG_DARKCYCLE_EXISTS) * 8 +
         NOTSET(flags, PAFLAG_DELIMITER_IS_SHIFTED) * 4 +
-        NOTSET(flags, PAFLAG_NO_POLYA_DETECTED) * 2 +
+        SET(flags, PAFLAG_POLYA_DETECTED) * 2 +
         NOTSET(flags, PAFLAG_MEASURED_USING_NAIVE_RULER);
 #undef SET
 #undef NOTSET

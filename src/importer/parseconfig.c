@@ -133,6 +133,8 @@ feed_output_entry(struct TailseekerConfig *cfg,
 {
     if (MATCH("seqqual"))
         cfg->seqqual_output = strdup(value);
+    else if (MATCH("taginfo"))
+        cfg->taginfo_output = strdup(value);
     else if (MATCH("signal"))
         cfg->signal_output = strdup(value);
     else if (MATCH("signal-dists"))
@@ -646,6 +648,10 @@ compute_derived_values(struct TailseekerConfig *cfg)
             cfg->fivep_length * 2 +
             cfg->threep_seqqual_output_length * 2 +
             6 /* field separators */);
+    cfg->max_bufsize_taginfo = nsamples * (
+            5 /* tabs and eol */ + 30 /* other fields */ +
+            cfg->finderparams.max_terminal_modifications +
+            longest_umi_length);
 
     /* Compute number of entries in a read buffer from the byte size. */
     {
@@ -656,7 +662,7 @@ compute_derived_values(struct TailseekerConfig *cfg)
                                      8 * cfg->threep_length; /* 8 bytes for CIF */
 
         write_buffer_memory_footprint = cfg->threads * NUM_CLUSTERS_PER_JOB *
-                                        cfg->max_bufsize_seqqual;
+                        (cfg->max_bufsize_seqqual + cfg->max_bufsize_taginfo);
 
         cfg->read_buffer_entry_count = (cfg->read_buffer_size - write_buffer_memory_footprint)
                                        / memory_footprint_per_entry;
@@ -709,6 +715,7 @@ free_config(struct TailseekerConfig *cfg)
     free_if_not_null(cfg->laneid);
 
     free_if_not_null(cfg->seqqual_output);
+    free_if_not_null(cfg->taginfo_output);
     free_if_not_null(cfg->signal_output);
     free_if_not_null(cfg->signal_dists_output);
     free_if_not_null(cfg->stats_output);
