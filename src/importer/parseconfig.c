@@ -290,8 +290,6 @@ feed_polyA_finder_entry(struct TailseekerConfig *cfg,
         cfg->finderparams.max_terminal_modifications = atoi(value);
     else if (MATCH("signal-analysis-trigger"))
         cfg->finderparams.sigproc_trigger_polya_length = atoi(value);
-    else if (MATCH("naive-count-trigger"))
-        cfg->finderparams.naive_ruler_trigger_polya_length = atoi(value);
     else {
         fprintf(stderr, "Unknown key \"%s\" in [polyA_finder].\n", name);
         return -1;
@@ -309,10 +307,6 @@ feed_polyA_ruler_entry(struct TailseekerConfig *cfg,
         cfg->rulerparams.dark_cycles_threshold = (float)atof(value);
     else if (MATCH("maximum-dark-cycles"))
         cfg->rulerparams.max_dark_cycles = atoi(value);
-    else if (MATCH("polya-score-threshold"))
-        cfg->rulerparams.polya_score_threshold = (float)atof(value);
-    else if (MATCH("downhill-extension-weight"))
-        cfg->rulerparams.downhill_extension_weight = (float)atof(value);
     else if (MATCH("t-intensity-k"))
         cfg->t_intensity_k = (float)atof(value);
     else if (MATCH("t-intensity-center"))
@@ -513,7 +507,6 @@ set_default_configuration(struct TailseekerConfig *cfg)
     cfg->finderparams.max_terminal_modifications = 20;
     cfg->finderparams.min_polya_length = 5;
     cfg->finderparams.sigproc_trigger_polya_length = 10;
-    cfg->finderparams.naive_ruler_trigger_polya_length = 60;
     cfg->finderparams.weights_polyA[(int)'T'] = 2;
     cfg->finderparams.weights_polyA[(int)'A'] = cfg->finderparams.weights_polyA[(int)'C'] =
         cfg->finderparams.weights_polyA[(int)'G'] = -9;
@@ -526,8 +519,6 @@ set_default_configuration(struct TailseekerConfig *cfg)
 
     cfg->rulerparams.dark_cycles_threshold = 10;
     cfg->rulerparams.max_dark_cycles = 5;
-    cfg->rulerparams.polya_score_threshold = .1;
-    cfg->rulerparams.downhill_extension_weight = .49;
     cfg->t_intensity_k = 20.f;
     cfg->t_intensity_center = .75f;
 }

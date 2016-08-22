@@ -204,7 +204,6 @@ struct PolyAFinderParameters {
     size_t max_terminal_modifications;
     size_t min_polya_length;
     size_t sigproc_trigger_polya_length;
-    size_t naive_ruler_trigger_polya_length;
 };
 
 #define T_INTENSITY_SCORE_BINS              200
@@ -216,9 +215,6 @@ struct PolyARulerParameters {
 
     float maximum_entropy;
     float t_intensity_score[T_INTENSITY_SCORE_BINS + 1];
-
-    float polya_score_threshold;
-    float downhill_extension_weight;
 };
 
 #define MAX_LANEID_LEN      32  /* including a zero terminator */
