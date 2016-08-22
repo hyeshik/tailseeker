@@ -169,30 +169,27 @@ def determine_inputs_process_signals(wildcards):
 
     return inputs
 
-optional_outputs_from_process_signals = [
-    'scratch/sigdumps/{}-{}-{{tile}}.dmp.gz'.format(filetype, sample)
-    for filetype in ['signals', 'spotids']
-    for sample, dumping in CONF['debug']['dump_signals'].items()
-    if sample in ALL_SAMPLES and dumping
-]
 
 rule process_signals:
     input: determine_inputs_process_signals
     output:
         sigproc_conf = temp('scratch/sigproc-conf/{tile}.ini'),
         seqqual = map(temp, expand('scratch/seqqual/{sample}_{{tile}}.txt.gz',
-                                 sample=ALL_SAMPLES + ['Unknown', 'PhiX'])),
+                                   sample=ALL_SAMPLES)),
         taginfo = map(temp, expand('scratch/taginfo/{sample}_{{tile}}.txt.gz',
-                                   sample=ALL_SAMPLES + ['Unknown', 'PhiX'])),
-        demuxstats = temp('scratch/stats/signal-proc-{tile}.csv'),
-        signaldumps = map(temp, optional_outputs_from_process_signals)
+                                   sample=ALL_SAMPLES)),
+        signals = map(temp, expand('scratch/signals/{sample}_{{tile}}.sigpack',
+                                   sample=ALL_SAMPLES)),
+        sigdists = map(temp, expand('scratch/sigdists/{posneg}_{{tile}}.sigdists',
+                                    posneg=['pos', 'neg'])),
+        demuxstats = temp('scratch/stats/signal-proc-{tile}.csv')
     threads: THREADS_MAXIMUM_CORE
     params:
         tileinfo=TILES, conf=CONF.confdata,
         exp_samples=EXP_SAMPLES, spikein_samples=SPIKEIN_SAMPLES
     run:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/generate-signalproc-conf.py')
-        shell('{BINDIR}/tailseq-sigproc {output.sigproc_conf}')
+        shell('{BINDIR}/tailseq-import {output.sigproc_conf}')
 
 
 TARGETS.append('stats/signal-processing.csv')
@@ -201,6 +198,19 @@ rule merge_signal_processing_stats:
     output: 'stats/signal-processing.csv'
     params: tiles=sorted(TILES)
     script: SCRIPTSDIR + '/stats-merge-demultiplexing-counts.py'
+
+
+TARGETS.append('stats/polya-score-cutoffs-bases.txt.gz')
+rule calculate_optimal_parameters:
+    input: expand('scratch/sigdists/{posneg}_{tile}.sigdists', \
+                  posneg=['pos', 'neg'], tile=TILES)
+    output:
+        cutoff_values=temp('scratch/sigdists/signal-cutoffs.txt'),
+        cutoff_bases='stats/polya-score-cutoffs-bases.txt',
+    params: conf=CONF.confdata, tileinfo=TILES, total_cycles=NUM_CYCLES
+    threads: 20
+    run:
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/calculate-optimal-parameters.py')
 
 
 TARGETS.extend(expand('taginfo/{sample}.txt.gz', sample=ALL_SAMPLES))

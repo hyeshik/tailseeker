@@ -496,7 +496,8 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
             if (max_contrast_pos >= params.polya_boundary_pos &&
                     contrast_score >= params.required_cdf_contrast)
                 add_polya_score_sample(pos_score_counts, scores + polya_start,
-                                       scan_len, delimiter_end + polya_start,
+                                       min_int(scan_len, params.polya_boundary_pos),
+                                       delimiter_end + polya_start,
                                        params.dist_sampling_bins);
         }
         else if (*polya_len <= params.negative_sample_polya_length)

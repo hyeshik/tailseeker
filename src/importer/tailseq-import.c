@@ -45,6 +45,10 @@ open_writers(struct TailseekerConfig *cfg)
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
         char *filename;
 
+        /* Don't generate output files for control samples. */
+        if (sample->index[0] == 'X')
+            continue;
+
         filename = replace_placeholder(cfg->seqqual_output, "{name}",
                                        sample->name);
         if (filename == NULL)
