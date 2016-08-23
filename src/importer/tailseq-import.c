@@ -90,18 +90,31 @@ open_writers(struct TailseekerConfig *cfg)
             return -1;
         }
 
-        {   /* Write header for signal dumps */
-            uint32_t sigdumpheader[2];
+        free(filename);
+    }
+
+    return 0;
+}
+
+
+static int
+write_output_file_headers(struct TailseekerConfig *cfg, uint32_t total_clusters)
+{
+    struct SampleInfo *sample;
+
+    for (sample = cfg->samples; sample != NULL; sample = sample->next) {
+        if (sample->stream_signal != NULL) {
+            /* Write header for signal dumps */
+            uint32_t sigdumpheader[3];
             sigdumpheader[0] = sizeof(float);
-            sigdumpheader[1] = sample->signal_dump_length;
+            sigdumpheader[1] = total_clusters;
+            sigdumpheader[2] = sample->signal_dump_length;
             if (bgzf_write(sample->stream_signal, (void *)sigdumpheader,
                            sizeof(sigdumpheader)) < 0) {
-                perror("open_writers");
+                perror("write_output_file_headers");
                 return -1;
             }
         }
-
-        free(filename);
     }
 
     return 0;
@@ -582,6 +595,9 @@ process(struct TailseekerConfig *cfg)
     clusters_to_go = nclusters = cifreader[0]->nclusters;
     totalblocks = nclusters / blocksize + ((nclusters % blocksize > 0) ? 1 : 0);
     printf("%sProcessing %u clusters.\n", msgprefix, nclusters);
+
+    if (write_output_file_headers(cfg, nclusters) == -1)
+        goto onError;
 
     for (blockno = 0; clusters_to_go > 0; blockno++) {
         clusters_to_read = (clusters_to_go >= blocksize) ? blocksize : clusters_to_go;

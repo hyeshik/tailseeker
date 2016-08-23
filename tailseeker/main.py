@@ -200,7 +200,7 @@ rule merge_signal_processing_stats:
     script: SCRIPTSDIR + '/stats-merge-demultiplexing-counts.py'
 
 
-TARGETS.append('stats/polya-score-cutoffs-bases.txt.gz')
+TARGETS.append('stats/polya-score-cutoffs-bases.txt')
 rule calculate_optimal_parameters:
     input: expand('scratch/sigdists/{posneg}_{tile}.sigdists', \
                   posneg=['pos', 'neg'], tile=TILES)
@@ -213,9 +213,20 @@ rule calculate_optimal_parameters:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/calculate-optimal-parameters.py')
 
 
+rule measure_polya_lengths_from_fluorescence:
+    input:
+        signals='scratch/signals/{sample}_{tile}.sigpack',
+        taginfo='scratch/taginfo/{sample}_{tile}.txt.gz',
+        score_cutoffs='scratch/sigdists/signal-cutoffs.txt'
+    output: temp('scratch/taginfo-fl/{sample}_{tile,[^_]+}.txt.gz')
+    shell: '{BINDIR}/tailseq-polya-ruler {wildcards.tile} {input.signals} \
+                {input.score_cutoffs} {CONF[polyA_finder][signal_analysis_trigger]} \
+                {input.taginfo} | {BGZIP_CMD} -c > {output}'
+
+
 TARGETS.extend(expand('taginfo/{sample}.txt.gz', sample=ALL_SAMPLES))
 rule merge_and_deduplicate_taginfo:
-    input: expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
+    input: expand('scratch/taginfo-fl/{{sample}}_{tile}.txt.gz', tile=TILES)
     output: 'taginfo/{sample}.txt.gz'
     threads: 12
     run:
