@@ -40,11 +40,12 @@ find_polya(const char *seq, size_t seqlen, struct PolyAFinderParameters *params)
     short *polyA_weights, *nonA_weights;
     int max_term_mod, nonA_score;
     int best_i, best_j, best_length, best_score;
-    int i, j;
+    int i, j, min_polya_len;
 
     max_term_mod = params->max_terminal_modifications;
     polyA_weights = params->weights_polyA;
     nonA_weights = params->weights_nonA;
+    min_polya_len = params->min_polya_length;
 
     if (seqlen < max_term_mod)
         max_term_mod = seqlen;
@@ -58,7 +59,7 @@ find_polya(const char *seq, size_t seqlen, struct PolyAFinderParameters *params)
         int curlength, scoresum;
 
         scoresum = nonA_score + polyA_weights[(int)seq[i]];
-        if (scoresum > best_score) {
+        if (min_polya_len <= 1 && scoresum > best_score) {
             best_i = best_j = i;
             best_length = 1;
             best_score = scoresum;
@@ -67,7 +68,7 @@ find_polya(const char *seq, size_t seqlen, struct PolyAFinderParameters *params)
         for (j = i + 1, curlength = 2; j < seqlen; j++, curlength++) {
             scoresum += polyA_weights[(int)seq[j]];
 
-            if (scoresum > best_score && curlength > best_length) {
+            if (scoresum > best_score && curlength >= min_polya_len) {
                 best_i = i;
                 best_j = j;
                 best_length = curlength;
