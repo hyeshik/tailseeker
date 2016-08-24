@@ -213,15 +213,22 @@ rule calculate_optimal_parameters:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/calculate-optimal-parameters.py')
 
 
+# A single job of this task is generally very light (<~1s). The tasks are
+# processed as grouped within a same tile to save the overheads by
+# the pipeline itself.
 rule measure_polya_lengths_from_fluorescence:
     input:
-        signals='scratch/signals/{sample}_{tile}.sigpack',
-        taginfo='scratch/taginfo/{sample}_{tile}.txt.gz',
+        signals=expand('scratch/signals/{sample}_{{tile}}.sigpack', sample=ALL_SAMPLES),
+        taginfo=expand('scratch/taginfo/{sample}_{{tile}}.txt.gz', sample=ALL_SAMPLES),
         score_cutoffs='scratch/sigdists/signal-cutoffs.txt'
-    output: temp('scratch/taginfo-fl/{sample}_{tile,[^_]+}.txt.gz')
-    shell: '{BINDIR}/tailseq-polya-ruler {wildcards.tile} {input.signals} \
+    output:
+        map(temp, expand('scratch/taginfo-fl/{sample}_{{tile,[^_]+}}.txt.gz',
+                sample=ALL_SAMPLES))
+    run:
+        for signals, taginfo, out in zip(input.signals, input.taginfo, output):
+            shell('{BINDIR}/tailseq-polya-ruler {wildcards.tile} {signals} \
                 {input.score_cutoffs} {CONF[polyA_finder][signal_analysis_trigger]} \
-                {input.taginfo} | {BGZIP_CMD} -c > {output}'
+                {taginfo} | {BGZIP_CMD} -c > {out}')
 
 
 TARGETS.extend(expand('taginfo/{sample}.txt.gz', sample=ALL_SAMPLES))
