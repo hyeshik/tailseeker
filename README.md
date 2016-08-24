@@ -1,4 +1,4 @@
-# Tailseeker 3
+# Tailseeker 3.1
 
 Tailseeker is the official pipeline for TAIL-seq, which measures poly(A) tail
 lengths and 3′-end modifications with Illumina SBS sequencers.
@@ -143,21 +143,20 @@ Flags on the third field are encoded by combinations of the following bits:
 
 | Bit (decimal) | Bit (hexadecimal) | Description |
 | ------------- | ----------------- | ----------- |
-|       1       |      0x0001       | Have a post-poly(A) modification |
-|       2       |      0x0002       | Poly(A) length is measured using fluorescence signal |
-|       4       |      0x0004       | Poly(A) length is measured using naive consecutive T counter |
-|       8       |      0x0008       | Delimiter sequence is found at a shifted position |
+|       1       |      0x0001       | A poly(A) tail is detected |
+|       2       |      0x0002       | Delimiter sequence is matched with one or more mismatch |
+|       4       |      0x0004       | Have a post-poly(A) modification |
+|       8       |      0x0008       | Poly(A) length is measured using fluorescence signal |
 |      16       |      0x0010       | Index sequence is matched to a sample with one or more mismatches |
-|      32       |      0x0020       | One or more cycle in 3′-read are dark (no fluorescence signal) |
-|      64       |      0x0040       | Delimiter sequence is not found |
-|     128       |      0x0080       | Delimiter sequence is matched with one or more mismatch |
+|      32       |      0x0020       | Delimiter sequence is found at a shifted position |
+|      64       |      0x0040       | One or more cycle in 3′-read are dark (no fluorescence signal) |
+|     128       |      0x0080       | Delimiter sequence is not found |
 |     256       |      0x0100       | Basecalling quality of balancer region is bad |
 |     512       |      0x0200       | Nucleotide composition of balancer region is biased |
 |    1024       |      0x0400       | Fluorescence signal in balancer region is irregular or too dark |
 |    2048       |      0x0800       | Number of dark cycle in read 2 exceeds the threshold |
-|    4096       |      0x1000       | No poly(A) tail is detected |
-|    8192       |      0x2000       | (level 2) 5′-read and 3′-read are aligned to two very distant positions in the genome |
-|   16384       |      0x4000       | (level 2) 3′-read is aligned to a position adjacent to an expected polyadenylation site |
+|    4096       |      0x1000       | (level 2) 5′-read and 3′-read are aligned to two very distant positions in the genome |
+|    8192       |      0x2000       | (level 2) 3′-read is aligned to a position adjacent to an expected polyadenylation site |
 
 
 # Software licenses
