@@ -402,27 +402,18 @@ add_polya_score_sample(cluster_count_t *samplecounts, float *scores,
 static int
 process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
                      uint32_t global_clusterno, struct SampleInfo *sample,
-                     const char *sequence, const char *quality,
+                     const char *sequence,
                      struct CIFData **intensities, int delimiter_end,
-                     int *terminal_mods, int *polya_len,
+                     int *terminal_mods,
                      cluster_count_t *pos_score_counts,
                      cluster_count_t *neg_score_counts,
                      int *procflags)
 {
-    int polya_start, polya_end, balancer_len, insert_len;
+    int polya_start, polya_end, balancer_len, insert_len, polya_len;
     uint32_t polya_ret;
     float signal_range_bandwidth[NUM_CHANNELS];
     float signal_range_low[NUM_CHANNELS];
     struct PolyASeederParameters params;
-
-    /* Check basecalling quality scores in the balancer in 3'-side read.
-     * This will represent how good the signal quality is. Using any
-     * among other regions leads to a biased sampling against long poly(A)
-     * tails. */
-    if (sample->umi_ranges_count > 0 &&
-            check_balancer_basecall_quality(cfg, sample, quality,
-                                            procflags) < 0)
-        return -1;
 
     memcpy(&params, &cfg->seederparams, sizeof(params));
 
@@ -432,7 +423,7 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
                            &cfg->finderparams);
     polya_start = polya_ret >> 16;
     polya_end = polya_ret & 0xffff;
-    *polya_len = polya_end - polya_start;
+    polya_len = polya_end - polya_start;
     *terminal_mods = polya_start;
 
     balancer_len = delimiter_end - cfg->threep_start;
@@ -441,7 +432,7 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
 
     if (polya_start > 0)
         *procflags |= PAFLAG_HAVE_3P_MODIFICATION;
-    if (*polya_len > 0)
+    if (polya_len > 0)
         *procflags |= PAFLAG_POLYA_DETECTED;
 
     /* Check balancer region for all spots including non-poly(A)
@@ -482,12 +473,12 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
 
         scan_len = insert_len - polya_start;
         if (scan_len <= 0)
-            return 0;
+            return polya_len;
 
         /* Evaluate the signal trends if it stems from a poly(A) tail.
          * A poly(A) tail has a great contrast among score values
          * divided by a certain point. */
-        if (*polya_len >= params.seed_trigger_polya_length) {
+        if (polya_len >= params.seed_trigger_polya_length) {
             max_contrast_pos = find_max_cumulative_contrast(scores + polya_start,
                                     scan_len, params.max_cctr_scan_left_space,
                                     params.max_cctr_scan_right_space,
@@ -500,22 +491,24 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
                                        delimiter_end + polya_start,
                                        params.dist_sampling_bins);
         }
-        else if (*polya_len <= params.negative_sample_polya_length)
+        else if (polya_len <= params.negative_sample_polya_length)
             add_polya_score_sample(neg_score_counts, scores + polya_start,
                                    scan_len, delimiter_end + polya_start,
                                    params.dist_sampling_bins);
 
         /* Write computed poly(A) scores of long poly(A) candidates
          * for later evaluation. */
-        if (*polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
+        if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
             if (write_polya_score(sample, scores + polya_start, scan_len,
                                   global_clusterno,
-                                  delimiter_end + polya_start) < 0)
-                return -1;
+                                  delimiter_end + polya_start) < 0) {
+                fprintf(stderr, "Failed to write a poly(A) score.\n");
+                return polya_len;
+            }
         }
     }
 
-    return 0;
+    return polya_len;
 }
 
 
@@ -594,6 +587,15 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
             }
         }
 
+        /* Check basecalling quality scores in the balancer in 3'-side read.
+         * This will represent how good the signal quality is. Using any
+         * among other regions leads to a biased sampling against long poly(A)
+         * tails. */
+        if (sample->umi_ranges_count > 0 &&
+                check_balancer_basecall_quality(cfg, sample, quality_formatted,
+                                                &procflags) < 0)
+            continue;
+
         if (sample->delimiter_length <= 0)
             polya_status = delimiter_end = -1;
         else {
@@ -608,14 +610,13 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
 
                 polya_status = -1;
             }
-            else if (process_polya_signal(cfg, clusterno,
-                                          firstclusterno + clusterno, sample,
-                                          sequence_formatted, quality_formatted,
-                                          intensities, delimiter_end,
-                                          &terminal_mods, &polya_status,
-                                          pos_score_counts, neg_score_counts,
-                                          &procflags) < 0)
-                continue;
+            else
+                polya_status = process_polya_signal(cfg, clusterno,
+                      firstclusterno + clusterno, sample,
+                      sequence_formatted,
+                      intensities, delimiter_end, &terminal_mods,
+                      pos_score_counts, neg_score_counts,
+                      &procflags);
         }
 
         if (write_measurements_to_buffers(cfg, wbuf, sample,
