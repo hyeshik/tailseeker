@@ -273,11 +273,13 @@ compute_polya_score(struct IntensitySet *intensities, int ncycles,
                     const float *signal_range_low,
                     const float *signal_range_bandwidth,
                     struct PolyARulerParameters *params,
-                    float *scores, int *procflags)
+                    float *scores, char *downhill, int *procflags)
 {
     int cycle, chan, ndarkcycles;
+    float entropy_prev;
 
     ndarkcycles = 0;
+    entropy_prev = NAN;
 
     for (cycle = 0; cycle < ncycles; cycle++) {
         float signals[NUM_CHANNELS];
@@ -296,7 +298,8 @@ compute_polya_score(struct IntensitySet *intensities, int ncycles,
 
         if (signal_sum < params->dark_cycles_threshold) {
             ndarkcycles++;
-            *scores++ = NAN;
+            *scores++ = entropy_prev = NAN;
+            *downhill++ = 0;
             continue;
         }
 
@@ -308,7 +311,8 @@ compute_polya_score(struct IntensitySet *intensities, int ncycles,
              * all channels are zero or negative after normalization.
              * It is treated as a dark cycle in this case. */
             ndarkcycles++;
-            *scores++ = NAN;
+            *scores++ = entropy_prev = NAN;
+            *downhill++ = 0;
             continue;
         }
 
@@ -324,6 +328,8 @@ compute_polya_score(struct IntensitySet *intensities, int ncycles,
 #endif
 
         *scores++ = entropy_score * t_intensity_score;
+        *downhill++ = (char)(entropy_score < entropy_prev);
+        entropy_prev = entropy_score;
     }
 
     if (ndarkcycles > 0) {

@@ -31,6 +31,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
+#include <assert.h>
 #include "tailseq-import.h"
 
 
@@ -344,10 +345,13 @@ sync_write_out_buffer(BGZF *stream, const char *content, size_t size,
 
 static int
 write_polya_score(struct SampleInfo *sample, const float *score, int length,
-                  uint32_t clusterno, int first_cycle)
+                  const char *downhill, uint32_t clusterno, int first_cycle)
 {
-    static const float zeropad[256] = {0.f};
+    static const signal_packet_t zeropad[256] = {{0, 0}};
     struct SignalRecordHeader header;
+    signal_packet_t sigscores[length];
+    unsigned int s;
+    int i;
 
     if (length > sample->signal_dump_length)
         length = sample->signal_dump_length;
@@ -356,19 +360,30 @@ write_polya_score(struct SampleInfo *sample, const float *score, int length,
     header.first_cycle = first_cycle;
     header.valid_cycle_count = length;
 
+    memset(sigscores, 0, sizeof(signal_packet_t) * length);
+    for (i = 0; i < length; i++)
+        if (!isnan(score[i])) {
+            assert(score[i] >= 0.f && score[i] <= 1.f);
+            s = 1 + (int)(score[i] * (float)(SIGNALPACKET_SCORE_MAX - 1));
+            if (s >= SIGNALPACKET_SCORE_MAX)
+                s = SIGNALPACKET_SCORE_MAX;
+            sigscores[i].score = s;
+            sigscores[i].downhill = downhill[i];
+        }
+
     pthread_mutex_lock(&sample->signal_writer_lock);
 
     if (bgzf_write(sample->stream_signal, (void *)&header,
                 sizeof(header)) < 0 ||
-            bgzf_write(sample->stream_signal, (void *)score,
-                    sizeof(float) * length) < 0) {
+            bgzf_write(sample->stream_signal, (void *)sigscores,
+                    sizeof(signal_packet_t) * length) < 0) {
         perror("write_polya_score");
         return -1;
     }
 
     if (length < sample->signal_dump_length &&
             bgzf_write(sample->stream_signal, (void *)zeropad,
-                       sizeof(float) *
+                       sizeof(signal_packet_t) *
                        (sample->signal_dump_length - length)) < 0) {
         perror("write_polya_score");
         return -1;
@@ -459,6 +474,7 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
     {
         struct IntensitySet spot_intensities[insert_len];
         float scores[insert_len], contrast_score;
+        char downhill[insert_len];
         int max_contrast_pos, scan_len;
 
         /* Fetch signal intensities and calculate poly(A) scores. */
@@ -468,7 +484,8 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
 
         if (compute_polya_score(spot_intensities, insert_len,
                                 signal_range_low, signal_range_bandwidth,
-                                &cfg->rulerparams, scores, procflags) < 0)
+                                &cfg->rulerparams, scores, downhill,
+                                procflags) < 0)
             return -1;
 
         scan_len = insert_len - polya_start;
@@ -500,7 +517,7 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
          * for later evaluation. */
         if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
             if (write_polya_score(sample, scores + polya_start, scan_len,
-                                  global_clusterno,
+                                  downhill, global_clusterno,
                                   delimiter_end + polya_start) < 0) {
                 fprintf(stderr, "Failed to write a poly(A) score.\n");
                 return polya_len;

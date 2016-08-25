@@ -34,18 +34,13 @@
 #include <math.h>
 #include <assert.h>
 #include "../sigproc-flags.h"
+#include "../signal-packs.h"
 
 
 #define SCORE_LINEBUF_SIZE      16384
 #define MAX_NUM_CYCLES          1024
 #define TAGINFO_LINEBUF_SIZE    2048
 
-
-struct SignalRecordHeader {
-    uint32_t clusterno;
-    int16_t first_cycle;            /* left-most cycle number of polyA start */
-    int16_t valid_cycle_count;      /* cycle count with valid signals */
-};
 
 static inline int
 min_int(int a, int b)
@@ -54,14 +49,14 @@ min_int(int a, int b)
     else return b;
 }
 
-static float *
+static unpacked_score_t *
 load_score_cutoffs(const char *filename, const char *tileid,
                    ssize_t *ncycles)
 {
     FILE *fp;
     char linebuf[SCORE_LINEBUF_SIZE], *bptr, *cutofftok;
     size_t tileid_len;
-    float *cutoffs;
+    unpacked_score_t *cutoffs;
     int i;
 
     tileid_len = strlen(tileid);
@@ -88,7 +83,7 @@ load_score_cutoffs(const char *filename, const char *tileid,
 
     fclose(fp);
 
-    cutoffs = malloc(sizeof(float) * MAX_NUM_CYCLES);
+    cutoffs = malloc(sizeof(unpacked_score_t) * MAX_NUM_CYCLES);
     if (cutoffs == NULL)
         return NULL;
 
@@ -104,7 +99,10 @@ load_score_cutoffs(const char *filename, const char *tileid,
             return NULL;
         }
 
-        cutoffs[i] = atof(cutofftok);
+        cutoffs[i] = 1 + (int)(atof(cutofftok) *
+                               (double)(SIGNALPACKET_SCORE_MAX - 1));
+        if (cutoffs[i] >= SIGNALPACKET_SCORE_MAX)
+            cutoffs[i] = SIGNALPACKET_SCORE_MAX;
     }
 
     *ncycles = i;
@@ -113,12 +111,16 @@ load_score_cutoffs(const char *filename, const char *tileid,
 }
 
 static int
-measure_polya_length(const float *read_scores, ssize_t read_num_cycles,
+measure_polya_length(const signal_packet_t *read_scores,
+                     ssize_t read_num_cycles,
                      int first_cycle,
-                     const float *score_cutoffs, ssize_t cutoffs_num_cycles)
+                     const unpacked_score_t *score_cutoffs,
+                     ssize_t cutoffs_num_cycles,
+                     float downhill_ext_weight)
 {
     ssize_t i, physical_cycle;
     int score_cumsum, score_cumsum_max, score_argmax_cycle;
+    int downhill_ext;
 
     score_cumsum = score_cumsum_max = 0;
     score_argmax_cycle = -1;
@@ -126,25 +128,43 @@ measure_polya_length(const float *read_scores, ssize_t read_num_cycles,
 
     for (i = 0; i < read_num_cycles && physical_cycle < cutoffs_num_cycles;
             i++, physical_cycle++) {
-        float cutoff = score_cutoffs[physical_cycle];
+        unpacked_score_t cutoff = score_cutoffs[physical_cycle];
 
-        if (isnan(cutoff))
+        if (cutoff == 0) /* NaN in the integer representation */
             continue;
 
-        score_cumsum += -1 + (read_scores[i] >= cutoff) * 2;
+        score_cumsum += -1 + (read_scores[i].score >= cutoff) * 2;
         if (score_cumsum > score_cumsum_max) {
             score_cumsum_max = score_cumsum;
             score_argmax_cycle = i;
         }
     }
 
-    return score_argmax_cycle;
+    downhill_ext = -1;
+
+    /* Try extending the poly(A) until entropy continuously decreases. */
+    if (score_argmax_cycle >= 0)
+        for (i = score_argmax_cycle + 1; i < read_num_cycles; i++)
+            if (read_scores[i].score > 0) { /* Non-dark signals */
+                if (read_scores[i].downhill > 0)
+                    downhill_ext = i;
+                else
+                    break;
+            }
+
+    if (downhill_ext >= 0)
+        return score_argmax_cycle + 1 +
+            (int)roundf((downhill_ext - score_argmax_cycle) *
+                        downhill_ext_weight);
+    else
+        return score_argmax_cycle + 1;
 }
 
 static int16_t *
-process_polya_ruling(const char *filename, const float *score_cutoffs,
+process_polya_ruling(const char *filename,
+                     const unpacked_score_t *score_cutoffs,
                      ssize_t cutoffs_num_cycles, int minimum_polya_len,
-                     size_t *ret_elements)
+                     float downhill_ext_weight, size_t *ret_elements)
 {
     gzFile fp;
     ssize_t record_size, bytesread;
@@ -167,7 +187,7 @@ process_polya_ruling(const char *filename, const float *score_cutoffs,
         return NULL;
     }
 
-    if (header.elemsize != sizeof(float)) {
+    if (header.elemsize != sizeof(signal_packet_t)) {
         fprintf(stderr, "The file %s was written in a machine with "
                         "different architecture.\n", filename);
         gzclose(fp);
@@ -183,13 +203,13 @@ process_polya_ruling(const char *filename, const float *score_cutoffs,
 
     memset(polya_measurements, 0xff,
            sizeof(int16_t) * header.total_clusters); /* fill with -1 */
-    record_size = header.max_cycles * sizeof(float);
+    record_size = header.max_cycles * sizeof(signal_packet_t);
 
     for (;;) {
         int polya_len;
         struct TSRecord {
             struct SignalRecordHeader header;
-            float scores[header.max_cycles];
+            signal_packet_t scores[header.max_cycles];
         } rec;
 
         bytesread = gzread(fp, (void *)&rec, sizeof(struct TSRecord));
@@ -203,7 +223,7 @@ process_polya_ruling(const char *filename, const float *score_cutoffs,
 
         polya_len = measure_polya_length(rec.scores,
                 rec.header.valid_cycle_count, rec.header.first_cycle,
-                score_cutoffs, cutoffs_num_cycles);
+                score_cutoffs, cutoffs_num_cycles, downhill_ext_weight);
 
         if (polya_len >= minimum_polya_len)
             polya_measurements[rec.header.clusterno] = polya_len;
@@ -285,15 +305,16 @@ int
 main(int argc, char *argv[])
 {
     ssize_t cutoffs_num_cycles;
-    float *score_cutoffs;
+    unpacked_score_t *score_cutoffs;
     int16_t *polya_measurements;
     size_t nclusters;
     const char *tile_id, *signals_file, *cutoffs_file, *taginfo_file;
+    float downhill_ext_weight;
     int minimum_polya_len;
 
-    if (argc < 6) {
+    if (argc < 7) {
         fprintf(stderr, "Usage: %s {tile id} {signals} {cutoffs} {min polya} "
-                        "{taginfo}\n", argv[0]);
+                        "{downhill ext weight} {taginfo}\n", argv[0]);
         return 1;
     }
 
@@ -301,7 +322,8 @@ main(int argc, char *argv[])
     signals_file = argv[2];
     cutoffs_file = argv[3];
     minimum_polya_len = atoi(argv[4]);
-    taginfo_file = argv[5];
+    downhill_ext_weight = atof(argv[5]);
+    taginfo_file = argv[6];
 
     /* Load per-cycle poly(A) score cutoffs table */
     score_cutoffs = load_score_cutoffs(cutoffs_file, tile_id, &cutoffs_num_cycles);
@@ -310,7 +332,8 @@ main(int argc, char *argv[])
 
     /* Measure the lengths of poly(A) tails */
     polya_measurements = process_polya_ruling(signals_file, score_cutoffs,
-            cutoffs_num_cycles, minimum_polya_len, &nclusters);
+            cutoffs_num_cycles, minimum_polya_len, downhill_ext_weight,
+            &nclusters);
     free(score_cutoffs);
     if (polya_measurements == NULL)
         return 2;

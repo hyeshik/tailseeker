@@ -33,6 +33,7 @@
 #include <pthread.h>
 #include "htslib/bgzf.h"
 #include "../sigproc-flags.h"
+#include "../signal-packs.h"
 #include "../utils.h"
 
 
@@ -82,12 +83,6 @@ struct UMIInterval {
     int start;
     int end;
     int length;
-};
-
-struct SignalRecordHeader {
-    uint32_t clusterno;
-    int16_t first_cycle;            /* left-most cycle number of polyA start */
-    int16_t valid_cycle_count;      /* cycle count with valid signals */
 };
 
 struct WriteHandleSync {
@@ -395,7 +390,7 @@ extern int compute_polya_score(struct IntensitySet *intensities, int ncycles,
                 const float *signal_range_low,
                 const float *signal_range_bandwidth,
                 struct PolyARulerParameters *params,
-                float *scores, int *procflags);
+                float *scores, char *downhill, int *procflags);
 extern int find_max_cumulative_contrast(const float *scores, int length,
                 int leftspace, int rightspace, float *pmax_score);
 

@@ -106,7 +106,7 @@ write_output_file_headers(struct TailseekerConfig *cfg, uint32_t total_clusters)
         if (sample->stream_signal != NULL) {
             /* Write header for signal dumps */
             uint32_t sigdumpheader[3];
-            sigdumpheader[0] = sizeof(float);
+            sigdumpheader[0] = sizeof(signal_packet_t);
             sigdumpheader[1] = total_clusters;
             sigdumpheader[2] = sample->signal_dump_length;
             if (bgzf_write(sample->stream_signal, (void *)sigdumpheader,

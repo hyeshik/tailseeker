@@ -228,6 +228,7 @@ rule measure_polya_lengths_from_fluorescence:
         for signals, taginfo, out in zip(input.signals, input.taginfo, output):
             shell('{BINDIR}/tailseq-polya-ruler {wildcards.tile} {signals} \
                 {input.score_cutoffs} {CONF[polyA_finder][signal_analysis_trigger]} \
+                {CONF[polyA_ruler][downhill_extension_weight]} \
                 {taginfo} | {BGZIP_CMD} -c > {out}')
 
 
