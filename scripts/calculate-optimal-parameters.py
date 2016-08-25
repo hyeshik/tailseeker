@@ -74,7 +74,8 @@ def find_all_eqodds_point(poscounts, negcounts, xsamples):
         for cycle in cycles_to_try}
 
 def infer_missing_cutoffs(cutoffs, allcycles):
-    available_cycles = np.array(list(sorted(cutoffs)))
+    available_cycles = np.array([cycle for cycle, value in cutoffs.items()
+                                 if value is not None])
     missing_cycles = np.array(list(sorted(set(allcycles) - set(cutoffs))))
     group_breaks = [0] + (np.where(np.diff(missing_cycles) > 1)[0] + 1).tolist() + [
                     len(missing_cycles)]
@@ -121,9 +122,9 @@ def infer_missing_cutoffs(cutoffs, allcycles):
 def get_report_marks(direct, inferred):
     r = []
     for i in range(TOTAL_CYCLES):
-        if i in direct:
+        if direct.get(i) is not None:
             r.append('d')
-        elif i in inferred:
+        elif inferred.get(i) is not None:
             r.append('i')
         else:
             r.append('x')
@@ -168,7 +169,7 @@ def write_outputs(cutoffs, bases):
         for tile, cutoffs in sorted(cutoffs.items()):
             print(tile + '\t', end='', file=outf)
             for i in range(TOTAL_CYCLES):
-                if i in cutoffs:
+                if cutoffs.get(i) is not None:
                     print(format(cutoffs[i], '.6f') + '\t', end='', file=outf)
                 else:
                     print('nan\t', end='', file=outf)
