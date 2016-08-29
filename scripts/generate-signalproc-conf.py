@@ -84,13 +84,14 @@ def generate_output_section(outf):
 [output]
 seqqual = scratch/seqqual/{{name}}_{tile}.txt.gz
 taginfo = scratch/taginfo/{{name}}_{tile}.txt.gz
+signal = scratch/signals/{{name}}_{tile}.sigpack
+signal-dists = scratch/sigdists/{{posneg}}_{tile}.sigdists
 stats = scratch/stats/signal-proc-{tile}.csv
 length-dists = scratch/stats/length-dist-{tile}.csv
-signal-dump-data = scratch/sigdumps/signals-{{name}}-{tile}.dmp.gz
-signal-dump-spotids = scratch/sigdumps/spotids-{{name}}-{tile}.dmp.gz
 """.format(tile=wildcards.tile), file=outf)
 
-    for subdir in 'scratch/seqqual scratch/taginfo scratch/stats scratch/sigdumps'.split():
+    for subdir in 'seqqual taginfo signals sigdists stats'.split():
+        subdir = os.path.join('scratch', subdir)
         if not os.path.isdir(subdir):
             os.makedirs(subdir)
 
@@ -129,6 +130,19 @@ num-negative-samples = {conf[negative_signal_samples]}
 """.format(conf=params.conf['balancer']), file=outf)
 
 
+def generate_polyA_seeder_section(outf):
+    print("""\
+[polyA_seeder]
+seed-trigger-polya-length = {conf[seed_trigger_polya_length]}
+negative-sample-polya-length = {conf[negative_sample_polya_length]}
+max-cctr-scan-left-space = {conf[max_cctr_scan_left_space]}
+max-cctr-scan-right-space = {conf[max_cctr_scan_right_space]}
+required-cdf-contrast = {conf[required_cdf_contrast]}
+polya-boundary-pos = {conf[polya_boundary_pos]}
+dist-sampling-bins = {conf[dist_sampling_bins]}
+""".format(conf=params.conf['polyA_seeder']), file=outf)
+
+
 def generate_polyA_finder_section(outf):
     print("""\
 [polyA_finder]
@@ -145,7 +159,6 @@ nonA-weight-N = {conf[nonA_weights][N]}
 minimum-polya-length = {conf[minimum_polya_length]}
 maximum-modifications = {conf[maximum_modifications]}
 signal-analysis-trigger = {conf[signal_analysis_trigger]}
-naive-count-trigger = {conf[naive_count_trigger]}
 """.format(conf=params.conf['polyA_finder']), file=outf)
 
 
@@ -154,8 +167,6 @@ def generate_polyA_ruler_section(outf):
 [polyA_ruler]
 dark-cycles-threshold = {conf[dark_cycles_threshold]}
 maximum-dark-cycles = {conf[maximum_dark_cycles]}
-polya-score-threshold = {conf[polya_score_threshold]}
-downhill-extension-weight = {conf[downhill_extension_weight]}
 t-intensity-k = {conf[t_intensity_k]}
 t-intensity-center = {conf[t_intensity_center]}
 """.format(conf=params.conf['polyA_ruler']), file=outf)
@@ -203,10 +214,6 @@ maximum-fingerprint-mismatch = {mismatches}\
             print("limit-threep-processing =",
                   params.conf['spikein_trimming_length'][samplename], file=outf)
 
-        if samplename in params.conf['debug']['dump_signals']:
-            print("dump-processed-signals =",
-                  int(params.conf['debug']['dump_signals'][samplename]), file=outf)
-
         print('', file=outf)
 
 
@@ -222,6 +229,7 @@ if is_snakemake_child:
     generate_alternative_calls_section(outf)
     generate_control_section(outf)
     generate_balancer_section(outf)
+    generate_polyA_seeder_section(outf)
     generate_polyA_finder_section(outf)
     generate_polyA_ruler_section(outf)
     generate_experimental_samples_section(outf)

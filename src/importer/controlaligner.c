@@ -34,8 +34,8 @@
 #include <stdint.h>
 #include <limits.h>
 #include <zlib.h>
-#include "tailseq-sigproc.h"
-#include "contrib/ssw.h"
+#include "tailseq-import.h"
+#include "../contrib/ssw.h"
 
 
 #define CONTROL_SEQUENCE_SPACING            20 /* space between forward and reverse strands */

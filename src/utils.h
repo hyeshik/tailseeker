@@ -29,5 +29,13 @@
 
 extern char *replace_placeholder(const char *format, const char *old,
                                  const char *new);
+extern int bgzf_printf(BGZF *fp, const char *format, ...);
+
+static inline int
+min_int(int a, int b)
+{
+    if (a > b) return b;
+    else return a;
+}
 
 #endif

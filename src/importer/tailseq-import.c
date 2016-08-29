@@ -1,7 +1,7 @@
 /*
- * tailseq-sigproc.c
+ * tailseq-import.c
  *
- * Copyright (c) 2015 Hyeshik Chang
+ * Copyright (c) 2016 Hyeshik Chang
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include "htslib/bgzf.h"
-#include "tailseq-sigproc.h"
+#include "tailseq-import.h"
 
 
 static int
@@ -44,6 +44,10 @@ open_writers(struct TailseekerConfig *cfg)
 
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
         char *filename;
+
+        /* Don't generate output files for control samples. */
+        if (sample->index[0] == 'X')
+            continue;
 
         filename = replace_placeholder(cfg->seqqual_output, "{name}",
                                        sample->name);
@@ -73,49 +77,43 @@ open_writers(struct TailseekerConfig *cfg)
             free(filename);
         }
 
-        if (cfg->signal_dump_data_output != NULL && sample->dump_signals) {
-            filename = replace_placeholder(cfg->signal_dump_data_output,
-                                           "{name}", sample->name);
-            sample->stream_signal_data_dump = bgzf_open(filename, "w");
-            if (sample->stream_signal_data_dump == NULL) {
-                perror("open_writers");
-                fprintf(stderr, "Failed to write to %s\n", filename);
-                free(filename);
-                return -1;
-            }
+        filename = replace_placeholder(cfg->signal_output, "{name}",
+                                       sample->name);
+        if (filename == NULL)
+            return -1;
+
+        sample->stream_signal = bgzf_open(filename, "w");
+        if (sample->stream_signal == NULL) {
+            perror("open_writers");
+            fprintf(stderr, "Failed to write to %s\n", filename);
             free(filename);
-
-            /* Calculate width of signal dump */
-            if (sample->limit_threep_processing > 0)
-                sample->dump_signals = sample->limit_threep_processing;
-            else if (sample->delimiter_length > 0)
-                sample->dump_signals = cfg->threep_length - sample->delimiter_length;
-            else
-                sample->dump_signals = cfg->threep_length;
-
-            /* Write header for signal dumps */
-            uint32_t sigdumpheader[3];
-            sigdumpheader[0] = sample->dump_signals;
-            sigdumpheader[1] = NUM_CHANNELS + 1;
-            sigdumpheader[2] = sizeof(float);
-            if (bgzf_write(sample->stream_signal_data_dump, (void *)sigdumpheader,
-                           sizeof(sigdumpheader)) < 0) {
-                perror("open_writers");
-                return -1;
-            }
+            return -1;
         }
 
-        if (cfg->signal_dump_spotids_output != NULL && sample->dump_signals) {
-            filename = replace_placeholder(cfg->signal_dump_spotids_output,
-                                           "{name}", sample->name);
-            sample->stream_signal_spotids_dump = bgzf_open(filename, "w");
-            if (sample->stream_signal_spotids_dump == NULL) {
-                perror("open_writers");
-                fprintf(stderr, "Failed to write to %s\n", filename);
-                free(filename);
+        free(filename);
+    }
+
+    return 0;
+}
+
+
+static int
+write_output_file_headers(struct TailseekerConfig *cfg, uint32_t total_clusters)
+{
+    struct SampleInfo *sample;
+
+    for (sample = cfg->samples; sample != NULL; sample = sample->next) {
+        if (sample->stream_signal != NULL) {
+            /* Write header for signal dumps */
+            uint32_t sigdumpheader[3];
+            sigdumpheader[0] = sizeof(signal_packet_t);
+            sigdumpheader[1] = total_clusters;
+            sigdumpheader[2] = sample->signal_dump_length;
+            if (bgzf_write(sample->stream_signal, (void *)sigdumpheader,
+                           sizeof(sigdumpheader)) < 0) {
+                perror("write_output_file_headers");
                 return -1;
             }
-            free(filename);
         }
     }
 
@@ -137,14 +135,9 @@ close_writers(struct SampleInfo *sample)
             sample->stream_taginfo = NULL;
         }
 
-        if (sample->stream_signal_data_dump != NULL) {
-            bgzf_close(sample->stream_signal_data_dump);
-            sample->stream_signal_data_dump = NULL;
-        }
-
-        if (sample->stream_signal_spotids_dump != NULL) {
-            bgzf_close(sample->stream_signal_spotids_dump);
-            sample->stream_signal_spotids_dump = NULL;
+        if (sample->stream_signal != NULL) {
+            bgzf_close(sample->stream_signal);
+            sample->stream_signal = NULL;
         }
     }
 }
@@ -237,10 +230,115 @@ load_intensities_and_basecalls(struct TailseekerConfig *cfg,
 }
 
 
+static int
+allocate_global_stats_buffer(struct TailseekerConfig *cfg,
+                             struct GloballyAggregatedOutput *buf)
+{
+    size_t scoresamplesize;
+
+    scoresamplesize = sizeof(cluster_count_t) * cfg->seederparams.dist_sampling_bins *
+                      cfg->total_cycles;
+
+    buf->pos_score_counts = malloc(scoresamplesize);
+    buf->neg_score_counts = malloc(scoresamplesize);
+
+    if (buf->pos_score_counts == NULL || buf->neg_score_counts == NULL) {
+        if (buf->pos_score_counts != NULL)
+            free(buf->pos_score_counts);
+        if (buf->neg_score_counts != NULL)
+            free(buf->neg_score_counts);
+        return -1;
+    }
+
+    return 0;
+}
+
+
+static void
+free_global_stats_buffer(struct GloballyAggregatedOutput *buf)
+{
+    if (buf->pos_score_counts != NULL)
+        free(buf->pos_score_counts);
+    if (buf->neg_score_counts != NULL)
+        free(buf->neg_score_counts);
+}
+
+
+static int
+write_signal_samples_dists(const char *filename_format, const char *type,
+                           const cluster_count_t *counts,
+                           int total_cycles, int sampling_bins)
+{
+    uint32_t header_elements[3];
+    char *filename;
+    BGZF *fp;
+
+    filename = replace_placeholder(filename_format, "{posneg}", type);
+    if (filename == NULL)
+        return -1;
+
+    fp = bgzf_open(filename, "w");
+    if (fp == NULL) {
+        fprintf(stderr, "Cannot open %s to write.\n", filename);
+        free(filename);
+        return -1;
+    }
+    free(filename);
+
+    header_elements[0] = sizeof(cluster_count_t);
+    header_elements[1] = total_cycles;
+    header_elements[2] = sampling_bins;
+
+    bgzf_write(fp, header_elements, sizeof(header_elements));
+    bgzf_write(fp, counts, sizeof(cluster_count_t) * total_cycles * sampling_bins);
+    bgzf_close(fp);
+
+    return 0;
+}
+
+
+static int
+write_global_stats_data(struct TailseekerConfig *cfg,
+                        struct GloballyAggregatedOutput *gstats)
+{
+    if (cfg->signal_dists_output != NULL)
+        return write_signal_samples_dists(cfg->signal_dists_output, "pos",
+                    gstats->pos_score_counts, cfg->total_cycles,
+                    cfg->seederparams.dist_sampling_bins) ||
+               write_signal_samples_dists(cfg->signal_dists_output, "neg",
+                    gstats->neg_score_counts, cfg->total_cycles,
+                    cfg->seederparams.dist_sampling_bins);
+    else
+        return 0;
+}
+
+
+static void
+accumulate_global_stats_buffer(struct GloballyAggregatedOutput *dest,
+                               struct GloballyAggregatedOutput *src,
+                               size_t nelements)
+{
+    cluster_count_t *pdest_pos, *pdest_neg;
+    cluster_count_t *psrc_pos, *psrc_neg;
+    size_t i;
+
+    pdest_pos = dest->pos_score_counts;
+    pdest_neg = dest->neg_score_counts;
+    psrc_pos = src->pos_score_counts;
+    psrc_neg = src->neg_score_counts;
+
+    for (i = 0; i < nelements; i++) {
+        *pdest_pos++ += *psrc_pos++;
+        *pdest_neg++ += *psrc_neg++;
+    }
+}
+
+
 static struct ParallelJobPool *
-prepare_split_jobs(struct SampleInfo *samples, uint32_t nclusters, int clusters_per_job)
+prepare_split_jobs(struct TailseekerConfig *cfg, uint32_t nclusters, int clusters_per_job)
 {
     struct ParallelJobPool *pool;
+    struct SampleInfo *sample;
     size_t poolmemsize;
     int njobs, i;
 
@@ -250,9 +348,14 @@ prepare_split_jobs(struct SampleInfo *samples, uint32_t nclusters, int clusters_
     if (pool == NULL)
         return NULL;
 
-    pool->job_next = pool->jobs_done = 0;
+    memset(pool, 0, poolmemsize);
     pool->jobs_total = njobs;
     pthread_mutex_init(&pool->poollock, NULL);
+
+    if (allocate_global_stats_buffer(cfg, &pool->global_stats) < 0) {
+        free(pool);
+        return NULL;
+    }
 
     for (i = 0; i < njobs; i++) {
         pool->jobs[i].jobid = i;
@@ -262,15 +365,15 @@ prepare_split_jobs(struct SampleInfo *samples, uint32_t nclusters, int clusters_
             pool->jobs[i].end = nclusters;
     }
 
-    for (; samples != NULL; samples = samples->next) {
-        samples->wsync_seqqual.jobs_written = 0;
-        samples->wsync_taginfo.jobs_written = 0;
+    for (sample = cfg->samples; sample != NULL; sample = sample->next) {
+        sample->wsync_seqqual.jobs_written = 0;
+        sample->wsync_taginfo.jobs_written = 0;
 
-        pthread_cond_init(&samples->wsync_seqqual.wakeup, NULL);
-        pthread_cond_init(&samples->wsync_taginfo.wakeup, NULL);
+        pthread_cond_init(&sample->wsync_seqqual.wakeup, NULL);
+        pthread_cond_init(&sample->wsync_taginfo.wakeup, NULL);
 
-        pthread_mutex_init(&samples->wsync_seqqual.lock, NULL);
-        pthread_mutex_init(&samples->wsync_taginfo.lock, NULL);
+        pthread_mutex_init(&sample->wsync_seqqual.lock, NULL);
+        pthread_mutex_init(&sample->wsync_taginfo.lock, NULL);
     }
 
     return pool;
@@ -280,6 +383,7 @@ prepare_split_jobs(struct SampleInfo *samples, uint32_t nclusters, int clusters_
 static void
 free_parallel_jobs(struct ParallelJobPool *pool, struct SampleInfo *samples)
 {
+    free_global_stats_buffer(&pool->global_stats);
     pthread_mutex_destroy(&pool->poollock);
     free(pool);
 
@@ -297,9 +401,13 @@ static int
 run_spot_processing(struct ParallelJobPool *pool)
 {
     struct WriteBuffer *wbuf, *wbuf0;
+    struct GloballyAggregatedOutput gstats;
     size_t memsize, wbufsize;
     char *buf, *buf0;
     int i, r=0;
+
+    buf = buf0 = NULL;
+    wbuf = wbuf0 = NULL;
 
     memsize = (pool->bufsize_seqqual + pool->bufsize_taginfo) *
               pool->cfg->num_samples;
@@ -309,17 +417,15 @@ run_spot_processing(struct ParallelJobPool *pool)
 
     wbufsize = sizeof(struct WriteBuffer) * pool->cfg->num_samples;
     wbuf = malloc(wbufsize);
-    if (wbuf == NULL) {
-        free(buf);
+    if (wbuf == NULL)
         goto onError;
-    }
 
     wbuf0 = malloc(wbufsize);
-    if (wbuf0 == NULL) {
-        free(buf);
-        free(wbuf);
+    if (wbuf0 == NULL)
         goto onError;
-    }
+
+    if (allocate_global_stats_buffer(pool->cfg, &gstats) < 0)
+        goto onError;
 
     for (i = 0; i < pool->cfg->num_samples; i++) {
         wbuf0[i].buf_seqqual = buf;
@@ -346,8 +452,9 @@ run_spot_processing(struct ParallelJobPool *pool)
         memcpy(wbuf, wbuf0, wbufsize);
 
         r = process_spots(pool->cfg, pool->firstclusterno, pool->intensities,
-                          pool->basecalls, wbuf0, wbuf, job->jobid, job->start,
-                          job->end);
+                          pool->basecalls, wbuf0, wbuf,
+                          gstats.pos_score_counts, gstats.neg_score_counts,
+                          job->jobid, job->start, job->end);
         if (r < 0)
             break;
 
@@ -356,6 +463,15 @@ run_spot_processing(struct ParallelJobPool *pool)
         pthread_mutex_unlock(&pool->poollock);
     }
 
+    {   /* Accumulate the collected counts into the global stats. */
+        pthread_mutex_lock(&pool->poollock);
+        accumulate_global_stats_buffer(&pool->global_stats, &gstats,
+                                       pool->cfg->seederparams.dist_sampling_bins *
+                                       pool->cfg->total_cycles);
+        pthread_mutex_unlock(&pool->poollock);
+    }
+
+    free_global_stats_buffer(&gstats);
     free(wbuf0);
     free(wbuf);
     free(buf0);
@@ -366,6 +482,13 @@ run_spot_processing(struct ParallelJobPool *pool)
     }
 
 onError:
+    if (wbuf0 != NULL)
+        free(wbuf0);
+    if (wbuf != NULL)
+        free(wbuf);
+    if (buf0 != NULL)
+        free(buf0);
+
     pthread_mutex_lock(&pool->poollock);
     pool->error_occurred++;
     pthread_mutex_unlock(&pool->poollock);
@@ -398,7 +521,7 @@ distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities
             return -1;
         }
 
-    pool = prepare_split_jobs(cfg->samples, clustersinblock, NUM_CLUSTERS_PER_JOB);
+    pool = prepare_split_jobs(cfg, clustersinblock, NUM_CLUSTERS_PER_JOB);
     if (pool == NULL)
         return -1;
 
@@ -417,6 +540,9 @@ distribute_processing(struct TailseekerConfig *cfg, struct CIFData **intensities
         pthread_join(threads[i], NULL);
 
     r = (pool->error_occurred > 0) * -1;
+
+    if (r == 0 && write_global_stats_data(cfg, &pool->global_stats) < 0)
+        r = -1;
 
     free_parallel_jobs(pool, cfg->samples);
 
@@ -469,6 +595,9 @@ process(struct TailseekerConfig *cfg)
     clusters_to_go = nclusters = cifreader[0]->nclusters;
     totalblocks = nclusters / blocksize + ((nclusters % blocksize > 0) ? 1 : 0);
     printf("%sProcessing %u clusters.\n", msgprefix, nclusters);
+
+    if (write_output_file_headers(cfg, nclusters) == -1)
+        goto onError;
 
     for (blockno = 0; clusters_to_go > 0; blockno++) {
         clusters_to_read = (clusters_to_go >= blocksize) ? blocksize : clusters_to_go;
@@ -574,9 +703,8 @@ static void
 usage(const char *prog)
 {
     printf("\
-tailseq-sigproc 3.0\
-\n - Processes Illumina .cif and .bcl files to produce poly(A) lengths and\
-\n   additional 3' end modifications.\
+tailseq-import 3.0\
+\n - Import Illumina .cif and .bcl files into TAIL-seq internal formats\
 \n\
 \nUsage: %s {config.ini}\
 \n\

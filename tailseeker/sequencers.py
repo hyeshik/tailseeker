@@ -68,6 +68,7 @@ def get_tiles(conf):
                 'tile': tile,
                 'id': tileid,
                 'laneid': source['id'],
+                'source': source['id'],
             }
 
     return tilemaps

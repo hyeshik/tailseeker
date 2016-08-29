@@ -169,30 +169,27 @@ def determine_inputs_process_signals(wildcards):
 
     return inputs
 
-optional_outputs_from_process_signals = [
-    'scratch/sigdumps/{}-{}-{{tile}}.dmp.gz'.format(filetype, sample)
-    for filetype in ['signals', 'spotids']
-    for sample, dumping in CONF['debug']['dump_signals'].items()
-    if sample in ALL_SAMPLES and dumping
-]
 
 rule process_signals:
     input: determine_inputs_process_signals
     output:
         sigproc_conf = temp('scratch/sigproc-conf/{tile}.ini'),
         seqqual = map(temp, expand('scratch/seqqual/{sample}_{{tile}}.txt.gz',
-                                 sample=ALL_SAMPLES + ['Unknown', 'PhiX'])),
+                                   sample=ALL_SAMPLES)),
         taginfo = map(temp, expand('scratch/taginfo/{sample}_{{tile}}.txt.gz',
-                                   sample=ALL_SAMPLES + ['Unknown', 'PhiX'])),
-        demuxstats = temp('scratch/stats/signal-proc-{tile}.csv'),
-        signaldumps = map(temp, optional_outputs_from_process_signals)
+                                   sample=ALL_SAMPLES)),
+        signals = map(temp, expand('scratch/signals/{sample}_{{tile}}.sigpack',
+                                   sample=ALL_SAMPLES)),
+        sigdists = map(temp, expand('scratch/sigdists/{posneg}_{{tile}}.sigdists',
+                                    posneg=['pos', 'neg'])),
+        demuxstats = temp('scratch/stats/signal-proc-{tile}.csv')
     threads: THREADS_MAXIMUM_CORE
     params:
         tileinfo=TILES, conf=CONF.confdata,
         exp_samples=EXP_SAMPLES, spikein_samples=SPIKEIN_SAMPLES
     run:
         external_script('{PYTHON3_CMD} {SCRIPTSDIR}/generate-signalproc-conf.py')
-        shell('{BINDIR}/tailseq-sigproc {output.sigproc_conf}')
+        shell('{BINDIR}/tailseq-import {output.sigproc_conf}')
 
 
 TARGETS.append('stats/signal-processing.csv')
@@ -203,9 +200,41 @@ rule merge_signal_processing_stats:
     script: SCRIPTSDIR + '/stats-merge-demultiplexing-counts.py'
 
 
+TARGETS.append('stats/polya-score-cutoffs-bases.txt')
+rule calculate_optimal_parameters:
+    input: expand('scratch/sigdists/{posneg}_{tile}.sigdists', \
+                  posneg=['pos', 'neg'], tile=TILES)
+    output:
+        cutoff_values=temp('scratch/sigdists/signal-cutoffs.txt'),
+        cutoff_bases='stats/polya-score-cutoffs-bases.txt',
+    params: conf=CONF.confdata, tileinfo=TILES, total_cycles=NUM_CYCLES
+    threads: 20
+    run:
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/calculate-optimal-parameters.py')
+
+
+# A single job of this task is generally very light (<~1s). The tasks are
+# processed as grouped within a same tile to save the overheads by
+# the pipeline itself.
+rule measure_polya_lengths_from_fluorescence:
+    input:
+        signals=expand('scratch/signals/{sample}_{{tile}}.sigpack', sample=ALL_SAMPLES),
+        taginfo=expand('scratch/taginfo/{sample}_{{tile}}.txt.gz', sample=ALL_SAMPLES),
+        score_cutoffs='scratch/sigdists/signal-cutoffs.txt'
+    output:
+        map(temp, expand('scratch/taginfo-fl/{sample}_{{tile,[^_]+}}.txt.gz',
+                sample=ALL_SAMPLES))
+    run:
+        for signals, taginfo, out in zip(input.signals, input.taginfo, output):
+            shell('{BINDIR}/tailseq-polya-ruler {wildcards.tile} {signals} \
+                {input.score_cutoffs} {CONF[polyA_finder][signal_analysis_trigger]} \
+                {CONF[polyA_ruler][downhill_extension_weight]} \
+                {taginfo} | {BGZIP_CMD} -c > {out}')
+
+
 TARGETS.extend(expand('taginfo/{sample}.txt.gz', sample=ALL_SAMPLES))
 rule merge_and_deduplicate_taginfo:
-    input: expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
+    input: expand('scratch/taginfo-fl/{{sample}}_{tile}.txt.gz', tile=TILES)
     output: 'taginfo/{sample}.txt.gz'
     threads: 12
     run:

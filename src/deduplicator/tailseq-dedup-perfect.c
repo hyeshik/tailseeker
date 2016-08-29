@@ -33,7 +33,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <assert.h>
-#include "sigproc-flags.h"
+#include "../sigproc-flags.h"
 
 #define DEFAULT_BUFFER_SIZE     1024
 #define MAX_TILENAME_LEN        63
@@ -98,8 +98,7 @@ calculate_tag_prority(int flags)
         NOTSET(flags, PAFLAG_BALANCER_SIGNAL_BAD) * 16 +
         NOTSET(flags, PAFLAG_DARKCYCLE_EXISTS) * 8 +
         NOTSET(flags, PAFLAG_DELIMITER_IS_SHIFTED) * 4 +
-        NOTSET(flags, PAFLAG_NO_POLYA_DETECTED) * 2 +
-        NOTSET(flags, PAFLAG_MEASURED_USING_NAIVE_RULER);
+        SET(flags, PAFLAG_POLYA_DETECTED) * 2;
 #undef SET
 #undef NOTSET
 }

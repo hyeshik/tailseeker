@@ -31,8 +31,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include "contrib/ini.h"
-#include "tailseq-sigproc.h"
+#include "../contrib/ini.h"
+#include "tailseq-import.h"
 
 
 #define MATCH(n) strcasecmp(name, n) == 0
@@ -79,8 +79,8 @@ feed_read_format_entry(struct TailseekerConfig *cfg,
         cfg->threep_start = atoi(value) - 1;
     else if (MATCH("threep-length"))
         cfg->threep_length = atoi(value);
-    else if (MATCH("threep-output-length"))
-        cfg->threep_output_length = atoi(value);
+    else if (MATCH("threep-seqqual-output-length"))
+        cfg->threep_seqqual_output_length = atoi(value);
     else {
         fprintf(stderr, "Unknown key \"%s\" in [read_format].\n", name);
         return -1;
@@ -135,14 +135,14 @@ feed_output_entry(struct TailseekerConfig *cfg,
         cfg->seqqual_output = strdup(value);
     else if (MATCH("taginfo"))
         cfg->taginfo_output = strdup(value);
+    else if (MATCH("signal"))
+        cfg->signal_output = strdup(value);
+    else if (MATCH("signal-dists"))
+        cfg->signal_dists_output = strdup(value);
     else if (MATCH("stats"))
         cfg->stats_output = strdup(value);
     else if (MATCH("length-dists"))
         cfg->length_dists_output = strdup(value);
-    else if (MATCH("signal-dump-data"))
-        cfg->signal_dump_data_output = strdup(value);
-    else if (MATCH("signal-dump-spotids"))
-        cfg->signal_dump_spotids_output = strdup(value);
     else {
         fprintf(stderr, "Unknown key \"%s\" in [output].\n", name);
         return -1;
@@ -234,6 +234,33 @@ feed_balancer_entry(struct TailseekerConfig *cfg,
 
 
 static int
+feed_polyA_seeder_entry(struct TailseekerConfig *cfg,
+                        const char *name, const char *value)
+{
+    if (MATCH("seed-trigger-polya-length"))
+        cfg->seederparams.seed_trigger_polya_length = atoi(value);
+    else if (MATCH("negative-sample-polya-length"))
+        cfg->seederparams.negative_sample_polya_length = atoi(value);
+    else if (MATCH("max-cctr-scan-left-space"))
+        cfg->seederparams.max_cctr_scan_left_space = atoi(value);
+    else if (MATCH("max-cctr-scan-right-space"))
+        cfg->seederparams.max_cctr_scan_right_space = atoi(value);
+    else if (MATCH("required-cdf-contrast"))
+        cfg->seederparams.required_cdf_contrast = atof(value);
+    else if (MATCH("polya-boundary-pos"))
+        cfg->seederparams.polya_boundary_pos = atoi(value);
+    else if (MATCH("dist-sampling-bins"))
+        cfg->seederparams.dist_sampling_bins = atoi(value);
+    else {
+        fprintf(stderr, "Unknown key \"%s\" in [polyA_seeder].\n", name);
+        return -1;
+    }
+
+    return 0;
+}
+
+
+static int
 feed_polyA_finder_entry(struct TailseekerConfig *cfg,
                         const char *name, const char *value)
 {
@@ -263,8 +290,6 @@ feed_polyA_finder_entry(struct TailseekerConfig *cfg,
         cfg->finderparams.max_terminal_modifications = atoi(value);
     else if (MATCH("signal-analysis-trigger"))
         cfg->finderparams.sigproc_trigger_polya_length = atoi(value);
-    else if (MATCH("naive-count-trigger"))
-        cfg->finderparams.naive_ruler_trigger_polya_length = atoi(value);
     else {
         fprintf(stderr, "Unknown key \"%s\" in [polyA_finder].\n", name);
         return -1;
@@ -282,10 +307,6 @@ feed_polyA_ruler_entry(struct TailseekerConfig *cfg,
         cfg->rulerparams.dark_cycles_threshold = (float)atof(value);
     else if (MATCH("maximum-dark-cycles"))
         cfg->rulerparams.max_dark_cycles = atoi(value);
-    else if (MATCH("polya-score-threshold"))
-        cfg->rulerparams.polya_score_threshold = (float)atof(value);
-    else if (MATCH("downhill-extension-weight"))
-        cfg->rulerparams.downhill_extension_weight = (float)atof(value);
     else if (MATCH("t-intensity-k"))
         cfg->t_intensity_k = (float)atof(value);
     else if (MATCH("t-intensity-center"))
@@ -378,6 +399,7 @@ feed_sample_entry(struct TailseekerConfig *cfg, const char *samplename,
         memset(sample, 0, sizeof(struct SampleInfo));
         sample->name = strdup(samplename);
         sample->next = cfg->samples;
+        sample->signal_dump_length = 0;
         cfg->samples = sample;
     }
 
@@ -397,16 +419,6 @@ feed_sample_entry(struct TailseekerConfig *cfg, const char *samplename,
         sample->fingerprint_pos = atoi(value) - 1;
     else if (MATCH("maximum-fingerprint-mismatch"))
         sample->maximum_fingerprint_mismatches = atoi(value);
-    else if (MATCH("dump-processed-signals")) {
-        if (strcasecmp(value, "yes") == 0 || strcmp(value, "1") == 0)
-            sample->dump_signals = 1;
-        else if (strcasecmp(value, "no") == 0 || strcmp(value, "0") == 0)
-            sample->dump_signals = 0;
-        else {
-            fprintf(stderr, "\"%s\" must be either yes or no.\n", name);
-            return -1;
-        }
-    }
     else if (MATCH("limit-threep-processing"))
         sample->limit_threep_processing = atoi(value);
     else if (STARTSWITH("umi-"))
@@ -442,6 +454,8 @@ feed_entry(void *user,
         return feed_control_entry(cfg, name, value);
     else if (MATCH("balancer"))
         return feed_balancer_entry(cfg, name, value);
+    else if (MATCH("polyA_seeder"))
+        return feed_polyA_seeder_entry(cfg, name, value);
     else if (MATCH("polyA_finder"))
         return feed_polyA_finder_entry(cfg, name, value);
     else if (MATCH("polyA_ruler"))
@@ -465,7 +479,7 @@ set_default_configuration(struct TailseekerConfig *cfg)
     cfg->lane = cfg->tile = cfg->total_cycles = cfg->index_start =
         cfg->threep_start = cfg->threep_length =
         cfg->fivep_start = cfg->fivep_length = -1;
-    cfg->threep_output_length = 100;
+    cfg->threep_seqqual_output_length = 100;
 
     cfg->keep_no_delimiter = 0;
     cfg->keep_low_quality_balancer = 0;
@@ -482,10 +496,17 @@ set_default_configuration(struct TailseekerConfig *cfg)
     cfg->balancerparams.min_quality = 25;
     cfg->balancerparams.min_fraction_passes = .70f;
 
+    cfg->seederparams.seed_trigger_polya_length = 10;
+    cfg->seederparams.negative_sample_polya_length = 0;
+    cfg->seederparams.max_cctr_scan_left_space = 20;
+    cfg->seederparams.max_cctr_scan_right_space = 20;
+    cfg->seederparams.required_cdf_contrast = .35f;
+    cfg->seederparams.polya_boundary_pos = 120;
+    cfg->seederparams.dist_sampling_bins = 1000;
+
     cfg->finderparams.max_terminal_modifications = 20;
     cfg->finderparams.min_polya_length = 5;
     cfg->finderparams.sigproc_trigger_polya_length = 10;
-    cfg->finderparams.naive_ruler_trigger_polya_length = 60;
     cfg->finderparams.weights_polyA[(int)'T'] = 2;
     cfg->finderparams.weights_polyA[(int)'A'] = cfg->finderparams.weights_polyA[(int)'C'] =
         cfg->finderparams.weights_polyA[(int)'G'] = -9;
@@ -498,8 +519,6 @@ set_default_configuration(struct TailseekerConfig *cfg)
 
     cfg->rulerparams.dark_cycles_threshold = 10;
     cfg->rulerparams.max_dark_cycles = 5;
-    cfg->rulerparams.polya_score_threshold = .1;
-    cfg->rulerparams.downhill_extension_weight = .49;
     cfg->t_intensity_k = 20.f;
     cfg->t_intensity_center = .75f;
 }
@@ -519,7 +538,7 @@ compute_derived_values(struct TailseekerConfig *cfg)
 
     /* Fix UMI-related values */
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
-        int i, total_length;
+        int i, umi_total_length;
 
         if (sample->delimiter != NULL)
             sample->delimiter_length = strlen(sample->delimiter);
@@ -527,18 +546,18 @@ compute_derived_values(struct TailseekerConfig *cfg)
         if (sample->fingerprint != NULL)
             sample->fingerprint_length = strlen(sample->fingerprint);
 
-        total_length = 0;
+        umi_total_length = 0;
         for (i = 0; i < sample->umi_ranges_count; i++) {
             struct UMIInterval *umi;
 
             umi = &sample->umi_ranges[i];
             if (umi->length > 0) {
                 umi->end = umi->start + umi->length;
-                total_length += umi->length;
+                umi_total_length += umi->length;
             }
         }
 
-        sample->umi_total_length = total_length;
+        sample->umi_total_length = umi_total_length;
         if (sample->umi_total_length > longest_umi_length)
             longest_umi_length = sample->umi_total_length;
     }
@@ -595,24 +614,33 @@ compute_derived_values(struct TailseekerConfig *cfg)
     nsamples = 0;
     for (sample = cfg->samples; sample != NULL; sample = sample->next) {
         sample->numindex = nsamples++;
+        pthread_mutex_init(&sample->signal_writer_lock, NULL);
         pthread_mutex_init(&sample->statslock, NULL);
 
-        sample->delimiter_pos += cfg->threep_start;
+        sample->signal_dump_length = cfg->threep_length;
+        if (sample->delimiter != NULL)
+            sample->signal_dump_length -=
+                    sample->delimiter_pos + sample->delimiter_length;
+        if (sample->limit_threep_processing > 0 &&
+                sample->signal_dump_length > sample->limit_threep_processing)
+            sample->signal_dump_length = sample->limit_threep_processing;
+
+        if (sample->delimiter_pos >= 0)
+            sample->delimiter_pos += cfg->threep_start;
     }
     cfg->num_samples = nsamples;
 
     /* Compute maximum write buffer sizes per output entry */
-    if (cfg->threep_output_length > cfg->threep_length)
-        cfg->threep_output_length = cfg->threep_length;
+    if (cfg->threep_seqqual_output_length > cfg->threep_length)
+        cfg->threep_seqqual_output_length = cfg->threep_length;
 
     cfg->max_bufsize_seqqual = nsamples * (
             MAX_CLUSTERID_LEN +
             cfg->fivep_length * 2 +
-            cfg->threep_output_length * 2 +
+            cfg->threep_seqqual_output_length * 2 +
             6 /* field separators */);
     cfg->max_bufsize_taginfo = nsamples * (
-            MAX_LANEID_LEN +
-            6 /* tabs and eol */ + 20 /* other fields */ +
+            5 /* tabs and eol */ + 30 /* other fields */ +
             cfg->finderparams.max_terminal_modifications +
             longest_umi_length);
 
@@ -679,10 +707,10 @@ free_config(struct TailseekerConfig *cfg)
 
     free_if_not_null(cfg->seqqual_output);
     free_if_not_null(cfg->taginfo_output);
+    free_if_not_null(cfg->signal_output);
+    free_if_not_null(cfg->signal_dists_output);
     free_if_not_null(cfg->stats_output);
     free_if_not_null(cfg->length_dists_output);
-    free_if_not_null(cfg->signal_dump_spotids_output);
-    free_if_not_null(cfg->signal_dump_data_output);
     free_if_not_null(cfg->threep_colormatrix_filename);
 
     free_if_not_null(cfg->controlinfo.control_seq);
@@ -693,6 +721,7 @@ free_config(struct TailseekerConfig *cfg)
         if (cfg->samples->stream_seqqual != NULL)
             abort();
 
+        pthread_mutex_destroy(&cfg->samples->signal_writer_lock);
         pthread_mutex_destroy(&cfg->samples->statslock);
 
         free_if_not_null(cfg->samples->name);

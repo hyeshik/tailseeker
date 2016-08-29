@@ -31,7 +31,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include "tailseq-sigproc.h"
+#include "tailseq-import.h"
 
 
 #define CIF_HEADER_SIZE 13

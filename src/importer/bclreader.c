@@ -31,7 +31,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <limits.h>
-#include "tailseq-sigproc.h"
+#include "tailseq-import.h"
 
 
 #define NOCALL_QUALITY      2

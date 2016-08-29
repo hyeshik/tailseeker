@@ -31,7 +31,7 @@
 #include <errno.h>
 #include <string.h>
 #include <limits.h>
-#include "tailseq-sigproc.h"
+#include "tailseq-import.h"
 
 
 static const uint8_t DNABASE2NUM_ac[128] = {

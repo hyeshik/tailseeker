@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+#include "htslib/bgzf.h"
 
 
 char *
@@ -50,4 +52,27 @@ replace_placeholder(const char *format, const char *old, const char *new)
     strcpy(wptr, found + strlen(old));
 
     return formatted;
+}
+
+
+int
+bgzf_printf(BGZF *fp, const char *format, ...)
+{
+    va_list args;
+    char buf[BUFSIZ];
+    int r, len;
+
+    va_start(args, format);
+    len = vsprintf(buf, format, args);
+
+    if (len > 0)
+        r = bgzf_write(fp, buf, len);
+    else if (len < 0)
+        r = -1;
+    else
+        r = 0;
+
+    va_end(args);
+
+    return r;
 }

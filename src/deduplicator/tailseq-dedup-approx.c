@@ -37,7 +37,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include "htslib/sam.h"
-#include "sigproc-flags.h"
+#include "../sigproc-flags.h"
 #include "tailseq-dedup-approx.h"
 
 /* Set a temporary limit of clusters in buffer. This will be
@@ -63,8 +63,7 @@ calculate_tag_prority(int flags)
         NOTSET(flags, PAFLAG_BALANCER_SIGNAL_BAD) * 16 +
         NOTSET(flags, PAFLAG_DARKCYCLE_EXISTS) * 8 +
         NOTSET(flags, PAFLAG_DELIMITER_IS_SHIFTED) * 4 +
-        NOTSET(flags, PAFLAG_NO_POLYA_DETECTED) * 2 +
-        NOTSET(flags, PAFLAG_MEASURED_USING_NAIVE_RULER);
+        SET(flags, PAFLAG_POLYA_DETECTED) * 2;
 #undef SET
 #undef NOTSET
 }

@@ -185,7 +185,7 @@ if CONF['performance']['enable_gsnap']:
             star='scratch/alignments/{sample}_STAR_{type}.bam',
             gsnap=expand('scratch/alignments/{{sample}}_GSNAP_{{type}}.bam.{part}',
                          part=range(CONF['performance']['split_gsnap_jobs'])),
-            taginfo=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
+            taginfo=expand('scratch/taginfo-fl/{{sample}}_{tile}.txt.gz', tile=TILES)
         output: temp('scratch/merged-alignments/{sample}_{type,[^_.]+}.bam')
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
@@ -199,7 +199,7 @@ else:
     rule merge_alignments:
         input:
             star='scratch/alignments/{sample}_STAR_{type}.bam',
-            taginfo=expand('scratch/taginfo/{{sample}}_{tile}.txt.gz', tile=TILES)
+            taginfo=expand('scratch/taginfo-fl/{{sample}}_{tile}.txt.gz', tile=TILES)
         output: temp('scratch/merged-alignments/{sample}_{type,[^_.]+}.bam')
         threads: THREADS_MAXIMUM_CORE
         params: sorttmp='scratch/alignments/{sample}_merge_{type}'
