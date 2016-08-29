@@ -42,7 +42,7 @@ def load_sig_dists(filename):
 
     counts = np.fromstring(inpf.read(), np.uint32).reshape((cycles, bins))
     spots_per_cycle = counts.sum(axis=1)
-    return counts, spots_per_cycle
+    return counts.astype(np.uint64), spots_per_cycle.astype(np.uint64)
 
 def load_all_signal_dists():
     sigdists = {}
@@ -132,8 +132,8 @@ def get_report_marks(direct, inferred):
 
 def calculate_optimal_cutoffs(sigdists, tiles):
     # Sum the counts from all tiles
-    postotal = sum([sigdists[tile['id'], 'pos'] for tile in tiles])
-    negtotal = sum([sigdists[tile['id'], 'neg'] for tile in tiles])
+    postotal = np.array([sigdists[tile['id'], 'pos'] for tile in tiles]).sum(axis=0)
+    negtotal = np.array([sigdists[tile['id'], 'neg'] for tile in tiles]).sum(axis=0)
 
     xsamples = np.arange(0, 1, 1 / postotal.shape[1])
 

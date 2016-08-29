@@ -250,6 +250,9 @@ allocate_global_stats_buffer(struct TailseekerConfig *cfg,
         return -1;
     }
 
+    memset(buf->pos_score_counts, 0, scoresamplesize);
+    memset(buf->neg_score_counts, 0, scoresamplesize);
+
     return 0;
 }
 
