@@ -275,6 +275,7 @@ write_signal_samples_dists(const char *filename_format, const char *type,
     uint32_t header_elements[3];
     char *filename;
     BGZF *fp;
+    int r;
 
     filename = replace_placeholder(filename_format, "{posneg}", type);
     if (filename == NULL)
@@ -292,11 +293,12 @@ write_signal_samples_dists(const char *filename_format, const char *type,
     header_elements[1] = total_cycles;
     header_elements[2] = sampling_bins;
 
-    bgzf_write(fp, header_elements, sizeof(header_elements));
-    bgzf_write(fp, counts, sizeof(cluster_count_t) * total_cycles * sampling_bins);
+    r = (bgzf_write(fp, header_elements, sizeof(header_elements)) < 0 ||
+         bgzf_write(fp, counts, sizeof(cluster_count_t) *
+                    total_cycles * sampling_bins) < 0) ? -1 : 0;
     bgzf_close(fp);
 
-    return 0;
+    return r;
 }
 
 
