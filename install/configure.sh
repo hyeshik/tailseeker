@@ -74,6 +74,9 @@ requirements_not_found=""
 # Choose the analysis level
 # =======================================================
 
+if [ -n "$TAILSEEKER_ANALYSIS_LEVEL" ]; then
+  analysis_level=$TAILSEEKER_ANALYSIS_LEVEL
+else
 analysis_level=\
 $($WHIPTAIL --title "Configure: Analysis level" \
 --backtitle "$BACKTITLE" --default-item "Level 3" \
@@ -93,8 +96,9 @@ one. You can re-configure it later." \
 if [ $? -ne 0 ]; then
   exit 0
 fi
-
 analysis_level=$(echo $analysis_level | sed -e 's,Level ,,')
+
+fi # -z TAILSEEKER_ANALYSIS_LEVEL
 
 echo "tailseeker: $TOPDIR" > $PATHCONF
 echo "whiptail: $WHIPTAIL" >> $PATHCONF
@@ -105,6 +109,10 @@ echo "analysis_level: $analysis_level" >> $PATHCONF
 # Choose whether to use the AYB base-caller
 # =======================================================
 
+if [ -n "$TAILSEEKER_USE_AYB" ]; then
+  required_executables_level1="$required_executables_level1
+AYB:AYB_(All_Your_Bases)"
+else
 if [ $analysis_level -ge 2 ]; then
   $WHIPTAIL --title "Configure: AYB basecalling" \
 --backtitle "$BACKTITLE" \
@@ -123,12 +131,22 @@ Do you want to use AYB for basecalling?" 15 62
 AYB:AYB_(All_Your_Bases)"
   fi
 fi
+fi # -z TAILSEEKER_USE_AYB
 
 
 # =======================================================
 # Choose whether to use the GSNAP aligner
 # =======================================================
 
+if [ -n "$TAILSEEKER_USE_GSNAP" ]; then
+  required_executables_level2="$required_executables_level2
+gsnap:GSNAP_(GMAP)
+gmap_build:GSNAP_(GMAP)
+gtf_splicesites:GSNAP_(GMAP)
+gtf_introns:GSNAP_(GMAP)
+iit_store:GSNAP_(GMAP)"
+  use_gsnap=yes
+else
 use_gsnap=no
 if [ $analysis_level -ge 2 ]; then
   $WHIPTAIL --title "Configure: GSNAP alignment" \
@@ -156,11 +174,16 @@ iit_store:GSNAP_(GMAP)"
   fi
 fi
 
+fi # -z TAILSEEKER_USE_GSNAP
+
 
 # =======================================================
 # Choose GSNAP indexing sensitivity
 # =======================================================
 
+if [ -n "$TAILSEEKER_GSNAP_SENSITIVITY" ]; then
+  echo "gsnap_sensitive_index: $TAILSEEKER_GSNAP_SENSITIVITY" >> $PATHCONF
+else
 if [ "$use_gsnap" = yes -a $analysis_level -ge 2 ]; then
   $WHIPTAIL --title "Configure: GSNAP sensitivity" \
 --backtitle "$BACKTITLE" --defaultno \
@@ -179,6 +202,8 @@ sensitivity?" 13 64
     echo "gsnap_sensitive_index: no" >> $PATHCONF
   fi
 fi
+
+fi # -z TAILSEEKER_GSNAP_SENSITIVITY
 
 
 # =======================================================
@@ -320,6 +345,9 @@ END
   exit 3
 fi
 
+if [ -n "$TAILSEEKER_BINDIR" ]; then
+  install_dir=$TAILSEEKER_BINDIR
+else
 install_dir=$($WHIPTAIL --title "Configure: install the tseek command" \
 --backtitle "$BACKTITLE" \
 --menu "
@@ -327,6 +355,7 @@ Choose a directory where to install the \"tseek\" command.
 It is recommended to keep the directory in your PATH." \
 $(($num_writable_dirs + 10)) 65 $num_writable_dirs $writable_dirs \
 3>&1 1>&2 2>&3)
+fi # -z TAILSEEKER_BINDIR
 
 rm -f $install_dir/tseek
 cat $TOPDIR/install/tailseeker.in | \
