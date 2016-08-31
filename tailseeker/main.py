@@ -253,6 +253,7 @@ rule merge_and_deduplicate_taginfo:
 
 if CONF['analysis_level'] >= 2 and CONF['read_filtering']['contaminant_filtering']:
     temp_primary_fastq = temp
+    INTERMEDIATE_DIRS.append('fastq')
 else:
     temp_primary_fastq = lazy_clearing
     TARGETS.extend(expand('fastq/{sample}_{read}.fastq.gz', sample=EXP_SAMPLES,
