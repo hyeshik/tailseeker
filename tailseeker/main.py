@@ -39,8 +39,8 @@ for badtile in CONF['input_filtering']['blacklisted_tiles']:
     if badtile in TILES:
         del TILES[badtile]
 
-EXP_SAMPLES = sorted(CONF['experimental_samples'].keys())
-SPIKEIN_SAMPLES = sorted(CONF['spikein_samples'].keys())
+EXP_SAMPLES = CONF.exp_samples
+SPIKEIN_SAMPLES = CONF.spikein_samples
 ALL_SAMPLES = sorted(EXP_SAMPLES + SPIKEIN_SAMPLES)
 
 INSERT_READS = sorted(readname for readname in CONF['read_cycles'] if readname[1] != 'i')

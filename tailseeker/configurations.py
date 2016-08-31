@@ -114,8 +114,8 @@ class Configurations:
 
     @property
     def all_samples(self):
-        return sorted(map(str, list(self['experimental_samples'].keys()) +
-                               list(self['spikein_samples'].keys())))
+        return sorted(map(str, list(self.exp_samples) +
+                               list(self.spikein_samples)))
 
     @property
     def exp_samples(self):
@@ -123,12 +123,12 @@ class Configurations:
 
     @property
     def spikein_samples(self):
-        return sorted(self['spikein_samples'].keys())
+        return sorted(self.get('spikein_samples', {}).keys())
 
     def get_sample_index(self, name):
         if name in self['experimental_samples']:
             return self['experimental_samples'][name]
-        elif name in self['spikein_samples']:
+        elif name in self.get('spikein_samples', {}):
             return self['spikein_samples'][name]
         else:
             raise KeyError("Sample {} not available in settings".format(repr(name)))
