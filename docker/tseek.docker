@@ -1,0 +1,29 @@
+#!/bin/sh
+# Command line wrapper that provides a `tseek' interface via a Docker
+# container.
+
+TAILSEEKER_IMAGE=tailseeker:3.1
+TEMPORARY_FILE=.tseek.docker.$$
+
+if [ -z "$TAILSEEKER_DATADIR" ]; then
+  echo "Please set TAILSEEKER_DATADIR to point a data source directory."
+  exit 1
+fi
+
+if [ ! -f "tailseeker.yaml" ]; then
+  echo "A configuration file \"tailseeker.yaml\" must exist in the current \
+directory."
+  exit 2
+fi
+
+if ! touch $TEMPORARY_FILE; then
+  echo "$(pwd) is not writable."
+  exit 3
+fi
+
+USERGROUP=$(ls -n $TEMPORARY_FILE | awk '{ print $3":"$4; }')
+rm -f $TEMPORARY_FILE
+
+docker run -it --rm -v ${TAILSEEKER_DATADIR}:/data -v $(pwd):/work \
+  -u $USERGROUP $TAILSEEKER_IMAGE $*
+exit $?

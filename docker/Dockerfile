@@ -43,6 +43,7 @@ RUN cd /tmp && \
 # Install Python modules for tailseeker
 RUN (wget -q https://bootstrap.pypa.io/ez_setup.py -O - | python3) && \
     easy_install pip && \
+    rm -f setuptools*.zip && \
     pip install --no-cache-dir --upgrade cython && \
     pip install --no-cache-dir --upgrade snakemake colormath numpy scipy \
             pandas PyYAML biopython feather-format XlsxWriter
@@ -52,8 +53,7 @@ RUN cd /tmp && \
     wget -q https://github.com/samtools/htslib/releases/download/1.3.1/htslib-1.3.1.tar.bz2 && \
     tar -xjf htslib-1.3.1.tar.bz2 && \
     cd htslib-1.3.1 && \
-    ./configure && make -j 8 && \
-    make install && \
+    ./configure && make -j 8 && make install && \
     cd / && rm -rf /tmp/htslib-1.3.1.tar.bz2 /tmp/htslib-1.3.1
 
 # Install samtools
@@ -84,10 +84,17 @@ RUN cd /tmp && \
 
 # Install tailseeker 3
 RUN mkdir -p /opt; \
+    cd /opt && \
     git clone https://github.com/hyeshik/tailseeker.git && \
     cd tailseeker && \
     env TAILSEEKER_USE_AYB=yes TAILSEEKER_ANALYSIS_LEVEL=3 TAILSEEKER_USE_GSNAP=yes \
         TAILSEEKER_GSNAP_SENSITIVITY=yes TAILSEEKER_BINDIR=/usr/local/bin \
         sh setup.sh
+
+# Prepare data directories.
+ENV LD_LIBRARY_PATH /usr/local/lib
+RUN mkdir -p -m 0777 /work /data
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/tseek"]
 
 # ex: ts=8 sts=4 sw=4 et
