@@ -63,7 +63,7 @@ Run the pipeline:
 Then, the results will be located in the current directory.
 
 
-## Prerequisite tools
+## Prerequisite tools for the conventional installation
 
   * Essential dependencies
     * Python 3.3 or higher
