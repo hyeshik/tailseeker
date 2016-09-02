@@ -1,0 +1,16 @@
+#!/bin/sh
+USERID=$1
+GROUPID=$2
+
+if ! getent group $GROUPID >/dev/null; then
+  /usr/sbin/groupadd --gid $GROUPID ts
+fi
+
+if ! getent passwd $USERID >/dev/null; then
+  /usr/sbin/useradd --uid $USERID --gid $GROUPID ts
+fi
+
+shift 2
+
+su -c "tseek $*" ts
+exit $?

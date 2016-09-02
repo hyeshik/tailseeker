@@ -21,9 +21,10 @@ if ! touch $TEMPORARY_FILE; then
   exit 3
 fi
 
-USERGROUP=$(ls -n $TEMPORARY_FILE | awk '{ print $3":"$4; }')
+USERID=$(ls -n $TEMPORARY_FILE | awk '{ print $3; }')
+GROUPID=$(ls -n $TEMPORARY_FILE | awk '{ print $4; }')
 rm -f $TEMPORARY_FILE
 
 docker run -it --rm -v ${TAILSEEKER_DATADIR}:/data -v $(pwd):/work \
-  -u $USERGROUP $TAILSEEKER_IMAGE $*
+  $TAILSEEKER_IMAGE $USERID $GROUPID $*
 exit $?

@@ -95,6 +95,6 @@ RUN mkdir -p /opt; \
 ENV LD_LIBRARY_PATH /usr/local/lib
 RUN mkdir -p -m 0777 /work /data
 WORKDIR /work
-ENTRYPOINT ["/usr/local/bin/tseek"]
+ENTRYPOINT ["/opt/tailseeker/bin/tailseq-docker-wrap"]
 
 # ex: ts=8 sts=4 sw=4 et
