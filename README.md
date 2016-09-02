@@ -21,6 +21,48 @@ the list of supported genomes are as followed:
 | 3 | GRCh38 *(Homo sapiens)*<br>GRCm38 *(Mus musculus)*<br>GRCz10 *(Danio rerio)*<br>WBcel235 *(C. elegans)*<br>Rnor\_6.0 *(Rattus norvegicus)* | All features from level 2<br>Gene-level statistics for poly(A) length and non-templated additions<br>Gene-level quantifications |
 
 
+## Running with Docker
+
+If you have a host running [Docker](https://www.docker.com), you can run
+the tailseeker pipeline without installing any. The current image is not
+ready for running it on multi-node clusters. For those environments, you're
+encouraged to install the software in conventional way as described later.
+
+Download the image and a wrapper script:
+
+    docker pull hyeshik/tailseeker:latest
+
+    wget http://bit.ly/tseek-docker
+    chmod 755 tseek-docker
+
+Set the environment variables up:
+
+    # Point the directory holding the raw data from an Illumina sequencer
+    export TAILSEEKER_DATADIR=/storage/150922_M01178_0123_00000000-ACB72
+
+    # Create an empty directory for new temporary and output files
+    mkdir myproject    # replace myproject with your favorite name
+    cd myproject
+
+    # Download a configuration template from the repository or
+    # copy from one of your previous projects
+    wget -O tailseeker.yaml http://bit.ly/tseek-settings-miseq
+
+    # Modify the settings to adapt to the current task
+    vi tailseeker.yaml    # or with your preferred text editor
+
+    # -> Change the value of "dir" under the "sources" section to
+    #    "/data" where the raw data directory is mounted in our Docker
+    #    container.
+    # -> Edit the list of samples, barcodes and spike-ins as you need.
+
+Run the pipeline:
+
+    ../tseek-docker -j
+
+Then, the results will be located in the current directory.
+
+
 ## Prerequisite tools
 
   * Essential dependencies
