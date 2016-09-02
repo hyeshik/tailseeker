@@ -32,8 +32,9 @@ import numpy as np
 
 def get_polya_length_hist(pacallsfile, badflagmask, maxpalen, columnno):
     freqoutput = sp.check_output(
-        'zcat {input_file} | awk -F"\t" \
-            \'!and($3, {flagmask}) {{ print ${polya_column}; }}\' | \
+        'zcat {input_file} | perl -e \'while (<>) {{ \
+            chomp; my @f=split; if ((@f[2] & {flagmask}) == 0) {{ \
+                print "$f[{polya_column}]\\n"; }} }}\' | \
             sort -n | uniq -c'.format(
             input_file=pacallsfile, polya_column=columnno,
             flagmask=badflagmask), shell=True)
@@ -52,7 +53,7 @@ inputfiles = list(zip(snakemake.params.samplenames, snakemake.input))
 
 tableschema = refined_taginfo if snakemake.params.refined else taginfo
 columnname = 'unaligned_polyA' if snakemake.params.refined else 'polyA'
-columnno = tableschema['names'].index(columnname) + 1
+columnno = tableschema['names'].index(columnname)
 
 pacounts = pd.DataFrame.from_items(
     [(samplename,
