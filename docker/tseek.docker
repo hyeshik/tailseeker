@@ -2,7 +2,7 @@
 # Command line wrapper that provides a `tseek' interface via a Docker
 # container.
 
-TAILSEEKER_IMAGE=tailseeker:3.1
+TAILSEEKER_IMAGE=hyeshik/tailseeker:latest
 TEMPORARY_FILE=.tseek.docker.$$
 
 if [ -z "$TAILSEEKER_DATADIR" ]; then
