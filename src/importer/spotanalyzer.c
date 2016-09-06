@@ -502,11 +502,17 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
                                     &contrast_score);
 
             if (max_contrast_pos >= params.polya_boundary_pos &&
-                    contrast_score >= params.required_cdf_contrast)
-                add_polya_score_sample(pos_score_counts, scores + polya_start,
-                                       min_int(scan_len, params.polya_boundary_pos),
-                                       delimiter_end + polya_start,
-                                       params.dist_sampling_bins);
+                    contrast_score >= params.required_cdf_contrast) {
+                int sampling_len = -polya_start;
+                sampling_len += min_int(scan_len,
+                        params.polya_boundary_pos - params.polya_sampling_gap);
+                if (sampling_len > 0)
+                    add_polya_score_sample(pos_score_counts,
+                                           scores + polya_start,
+                                           sampling_len,
+                                           delimiter_end + polya_start,
+                                           params.dist_sampling_bins);
+            }
         }
         else if (polya_len <= params.negative_sample_polya_length)
             add_polya_score_sample(neg_score_counts, scores + polya_start,

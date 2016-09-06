@@ -249,6 +249,8 @@ feed_polyA_seeder_entry(struct TailseekerConfig *cfg,
         cfg->seederparams.required_cdf_contrast = atof(value);
     else if (MATCH("polya-boundary-pos"))
         cfg->seederparams.polya_boundary_pos = atoi(value);
+    else if (MATCH("polya-sampling-gap"))
+        cfg->seederparams.polya_sampling_gap = atoi(value);
     else if (MATCH("dist-sampling-bins"))
         cfg->seederparams.dist_sampling_bins = atoi(value);
     else {
@@ -502,6 +504,7 @@ set_default_configuration(struct TailseekerConfig *cfg)
     cfg->seederparams.max_cctr_scan_right_space = 20;
     cfg->seederparams.required_cdf_contrast = .35f;
     cfg->seederparams.polya_boundary_pos = 120;
+    cfg->seederparams.polya_sampling_gap = 3;
     cfg->seederparams.dist_sampling_bins = 1000;
 
     cfg->finderparams.max_terminal_modifications = 20;

@@ -139,6 +139,7 @@ max-cctr-scan-left-space = {conf[max_cctr_scan_left_space]}
 max-cctr-scan-right-space = {conf[max_cctr_scan_right_space]}
 required-cdf-contrast = {conf[required_cdf_contrast]}
 polya-boundary-pos = {conf[polya_boundary_pos]}
+polya-sampling-gap = {conf[polya_sampling_gap]}
 dist-sampling-bins = {conf[dist_sampling_bins]}
 """.format(conf=params.conf['polyA_seeder']), file=outf)
 

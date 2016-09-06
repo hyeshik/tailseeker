@@ -190,6 +190,7 @@ struct PolyASeederParameters {
     int max_cctr_scan_right_space;
     float required_cdf_contrast;
     int polya_boundary_pos;
+    int polya_sampling_gap;
     int dist_sampling_bins;
 };
 
