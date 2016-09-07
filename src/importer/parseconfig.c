@@ -253,6 +253,12 @@ feed_polyA_seeder_entry(struct TailseekerConfig *cfg,
         cfg->seederparams.polya_sampling_gap = atoi(value);
     else if (MATCH("dist-sampling-bins"))
         cfg->seederparams.dist_sampling_bins = atoi(value);
+    else if (MATCH("fair-sampling-fingerprint-length"))
+        cfg->seederparams.fair_sampling_fingerprint_length = atoi(value);
+    else if (MATCH("fair-sampling-hash-space-size"))
+        cfg->seederparams.fair_sampling_hash_space_size = atoi(value);
+    else if (MATCH("fair-sampling-max-count"))
+        cfg->seederparams.fair_sampling_max_count = atoi(value);
     else {
         fprintf(stderr, "Unknown key \"%s\" in [polyA_seeder].\n", name);
         return -1;
@@ -506,6 +512,9 @@ set_default_configuration(struct TailseekerConfig *cfg)
     cfg->seederparams.polya_boundary_pos = 120;
     cfg->seederparams.polya_sampling_gap = 3;
     cfg->seederparams.dist_sampling_bins = 1000;
+    cfg->seederparams.fair_sampling_fingerprint_length = 30;
+    cfg->seederparams.fair_sampling_hash_space_size = 1048576;
+    cfg->seederparams.fair_sampling_max_count = 5;
 
     cfg->finderparams.max_terminal_modifications = 20;
     cfg->finderparams.min_polya_length = 5;

@@ -362,6 +362,15 @@ prepare_split_jobs(struct TailseekerConfig *cfg, uint32_t nclusters, int cluster
         return NULL;
     }
 
+    pool->fair_sampling.count = malloc(cfg->seederparams.fair_sampling_hash_space_size);
+    if (pool->fair_sampling.count == NULL) {
+        free_global_stats_buffer(&pool->global_stats);
+        free(pool);
+        return NULL;
+    }
+    memset(pool->fair_sampling.count, 0, cfg->seederparams.fair_sampling_hash_space_size);
+    pthread_mutex_init(&pool->fair_sampling.lock, NULL);
+
     for (i = 0; i < njobs; i++) {
         pool->jobs[i].jobid = i;
         pool->jobs[i].start = i * clusters_per_job;
@@ -388,6 +397,8 @@ prepare_split_jobs(struct TailseekerConfig *cfg, uint32_t nclusters, int cluster
 static void
 free_parallel_jobs(struct ParallelJobPool *pool, struct SampleInfo *samples)
 {
+    free(pool->fair_sampling.count);
+    pthread_mutex_destroy(&pool->fair_sampling.lock);
     free_global_stats_buffer(&pool->global_stats);
     pthread_mutex_destroy(&pool->poollock);
     free(pool);
@@ -459,7 +470,8 @@ run_spot_processing(struct ParallelJobPool *pool)
         r = process_spots(pool->cfg, pool->firstclusterno, pool->intensities,
                           pool->basecalls, wbuf0, wbuf,
                           gstats.pos_score_counts, gstats.neg_score_counts,
-                          job->jobid, job->start, job->end);
+                          &pool->fair_sampling, job->jobid,
+                          job->start, job->end);
         if (r < 0)
             break;
 

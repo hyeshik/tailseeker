@@ -141,6 +141,9 @@ required-cdf-contrast = {conf[required_cdf_contrast]}
 polya-boundary-pos = {conf[polya_boundary_pos]}
 polya-sampling-gap = {conf[polya_sampling_gap]}
 dist-sampling-bins = {conf[dist_sampling_bins]}
+fair-sampling-fingerprint-length = {conf[fair_sampling_fingerprint_length]}
+fair-sampling-hash-space-size = {conf[fair_sampling_hash_space_size]}
+fair-sampling-max-count = {conf[fair_sampling_max_count]}
 """.format(conf=params.conf['polyA_seeder']), file=outf)
 
 

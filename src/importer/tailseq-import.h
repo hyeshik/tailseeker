@@ -192,6 +192,9 @@ struct PolyASeederParameters {
     int polya_boundary_pos;
     int polya_sampling_gap;
     int dist_sampling_bins;
+    size_t fair_sampling_fingerprint_length;
+    size_t fair_sampling_hash_space_size;
+    uint8_t fair_sampling_max_count;
 };
 
 struct PolyAFinderParameters {
@@ -292,6 +295,11 @@ struct GloballyAggregatedOutput {
     cluster_count_t *neg_score_counts;
 };
 
+struct FairSamplingCount {
+    pthread_mutex_t lock;
+    uint8_t *count;
+};
+
 struct ParallelJobPool {
     int job_next;
     int jobs_done;
@@ -308,6 +316,7 @@ struct ParallelJobPool {
     size_t bufsize_taginfo;
 
     struct GloballyAggregatedOutput global_stats;
+    struct FairSamplingCount fair_sampling;
 
     struct ParallelJob jobs[1];
 };
@@ -401,6 +410,7 @@ extern int process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                          struct WriteBuffer *wbuf0, struct WriteBuffer *wbuf,
                          cluster_count_t *pos_score_counts,
                          cluster_count_t *neg_score_counts,
+                         struct FairSamplingCount *fair_sampling,
                          int jobid, uint32_t cln_start, uint32_t cln_end);
 
 /* misc.c */

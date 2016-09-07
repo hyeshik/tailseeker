@@ -415,6 +415,38 @@ add_polya_score_sample(cluster_count_t *samplecounts, float *scores,
 
 
 static int
+check_sequence_for_fair_sampling(struct FairSamplingCount *fair_sampling,
+                                 struct PolyASeederParameters *params,
+                                 const char *sequence)
+{
+    const char *end, *hashptr;
+    uint64_t v;
+    int r;
+
+    end = sequence + params->fair_sampling_fingerprint_length;
+
+    v = 0;
+    for (hashptr = sequence; hashptr < end; hashptr++)
+        v = ((v << 3) | ((*hashptr & 7) ^ (v >> 60))) & ((1UL << 63) - 1UL);
+    v %= params->fair_sampling_hash_space_size;
+
+    pthread_mutex_lock(&fair_sampling->lock);
+
+    if (params->fair_sampling_max_count == 0 ||
+            fair_sampling->count[v] < params->fair_sampling_max_count) {
+        fair_sampling->count[v]++;
+        r = 0;
+    }
+    else
+        r = -1;
+
+    pthread_mutex_unlock(&fair_sampling->lock);
+
+    return r;
+}
+
+
+static int
 process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
                      uint32_t global_clusterno, struct SampleInfo *sample,
                      const char *sequence,
@@ -422,6 +454,7 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
                      int *terminal_mods,
                      cluster_count_t *pos_score_counts,
                      cluster_count_t *neg_score_counts,
+                     struct FairSamplingCount *fair_sampling,
                      int *procflags)
 {
     int polya_start, polya_end, balancer_len, insert_len, polya_len;
@@ -514,7 +547,10 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
                                            params.dist_sampling_bins);
             }
         }
-        else if (polya_len <= params.negative_sample_polya_length)
+        else if (polya_len <= params.negative_sample_polya_length &&
+                    scan_len >= params.fair_sampling_fingerprint_length &&
+                    check_sequence_for_fair_sampling(fair_sampling,
+                        &params, sequence + delimiter_end + polya_start) == 0)
             add_polya_score_sample(neg_score_counts, scores + polya_start,
                                    scan_len, delimiter_end + polya_start,
                                    params.dist_sampling_bins);
@@ -541,6 +577,7 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
               struct WriteBuffer *wbuf0, struct WriteBuffer *wbuf,
               cluster_count_t *pos_score_counts,
               cluster_count_t *neg_score_counts,
+              struct FairSamplingCount *fair_sampling,
               int jobid, uint32_t cln_start, uint32_t cln_end)
 {
     uint32_t clusterno;
@@ -639,7 +676,7 @@ process_spots(struct TailseekerConfig *cfg, uint32_t firstclusterno,
                       sequence_formatted,
                       intensities, delimiter_end, &terminal_mods,
                       pos_score_counts, neg_score_counts,
-                      &procflags);
+                      fair_sampling, &procflags);
         }
 
         if (write_measurements_to_buffers(cfg, wbuf, sample,
