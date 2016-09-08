@@ -43,4 +43,7 @@ typedef struct SignalPacket {
 /* A storage type that are wide enough to store an score value. */
 typedef uint32_t unpacked_score_t;
 
+/* A storage type that are wide enough to count clusters in any tile */
+typedef uint32_t cluster_count_t;
+
 #endif

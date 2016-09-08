@@ -85,7 +85,7 @@ def generate_output_section(outf):
 seqqual = scratch/seqqual/{{name}}_{tile}.txt.gz
 taginfo = scratch/taginfo/{{name}}_{tile}.txt.gz
 signal = scratch/signals/{{name}}_{tile}.sigpack
-signal-dists = scratch/sigdists/{{posneg}}_{tile}.sigdists
+signal-dists = scratch/sigdists-r00/{{posneg}}_{tile}.sigdists
 stats = scratch/stats/signal-proc-{tile}.csv
 length-dists = scratch/stats/length-dist-{tile}.csv
 """.format(tile=wildcards.tile), file=outf)

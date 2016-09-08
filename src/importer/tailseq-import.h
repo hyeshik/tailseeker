@@ -39,8 +39,6 @@
 
 #define NUM_CHANNELS        4
 
-typedef uint32_t cluster_count_t;
-
 
 #define BCLREADER_OVERRIDDEN    ((struct BCLReader *)1)
                                 /* placeholder for overridden cycles by an alternative call */

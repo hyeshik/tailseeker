@@ -160,30 +160,91 @@ measure_polya_length(const signal_packet_t *read_scores,
         return score_argmax_cycle + 1;
 }
 
+static void
+add_polya_score_sample(cluster_count_t *samplecounts,
+                       signal_packet_t *scores, int length,
+                       int firstcycle, int sampling_bins)
+{
+    cluster_count_t *sptr;
+    int i, binno;
+
+    sptr = samplecounts + (firstcycle * sampling_bins);
+    for (i = 0; i < length; i++, scores++, sptr += sampling_bins)
+        if (scores->score > 0) {
+            binno = ((scores->score - 1.) / (SIGNALPACKET_SCORE_MAX - 1)) *
+                    sampling_bins;
+            if (binno >= sampling_bins)
+                binno = sampling_bins - 1;
+
+            sptr[binno]++;
+        }   
+}
+
+static int 
+write_signal_samples_dists(const char *filename,
+                           const cluster_count_t *counts,
+                           int total_cycles, int sampling_bins)
+{
+    uint32_t header_elements[3];
+    gzFile fp;
+    int r;
+
+    fp = gzopen(filename, "wb");
+    if (fp == NULL) {
+        fprintf(stderr, "Cannot open %s to write.\n", filename);
+        return -1; 
+    }   
+
+    header_elements[0] = sizeof(cluster_count_t);
+    header_elements[1] = total_cycles;
+    header_elements[2] = sampling_bins;
+
+    r = (gzwrite(fp, header_elements, sizeof(header_elements)) < 0 ||
+         gzwrite(fp, counts, sizeof(cluster_count_t) *
+                    total_cycles * sampling_bins) < 0) ? -1 : 0;
+    gzclose(fp);
+
+    return r;
+}
+
 static int16_t *
 process_polya_ruling(const char *filename,
                      const unpacked_score_t *score_cutoffs,
                      ssize_t cutoffs_num_cycles, int minimum_polya_len,
-                     float downhill_ext_weight, size_t *ret_elements)
+                     float downhill_ext_weight, int dist_sampling_bins,
+                     float dist_sampling_gap, const char *sigdist_output,
+                     size_t *ret_elements)
 {
     gzFile fp;
-    ssize_t record_size, bytesread;
+    ssize_t record_size, bytesread, sigdist_size;
     int16_t *polya_measurements;
+    int r;
+    cluster_count_t *pos_score_counts;
     struct {
         uint32_t elemsize;
         uint32_t total_clusters;
         uint32_t max_cycles;
     } header;
 
+    sigdist_size = cutoffs_num_cycles * dist_sampling_bins * sizeof(cluster_count_t);
+    pos_score_counts = malloc(sigdist_size);
+    if (pos_score_counts == NULL) {
+        perror("process_polya_ruling");
+        return NULL;
+    }
+    memset(pos_score_counts, 0, sigdist_size);
+
     fp = gzopen(filename, "rb");
     if (fp == NULL) {
         fprintf(stderr, "Cannot open the input file: %s\n", filename);
+        free(pos_score_counts);
         return NULL;
     }
 
     if (gzread(fp, &header, sizeof(header)) != sizeof(header)) {
         fprintf(stderr, "Failed to read the header from %s.\n", filename);
         gzclose(fp);
+        free(pos_score_counts);
         return NULL;
     }
 
@@ -191,6 +252,7 @@ process_polya_ruling(const char *filename,
         fprintf(stderr, "The file %s was written in a machine with "
                         "different architecture.\n", filename);
         gzclose(fp);
+        free(pos_score_counts);
         return NULL;
     }
 
@@ -198,6 +260,7 @@ process_polya_ruling(const char *filename,
     if (polya_measurements == NULL) {
         perror("process_polya_ruling");
         gzclose(fp);
+        free(pos_score_counts);
         return NULL;
     }
 
@@ -218,6 +281,8 @@ process_polya_ruling(const char *filename,
 
         if (bytesread < record_size) {
             fprintf(stderr, "Unexpected end of file.\n");
+            gzclose(fp);
+            free(pos_score_counts);
             return NULL;
         }
 
@@ -225,11 +290,23 @@ process_polya_ruling(const char *filename,
                 rec.header.valid_cycle_count, rec.header.first_cycle,
                 score_cutoffs, cutoffs_num_cycles, downhill_ext_weight);
 
-        if (polya_len >= minimum_polya_len)
+        if (polya_len >= minimum_polya_len) {
+            int sampling_len;
             polya_measurements[rec.header.clusterno] = polya_len;
+            sampling_len = polya_len - (int)(polya_len * dist_sampling_gap);
+            add_polya_score_sample(pos_score_counts, rec.scores,
+                sampling_len, rec.header.first_cycle, dist_sampling_bins);
+        }
     }
 
     gzclose(fp);
+
+    r = write_signal_samples_dists(sigdist_output, pos_score_counts,
+                    cutoffs_num_cycles, dist_sampling_bins);
+    free(pos_score_counts);
+    if (r < 0)
+        return NULL;
+
     *ret_elements = header.total_clusters;
 
     return polya_measurements;
@@ -309,12 +386,15 @@ main(int argc, char *argv[])
     int16_t *polya_measurements;
     size_t nclusters;
     const char *tile_id, *signals_file, *cutoffs_file, *taginfo_file;
-    float downhill_ext_weight;
-    int minimum_polya_len;
+    const char *sigdist_file;
+    float downhill_ext_weight, dist_sampling_gap;
+    int minimum_polya_len, dist_sampling_bins;
 
-    if (argc < 7) {
+    if (argc < 10) {
         fprintf(stderr, "Usage: %s {tile id} {signals} {cutoffs} {min polya} "
-                        "{downhill ext weight} {taginfo}\n", argv[0]);
+                        "{downhill ext weight} {taginfo} {sampling bin count} "
+                        "{positive sampling gap} {positive sampling output}\n",
+                        argv[0]);
         return 1;
     }
 
@@ -324,6 +404,9 @@ main(int argc, char *argv[])
     minimum_polya_len = atoi(argv[4]);
     downhill_ext_weight = atof(argv[5]);
     taginfo_file = argv[6];
+    dist_sampling_bins = atoi(argv[7]);
+    dist_sampling_gap = atof(argv[8]);
+    sigdist_file = argv[9];
 
     /* Load per-cycle poly(A) score cutoffs table */
     score_cutoffs = load_score_cutoffs(cutoffs_file, tile_id, &cutoffs_num_cycles);
@@ -333,6 +416,7 @@ main(int argc, char *argv[])
     /* Measure the lengths of poly(A) tails */
     polya_measurements = process_polya_ruling(signals_file, score_cutoffs,
             cutoffs_num_cycles, minimum_polya_len, downhill_ext_weight,
+            dist_sampling_bins, dist_sampling_gap, sigdist_file,
             &nclusters);
     free(score_cutoffs);
     if (polya_measurements == NULL)

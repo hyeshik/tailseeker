@@ -180,7 +180,7 @@ rule process_signals:
                                    sample=ALL_SAMPLES)),
         signals = map(temp, expand('scratch/signals/{sample}_{{tile}}.sigpack',
                                    sample=ALL_SAMPLES)),
-        sigdists = map(temp, expand('scratch/sigdists/{posneg}_{{tile}}.sigdists',
+        sigdists = map(temp, expand('scratch/sigdists-r00/{posneg}_{{tile}}.sigdists',
                                     posneg=['pos', 'neg'])),
         demuxstats = temp('scratch/stats/signal-proc-{tile}.csv')
     threads: THREADS_MAXIMUM_CORE
@@ -200,13 +200,13 @@ rule merge_signal_processing_stats:
     script: SCRIPTSDIR + '/stats-merge-demultiplexing-counts.py'
 
 
-TARGETS.append('stats/polya-score-cutoffs-bases.txt')
 rule calculate_optimal_parameters:
-    input: expand('scratch/sigdists/{posneg}_{tile}.sigdists', \
-                  posneg=['pos', 'neg'], tile=TILES)
+    input:
+        expand('scratch/sigdists-r{{round}}/pos_{tile}.sigdists', tile=TILES),
+        expand('scratch/sigdists-r00/neg_{tile}.sigdists', tile=TILES)
     output:
-        cutoff_values=temp('scratch/sigdists/signal-cutoffs.txt'),
-        cutoff_bases='stats/polya-score-cutoffs-bases.txt',
+        cutoff_values=temp('scratch/sigdists-r{round}/signal-cutoffs.txt'),
+        cutoff_bases=temp('scratch/stats/polya-score-cutoffs-bases-r{round}.txt'),
     params: conf=CONF.confdata, tileinfo=TILES, total_cycles=NUM_CYCLES
     threads: 20
     run:
@@ -220,21 +220,39 @@ rule measure_polya_lengths_from_fluorescence:
     input:
         signals=expand('scratch/signals/{sample}_{{tile}}.sigpack', sample=ALL_SAMPLES),
         taginfo=expand('scratch/taginfo/{sample}_{{tile}}.txt.gz', sample=ALL_SAMPLES),
-        score_cutoffs='scratch/sigdists/signal-cutoffs.txt'
+        score_cutoffs=lambda wc: (
+            'scratch/sigdists-r{round:02d}/signal-cutoffs.txt'.format(round=int(wc.round)-1))
     output:
-        map(temp, expand('scratch/taginfo-fl/{sample}_{{tile,[^_]+}}.txt.gz',
-                sample=ALL_SAMPLES))
+        taginfo=map(temp, expand('scratch/taginfo-fl-r{{round,[^0].|.[^0]}}/'
+                                 '{sample}_{{tile,[^_]+}}.txt.gz', sample=ALL_SAMPLES)),
+        sigdists=temp('scratch/sigdists-r{round,[^0].|.[^0]}/pos_{tile}.sigdists')
+    params: CONF=CONF.confdata, BINDIR=BINDIR, BGZIP_CMD=BGZIP_CMD
     run:
-        for signals, taginfo, out in zip(input.signals, input.taginfo, output):
-            shell('{BINDIR}/tailseq-polya-ruler {wildcards.tile} {signals} \
-                {input.score_cutoffs} {CONF[polyA_finder][signal_analysis_trigger]} \
-                {CONF[polyA_ruler][downhill_extension_weight]} \
-                {taginfo} | {BGZIP_CMD} -c > {out}')
+        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/measure-polya-lengths.py')
+
+
+TARGETS.extend(['stats/polya-score-cutoffs-bases.txt',
+                'stats/polya-score-cutoffs.txt'])
+rule finalize_measurement_params:
+    input:
+        cutoff_values='scratch/sigdists-r{round:02d}/signal-cutoffs.txt'.format(
+                        round=CONF['polyA_ruler']['signal_resampling_rounds']),
+        cutoff_bases='scratch/stats/polya-score-cutoffs-bases-r{round:02d}.txt'.format(
+                        round=CONF['polyA_ruler']['signal_resampling_rounds'])
+    output:
+        cutoff_values='stats/polya-score-cutoffs.txt',
+        cutoff_bases='stats/polya-score-cutoffs-bases.txt'
+    shell: 'cp {input.cutoff_values} {output.cutoff_values} && \
+            cp {input.cutoff_bases} {output.cutoff_bases}'
 
 
 TARGETS.extend(expand('taginfo/{sample}.txt.gz', sample=ALL_SAMPLES))
 rule merge_and_deduplicate_taginfo:
-    input: expand('scratch/taginfo-fl/{{sample}}_{tile}.txt.gz', tile=TILES)
+    # Round number for taginfo files are actually based on parameters
+    # of one round behind. Thus, use the file for one step later.
+    input:
+        expand('scratch/taginfo-fl-r{round:02d}/{{sample}}_{tile}.txt.gz',
+               tile=TILES, round=[CONF['polyA_ruler']['signal_resampling_rounds'] + 1])
     output: 'taginfo/{sample}.txt.gz'
     threads: 12
     run:
