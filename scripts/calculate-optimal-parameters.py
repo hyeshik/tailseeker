@@ -61,10 +61,14 @@ def find_eqodds_point(poscounts, negcounts, xsamples):
     logLRfun = lambda x: np.log(max(VERY_SMALL_PROBABILITY, poskde(x)) /
                                 max(VERY_SMALL_PROBABILITY, negkde(x)))
 
-    try:
-        return optimize.bisect(logLRfun, CUTOFF_RANGE_LOW, CUTOFF_RANGE_HIGH)
-    except ValueError:
-        return
+    for cutoff_limit_high in CUTOFF_RANGE_HIGH:
+        try:
+            r = optimize.bisect(logLRfun, CUTOFF_RANGE_LOW, cutoff_limit_high)
+            if CUTOFF_RANGE_LOW < r < cutoff_limit_high:
+                return r
+        except ValueError:
+            pass
+    return
 
 def find_all_eqodds_point(poscounts, negcounts, xsamples):
     cycles_to_try = np.where((poscounts.sum(axis=1) >= MIN_SPOTS_FOR_DIST) &
@@ -156,7 +160,9 @@ def calculate_optimal_cutoffs(sigdists, tiles):
     tile_cutoffs_inferred = {}
     for tileid, tile_cutoffs in tile_cutoffs.items():
         cutoffs = tile_cutoffs.copy()
-        for c in set(all_cycles) - set(tile_cutoffs.keys()):
+        determined_cycles = set(cycle for cycle, cutoff in cutoffs.items()
+                                if cutoff is not None)
+        for c in set(all_cycles) - determined_cycles:
             cutoffs[c] = runwide_cutoffs_inferred[c]
         tile_cutoffs_inferred[tileid] = cutoffs
 
