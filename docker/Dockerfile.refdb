@@ -1,0 +1,12 @@
+FROM hyeshik/tailseeker:latest
+MAINTAINER Hyeshik Chang <hyeshik@snu.ac.kr>
+ARG genome
+
+RUN cd /opt/tailseeker/refdb/level2 && \
+    snakemake -j -- $genome && \
+    rm -rf tmp && \
+    cd ../level3 && \
+    snakemake -j -- $genome && \
+    rm -rf tmp
+
+# ex: ts=8 sts=4 sw=4 et
