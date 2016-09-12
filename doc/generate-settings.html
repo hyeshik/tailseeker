@@ -1,0 +1,806 @@
+<html>
+<head>
+<link href='http://fonts.googleapis.com/css?family=Open+Sans:400,300,300italic,400italic,600' rel='stylesheet' type='text/css'>
+<link href="//netdna.bootstrapcdn.com/font-awesome/3.1.1/css/font-awesome.css" rel="stylesheet">
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+<title>Tailseeker 3.1 :: Basic Settings Generator</title>
+<style>
+body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, 
+pre, form, fieldset, input, textarea, p, blockquote, th, td { 
+  padding:0;
+  margin:0;}
+
+fieldset, img {border:0}
+
+ol, ul, li {list-style:none}
+
+:focus {outline:none}
+
+body,
+input,
+textarea,
+select {
+  font-family: 'Open Sans', sans-serif;
+  font-size: 16px;
+  color: #4c4c4c;
+}
+
+h1.maintitle {
+  font-weight: bold;
+  color: #3a57af;
+  text-align: left;
+  padding-left: 20px;
+}
+
+h3 {
+  font-weight: bold;
+  color: #3a57af;
+  text-align: left;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+p {
+  margin-bottom: 10px;
+}
+
+div#generated_configuration {
+  color: black;
+  margin-bottom: 25px;
+  margin-right: 20px;
+  float: top;
+  position: fixed;
+  left: 600px;
+}
+
+textarea#conf {
+  width: 500px;
+  height: 500px;
+  font-family: monospace;
+  color: black;
+  background: #f3f3f3;
+  padding: 15px;
+  border: 1px solid #7070a0;
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 300;
+  color: #4c4c4c;
+  text-align: center;
+  padding-top: 10px;
+  margin-bottom: 10px;
+}
+
+html{
+  background-color: #ffffff;
+}
+
+div.configuration {
+  float: left;
+  width: 600px;
+}
+
+.testbox {
+  margin: 20px auto;
+  width: 500px; 
+  -webkit-border-radius: 8px/7px; 
+  -moz-border-radius: 8px/7px; 
+  border-radius: 8px/7px; 
+  background-color: #ebebeb; 
+  -webkit-box-shadow: 1px 2px 5px rgba(0,0,0,.31); 
+  -moz-box-shadow: 1px 2px 5px rgba(0,0,0,.31); 
+  box-shadow: 1px 2px 5px rgba(0,0,0,.31); 
+  border: solid 1px #cbc9c9;
+  padding-bottom: 17px;
+}
+
+input[type=radio] {
+  visibility: hidden;
+}
+
+form{
+  margin: 0 30px;
+}
+
+label.radio {
+  cursor: pointer;
+  text-indent: 35px;
+  overflow: visible;
+  display: inline-block;
+  position: relative;
+  margin-bottom: 15px;
+}
+
+label.radio:before {
+  background: #3a57af;
+  content:'';
+  position: absolute;
+  top:2px;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 100%;
+}
+
+label.radio:after {
+  opacity: 0;
+  content: '';
+  position: absolute;
+  width: 0.5em;
+  height: 0.25em;
+  background: transparent;
+  top: 7.5px;
+  left: 4.5px;
+  border: 3px solid #ffffff;
+  border-top: none;
+  border-right: none;
+
+  -webkit-transform: rotate(-45deg);
+  -moz-transform: rotate(-45deg);
+  -o-transform: rotate(-45deg);
+  -ms-transform: rotate(-45deg);
+  transform: rotate(-45deg);
+}
+
+input[type=radio]:checked + label:after {
+  opacity: 1;
+}
+
+hr{
+  color: #a9a9a9;
+  opacity: 0.3;
+}
+
+input[type=text],input[type=password]{
+  width: 200px; 
+  height: 39px; 
+  -webkit-border-radius: 0px 4px 4px 0px/5px 5px 4px 4px; 
+  -moz-border-radius: 0px 4px 4px 0px/0px 0px 4px 4px; 
+  border-radius: 0px 4px 4px 0px/5px 5px 4px 4px; 
+  background-color: #fff; 
+  -webkit-box-shadow: 1px 2px 5px rgba(0,0,0,.09); 
+  -moz-box-shadow: 1px 2px 5px rgba(0,0,0,.09); 
+  box-shadow: 1px 2px 5px rgba(0,0,0,.09); 
+  border: solid 1px #cbc9c9;
+  margin-left: -5px;
+  margin-top: 13px; 
+  padding-left: 10px;
+}
+
+input[type=password]{
+  margin-bottom: 25px;
+}
+
+#icon {
+  display: inline-block;
+  width: 30px;
+  background-color: #3a57af;
+  padding: 8px 0px 8px 15px;
+  margin-left: 15px;
+  -webkit-border-radius: 4px 0px 0px 4px; 
+  -moz-border-radius: 4px 0px 0px 4px; 
+  border-radius: 4px 0px 0px 4px;
+  color: white;
+  -webkit-box-shadow: 1px 2px 5px rgba(0,0,0,.09);
+  -moz-box-shadow: 1px 2px 5px rgba(0,0,0,.09); 
+  box-shadow: 1px 2px 5px rgba(0,0,0,.09); 
+  border: solid 0px #cbc9c9;
+}
+
+.gender {
+  margin-left: 30px;
+  margin-bottom: 30px;
+}
+
+.accounttype{
+  margin-left: 8px;
+  margin-top: 20px;
+}
+
+a.button {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  padding: 6px 25px 0px 20px;
+  margin: 10px 8px 20px 0px;
+  display: inline-block;
+  float: right;
+  text-decoration: none;
+  width: 50px; height: 27px; 
+  -webkit-border-radius: 5px; 
+  -moz-border-radius: 5px; 
+  border-radius: 5px; 
+  background-color: #3a57af; 
+  -webkit-box-shadow: 0 3px rgba(58,87,175,.75); 
+  -moz-box-shadow: 0 3px rgba(58,87,175,.75); 
+  box-shadow: 0 3px rgba(58,87,175,.75);
+  transition: all 0.1s linear 0s; 
+  top: 0px;
+  position: relative;
+}
+
+a.button:hover {
+  top: 3px;
+  background-color:#2e458b;
+  -webkit-box-shadow: none; 
+  -moz-box-shadow: none; 
+  box-shadow: none;
+  
+}
+
+.dualtextboxform label {
+  width: 130px;
+  display: inline-block;
+  font-weight: bold;
+}
+
+.dualtextboxform input[type=text] {
+  width: 80px;
+  margin-left: 10px;
+  margin-right: 10px;
+}
+
+.sampletablerow span.name {
+  width: 120px;
+  display: inline-block;
+}
+.sampletablerow span.index {
+  width: 100px;
+  display: inline-block;
+}
+.sampletablerow span.length {
+  width: 80px;
+  display: inline-block;
+}
+.sampletablerow span.delete {
+  width: 50px;
+}
+.sampletablerow span.name input {
+  width: 110px;
+}
+.sampletablerow span.index input {
+  width: 90px;
+}
+.sampletablerow span.length input {
+  width: 70px;
+}
+.sampletablerow span.delete a.button {
+  width: 35px;
+  float: none;
+  text-align: center;
+  bottom: 3px;
+  top: unset;
+}
+.sampletablerow span.name a.button {
+  width: 35px;
+  float: none;
+  text-align: center;
+  bottom: 3px;
+  top: unset;
+}
+
+.sourcetablerow span.datadir {
+  width: 150px;
+  display: inline-block;
+}
+.sourcetablerow span.lane {
+  width: 50px;
+  display: inline-block;
+}
+.sourcetablerow span.length {
+  width: 80px;
+  display: inline-block;
+}
+.sourcetablerow span.delete {
+  width: 50px;
+}
+.sourcetablerow span.datadir input {
+  width: 140px;
+}
+.sourcetablerow span.lane input {
+  width: 40px;
+}
+.sourcetablerow span.length input {
+  width: 70px;
+}
+.sourcetablerow span.delete a.button {
+  width: 35px;
+  float: none;
+  text-align: center;
+  bottom: 3px;
+  top: unset;
+}
+.sourcetablerow span.name a.button {
+  width: 35px;
+  float: none;
+  text-align: center;
+  bottom: 3px;
+  top: unset;
+}
+
+</style>
+</head>
+<body>
+<script language="javascript">
+function update_configuration()
+{
+  var settings_text = 'include:\n    - defaults.conf\n\n';
+
+  // Run ID
+  settings_text += 'run_id:         ts001\n\n'
+
+  // Data sources
+  var datasource_form = document.getElementById('sourceform');
+  var datasource_divs = datasource_form.getElementsByTagName('div');
+  settings_text += 'sources:\n'
+  var sourcenum = 0;
+  for (i = 0; i < datasource_divs.length; i++) {
+    if (datasource_divs[i].className == 'sourcetablerow') {
+      var inputs = datasource_divs[i].getElementsByTagName('input');
+      if (inputs.length < 2)
+        continue;
+      datadir = inputs[0].value;
+      lane = inputs[1].value;
+      if (!datadir || !lane)
+        continue;
+      chemistry = datasource_divs[i].getElementsByTagName('select')[0].value;
+      laneid = String.fromCharCode(97 + sourcenum++);
+      settings_text += '    - id:       ' + laneid + '\n' +
+          '      type:     ' + chemistry + '\n' +
+          '      dir:      ' + datadir + '\n' +
+          '      lane:     ' + lane + '\n';
+    }
+  }
+  settings_text += '\n';
+
+  // Experimental samples
+  var experimentalsamples_form = document.getElementById('experimental_samples');
+  var experimentalsamples_divs = experimentalsamples_form.getElementsByTagName('div');
+  settings_text += 'experimental_samples:\n'
+  for (i = 0; i < experimentalsamples_divs.length; i++) {
+    if (experimentalsamples_divs[i].className == 'sampletablerow') {
+      var inputs = experimentalsamples_divs[i].getElementsByTagName('input');
+      if (inputs.length < 2)
+        continue;
+      name = inputs[0].value;
+      index = inputs[1].value;
+      if (!name || !index)
+        continue;
+      settings_text += '    ' + name + ': ' + index + '\n';
+    }
+  }
+  settings_text += '\n';
+
+  // Reference genome
+  var referencegenome_form = document.getElementById('reference_genome_form');
+  reference_genome = referencegenome_form.elements.namedItem('genome').value;
+  settings_text += 'reference_set:\n    _exp: ' + reference_genome + '\n\n';
+
+  // Spike-in samples
+  var spikeinsamples_form = document.getElementById('spikein_samples');
+  var spikeinsamples_divs = spikeinsamples_form.getElementsByTagName('div');
+  settings_text += 'spikein_samples:\n'
+  spikein_lengths_text = '\nspikein_lengths:\n';
+  for (i = 0; i < spikeinsamples_divs.length; i++) {
+    if (spikeinsamples_divs[i].className == 'sampletablerow') {
+      var inputs = spikeinsamples_divs[i].getElementsByTagName('input');
+      if (inputs.length < 3)
+        continue;
+      name = inputs[0].value;
+      index = inputs[1].value;
+      length = inputs[2].value;
+      settings_text += '    ' + name + ': ' + index + '\n';
+      spikein_lengths_text += '    ' + name + ': ' + length + '\n';
+    }
+  }
+  settings_text += spikein_lengths_text + '\n';
+
+  // Read cycles
+  settings_text += 'read_cycles:\n';
+  var cycle5start = document.getElementById('cycle5start').value;
+  var cycle5length = document.getElementById('cycle5length').value;
+  var cycleIstart = document.getElementById('cycleIstart').value;
+  var cycleIlength = document.getElementById('cycleIlength').value;
+  var cycle3start = document.getElementById('cycle3start').value;
+  var cycle3length = document.getElementById('cycle3length').value;
+  settings_text += '    R5: [' + cycle5start + ', ' + (
+      parseInt(cycle5start) + parseInt(cycle5length) - 1) + ', 1]\n';
+  settings_text += '    Ri: [' + cycleIstart + ', ' + (
+      parseInt(cycleIstart) + parseInt(cycleIlength) - 1) + ', 2]\n';
+  settings_text += '    R3: [' + cycle3start + ', ' + (
+      parseInt(cycle3start) + parseInt(cycle3length) - 1) + ', 3]\n\n';
+
+  // Duplicate check regions
+  settings_text += 'dupcheck_regions:\n';
+  settings_text += '    _exp: [[' +
+      (parseInt(cycle5start) + 20) + ', ' +
+      (parseInt(cycle5start) + 34) + '], [' +
+      (parseInt(cycle3start)) + ', ' +
+      (parseInt(cycle3start) + 14) + ']]\n\n';
+
+  // Analysis level
+  var anallevel_form = document.getElementById('analysis_level_form');
+  analysis_level = anallevel_form.elements.namedItem('analysisLevel').value;
+  settings_text += 'analysis_level: ' + analysis_level + '\n\n';
+
+  // Use GSNAP?
+  var gsnap_form = document.getElementById('opt_in_GSNAP');
+  use_gsnap = gsnap_form.elements.namedItem('GSNAP').value;
+  if (use_gsnap == 'yes')
+    settings_text += 'performance:\n    enable_gsnap: yes\n\n';
+  else
+    settings_text += 'performance:\n    enable_gsnap: no\n\n';
+
+  // Use AYB?
+  var ayb_form = document.getElementById('opt_in_AYB');
+  use_ayb = ayb_form.elements.namedItem('AYB').value;
+  if (use_ayb == 'AYB')
+    settings_text += 'third_party_basecaller:\n    R5: AYB\n\n';
+  else
+    settings_text += 'third_party_basecaller:\n    R5: \'\'\n\n';
+
+  // Replace the configuration
+  var conftag = document.getElementById('conf');
+  conftag.innerHTML = settings_text;
+}
+
+function delete_row(obj)
+{
+  var rowobj = obj.parentNode.parentNode;
+  rowobj.parentNode.removeChild(rowobj);
+  update_configuration();
+}
+
+function add_new_data_source()
+{
+  var newtag = document.createElement('div');
+
+  newtag.innerHTML = "\
+      <div class=\"sourcetablerow\">\
+        <span class=\"datadir\"><input type=\"text\" value=\"\" onchange=\"update_configuration()\"/></span>\
+        <span class=\"lane\">\
+          <input type=\"text\" value=\"\" onchange=\"update_configuration()\"/></span>\
+        <span class=\"chemistry\" onchange=\"update_configuration()\">\
+          <select>\
+            <option value=\"MiSeq_V2\" selected>MiSeq v2</option>\
+            <option value=\"MiSeq_V3\">MiSeq v3</option>\
+            <option value=\"HiSeq_RapidV1\">HiSeq Rapid v1</option>\
+            <option value=\"HiSeq_RapidV2\">HiSeq Rapid v2</option>\
+          </select>\
+        </span>\
+        <span class=\"delete\"><a class=\"button\" onclick=\"delete_row(this)\">Delete</a></span>\
+      </div>";
+
+  document.getElementById('sourcetable').appendChild(newtag);
+  update_configuration();
+}
+
+function add_new_spikein_sample()
+{
+  var newtag = document.createElement('div');
+
+  newtag.innerHTML = "\
+      <div class=\"sampletablerow\">\
+        <span class=\"name\"><input type=\"text\" value=\"\" onchange=\"update_configuration()\"/></span>\
+        <span class=\"index\"><input type=\"text\" value=\"\" onchange=\"update_configuration()\"/></span>\
+        <span class=\"length\"><input type=\"text\" value=\"\" onchange=\"update_configuration()\"/></span>\
+        <span class=\"delete\"><a class=\"button\" onclick=\"delete_row(this)\">Delete</a></span>\
+      </div>";
+
+  document.getElementById('spikeins_table').appendChild(newtag);
+  update_configuration();
+}
+
+function add_new_experimental_sample()
+{
+  var newtag = document.createElement('div');
+
+  newtag.innerHTML = "\
+      <div class=\"sampletablerow\">\
+        <span class=\"name\"><input type=\"text\" value=\"\" onchange=\"update_configuration()\"/></span>\
+        <span class=\"index\"><input type=\"text\" value=\"\" onchange=\"update_configuration()\"/></span>\
+        <span class=\"delete\"><a class=\"button\" onclick=\"delete_row(this)\">Delete</a></span>\
+      </div>";
+
+  document.getElementById('expsample_table').appendChild(newtag);
+  update_configuration();
+}
+
+</script>
+
+<div class="configuration">
+
+<h1 class="maintitle">Settings for Tailseeker 3</h1>
+
+<div class="testbox">
+  <h1>Analysis Level</h1>
+
+  <form action="/" id="analysis_level_form">
+    <hr>
+    You can run Tailseeker for different ranges of provided
+    functions. It can be used for essential tail length
+    measurement only (level 1) or for getting the full gene-
+    level statistics (level 3). Higher level will include
+    all result data from lower level, but it takes much more
+    space, time, and external dependencies.
+    <div class="accounttype">
+      <input type="radio" value="1" id="analysisLevel1" name="analysisLevel" onchange="update_configuration()"/>
+      <label for="analysisLevel1" class="radio">Level 1: Tail length measurement and QC.</label><br/>
+      <input type="radio" value="2" id="analysisLevel2" name="analysisLevel" onchange="update_configuration()"/>
+      <label for="analysisLevel2" class="radio">Level 2: Genome/gene-level processing.</label><br/>
+      <input type="radio" value="3" id="analysisLevel3" name="analysisLevel" onchange="update_configuration()" checked/>
+      <label for="analysisLevel3" class="radio">Level 3: Advanced gene annotations.</label>
+    </div>
+  </form>
+</div>
+
+<div class="testbox">
+  <h1>Third-party Base-calling</h1>
+
+  <form action="/" id="opt_in_AYB">
+    <hr>
+    The standard basecaller of the Illumina sequencer is
+    sometimes fail to produce high quality basecalls for
+    5′-side read (usually read 1) when long poly(A) tail is
+    attached on its 3′-side. AYB is much stronger at reliable
+    basecalling in this case, gives 10-50% more mappable reads
+    for tags adjacent to poly(A) tails &gt; 100 nt.
+    <hr>
+    <div class="accounttype">
+      <input type="radio" value="AYB" id="AYB1" name="AYB" onchange="update_configuration()" checked/>
+      <label for="AYB1" class="radio">Use AYB (more accurate)</label><br/>
+      <input type="radio" value="RTA" id="AYB2" name="AYB" onchange="update_configuration()" />
+      <label for="AYB2" class="radio">Use Illumina RTA (faster)</label><br/>
+    </div>
+  </form>
+</div>
+
+<div class="testbox">
+  <h1>GSNAP Alignment</h1>
+
+  <form action="/" id="opt_in_GSNAP">
+    <hr>
+    <p>
+      Tailseeker 3 uses STAR as the primary sequence alignment
+      software. Optionally, GSNAP can be used to rescue unmapped
+      sequences by STAR. Tags with long poly(A) tails sometimes
+      suffer from low sequence read quality, and this leads
+      to failure in identification of tags. Usually, GSNAP
+      rescues ~0.5% of total reads and ~10% among long poly(A)
+      tails. However, it lengthens total running time of the
+      pipeline by about 10-fold.</p>
+
+    <p>Do you want to use GSNAP together with STAR?</p>
+    <hr>
+    <div class="accounttype">
+      <input type="radio" value="yes" id="GSNAP1" name="GSNAP" onchange="update_configuration()" checked/>
+      <label for="GSNAP1" class="radio">Use GSNAP with STAR (more sensitive)</label><br/>
+      <input type="radio" value="no" id="GSNAP2" name="GSNAP" onchange="update_configuration()" />
+      <label for="GSNAP2" class="radio">Use STAR only (a lot faster)</label><br/>
+    </div>
+  </form>
+</div>
+
+<div class="testbox">
+  <h1>Sequencing Cycles</h1>
+
+  <form action="/">
+    <hr>
+    Specify sequencing cycle ranges in 1-based right-inclusive coordinates.
+    Please note that Illumina HiSeq usually spend one more cycle for the Index
+    read. In those machines, six nucleotides index will take up seven cycles,
+    whose last cycle needs to be skipped.
+    <hr>
+    <div class="dualtextboxform">
+      <label for="cycle5start">5′-read</label>
+      from <input type="text" value="1" name="cycle5start" id="cycle5start" onchange="update_configuration()"/>
+      length <input type="text" value="51" name="cycle5length" id="cycle5length" onchange="update_configuration()"/><br/>
+
+      <label for="cycleIstart">Index read</label>
+      from <input type="text" value="52" name="cycleIstart" id="cycleIstart" onchange="update_configuration()"/>
+      length <input type="text" value="6" name="cycleIlength" id="cycleIlength" onchange="update_configuration()"/><br/>
+
+      <label for="cycle3start">3′-read</label>
+      from <input type="text" value="58" name="cycle3start" id="cycle3start" onchange="update_configuration()"/>
+      length <input type="text" value="251" name="cycle3length" id="cycle3length" onchange="update_configuration()"/><br/>
+    </div>
+  </form>
+</div>
+
+<div class="testbox">
+  <h1>Data Sources</h1>
+  <form action="/" id="sourceform">
+    <hr>
+    <div class="sourcetable" id="sourcetable">
+      <div class="sourcetablerow">
+        <span class="datadir">Data dir.</span>
+        <span class="lane">Lane</span>
+        <span class="chemistry">Chemistry</span>
+        <span class="delete"></span>
+      </div>
+      <div class="sourcetablerow" id="source_1">
+        <span class="datadir">
+          <input type="text" value="/data/miseq/2015/150319_M00714_0319_000000000-AWLWL" name="source_1_dir" onchange="update_configuration()"/></span>
+        <span class="lane">
+          <input type="text" value="1" name="source_1_lane" onchange="update_configuration()"/></span>
+        <span class="chemistry">
+          <select name="source_1_chemistry" onchange="update_configuration()">
+            <option value="MiSeq_V2" selected>MiSeq v2</option>
+            <option value="MiSeq_V3">MiSeq v3</option>
+            <option value="HiSeq_RapidV1">HiSeq Rapid v1</option>
+            <option value="HiSeq_RapidV2">HiSeq Rapid v2</option>
+          </select>
+        </span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+      <div class="sourcetablerow" id="source_2">
+        <span class="datadir">
+          <input type="text" value="/data/miseq/2015/150319_M00714_0319_000000000-AWLWL" name="source_2_dir" onchange="update_configuration()"/></span>
+        <span class="lane">
+          <input type="text" value="2" name="source_2_lane" onchange="update_configuration()"/></span>
+        <span class="chemistry">
+          <select name="source_2_chemistry" onchange="update_configuration()">
+            <option value="MiSeq_V2" selected>MiSeq v2</option>
+            <option value="MiSeq_V3">MiSeq v3</option>
+            <option value="HiSeq_RapidV1">HiSeq Rapid v1</option>
+            <option value="HiSeq_RapidV2">HiSeq Rapid v2</option>
+          </select>
+        </span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+    </div>
+    <div class="sourcetablerow" id="source_3">
+      <span class="name"><a class="button" onclick="add_new_data_source()">Add</a></span>
+    </div>
+  </form>
+</div>
+
+<div class="testbox">
+  <h1>Poly(A) Standards</h1>
+  <form action="/" id="spikein_samples">
+    <hr>
+    Poly(A) standards are used for quality checks of poly(A) measurements.
+    <hr>
+    <div class="sampletable" id="spikeins_table">
+      <div class="sampletablerow">
+        <span class="name">Name</span>
+        <span class="index">Index</span>
+        <span class="length">Length</span>
+        <span class="delete"></span>
+      </div>
+      <div class="sampletablerow" id="polya_1">
+        <span class="name">
+          <input type="text" value="spk8" name="polya_1_name" id="polya_1_name" onchange="update_configuration()"/></span>
+        <span class="index">
+          <input type="text" value="CGATGT" name="polya_1_index" id="polya_1_index" onchange="update_configuration()"/></span>
+        <span class="length">
+          <input type="text" value="8" name="polya_1_length" id="polya_1_length" onchange="update_configuration()"/></span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+      <div class="sampletablerow" id="polya_2">
+        <span class="name">
+          <input type="text" value="spk16" name="polya_2_name" id="polya_2_name" onchange="update_configuration()"/></span>
+        <span class="index">
+          <input type="text" value="TTAGGC" name="polya_2_index" id="polya_2_index" onchange="update_configuration()"/></span>
+        <span class="length">
+          <input type="text" value="16" name="polya_2_length" id="polya_2_length" onchange="update_configuration()"/></span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+      <div class="sampletablerow" id="polya_3">
+        <span class="name">
+          <input type="text" value="spk32" name="polya_3_name" id="polya_3_name" onchange="update_configuration()"/></span>
+        <span class="index">
+          <input type="text" value="TGACCA" name="polya_3_index" id="polya_3_index" onchange="update_configuration()"/></span>
+        <span class="length">
+          <input type="text" value="32" name="polya_3_length" id="polya_3_length" onchange="update_configuration()"/></span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+      <div class="sampletablerow" id="polya_4">
+        <span class="name">
+          <input type="text" value="spk64" name="polya_4_name" id="polya_4_name" onchange="update_configuration()"/></span>
+        <span class="index">
+          <input type="text" value="ACAGTG" name="polya_4_index" id="polya_4_index" onchange="update_configuration()"/></span>
+        <span class="length">
+          <input type="text" value="64" name="polya_4_length" id="polya_4_length" onchange="update_configuration()"/></span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+      <div class="sampletablerow" id="polya_5">
+        <span class="name">
+          <input type="text" value="spk118" name="polya_5_name" id="polya_5_name" onchange="update_configuration()"/></span>
+        <span class="index">
+          <input type="text" value="CAGATC" name="polya_5_index" id="polya_5_index" onchange="update_configuration()"/></span>
+        <span class="length">
+          <input type="text" value="118" name="polya_5_length" id="polya_5_length" onchange="update_configuration()"/></span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+      <div class="sampletablerow" id="polya_6">
+        <span class="name">
+          <input type="text" value="spk128" name="polya_6_name" id="polya_6_name" onchange="update_configuration()"/></span>
+        <span class="index">
+          <input type="text" value="ACTTGA" name="polya_6_index" id="polya_6_index" onchange="update_configuration()"/></span>
+        <span class="length">
+          <input type="text" value="128" name="polya_6_length" id="polya_6_length" onchange="update_configuration()"/></span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+    </div>
+    <div class="sampletablerow">
+      <span class="name"><a class="button" onclick="add_new_spikein_sample()">Add</a></span>
+    </div>
+  </form>
+</div>
+
+<div class="testbox">
+  <h1>Experimental Samples</h1>
+  <form action="/" id="experimental_samples">
+    <hr>
+    <div class="sampletable" id="expsample_table">
+      <div class="sampletablerow">
+        <span class="name">Name</span>
+        <span class="index">Index</span>
+        <span class="delete"></span>
+      </div>
+      <div class="sampletablerow" id="exp_1">
+        <span class="name">
+          <input type="text" value="Control" name="polya_1_name" id="polya_1_name" onchange="update_configuration()"/></span>
+        <span class="index">
+          <input type="text" value="TTAGGT" name="polya_1_index" id="polya_1_index" onchange="update_configuration()"/></span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+      <div class="sampletablerow" id="exp_2">
+        <span class="name">
+          <input type="text" value="Knockdown" name="polya_2_name" id="polya_2_name" onchange="update_configuration()"/></span>
+        <span class="index">
+          <input type="text" value="GACTAC" name="polya_2_index" id="polya_2_index" onchange="update_configuration()"/></span>
+        <span class="delete"><a class="button" onclick="delete_row(this)">Delete</a></span>
+      </div>
+    </div>
+    <div class="sampletablerow">
+      <span class="name"><a class="button" onclick="add_new_experimental_sample()">Add</a></span>
+    </div>
+  </form>
+</div>
+
+
+<div class="testbox">
+  <h1>Reference Genome</h1>
+
+  <form action="/" id="reference_genome_form">
+  <hr>
+  Tailseeker 3 supports EMSEMBL-style genome and gene annotations.
+  If you cannot find an appropriate one in your study, you can
+  use analysis level 1, which does not rely on genome or gene annotations.
+  <hr>
+  <input type="radio" value="BDGP6" name="genome" id="genome_BDGP6" onchange="update_configuration()"/>
+  <label for="genome_BDGP6" class="radio" chec>BDGP6 <i>(Drosophila melanogaster)</i></label><br/>
+  <input type="radio" value="GRCh10" name="genome" id="genome_GRCh38" onchange="update_configuration()"/>
+  <label for="genome_GRCh38" class="radio" chec>GRCh38 <i>(Homo sapiens)</i></label><br/>
+  <input type="radio" value="GRCm10" name="genome" id="genome_GRCm38" onchange="update_configuration()"/>
+  <label for="genome_GRCm38" class="radio" chec>GRCm38 <i>(Mus musculus)</i></label><br/>
+  <input type="radio" value="GRCz10" name="genome" id="genome_GRCz10" checked onchange="update_configuration()"/>
+  <label for="genome_GRCz10" class="radio" chec>GRCz10 <i>(Danio rerio)</i></label><br/>
+  <input type="radio" value="JGIxl91" name="genome" id="genome_JGIxl91" onchange="update_configuration()"/>
+  <label for="genome_JGIxl91" class="radio" chec>JGIxl91 <i>(Xenopus laevis)</i></label><br/>
+  <input type="radio" value="Rnor_6.0" name="genome" id="genome_Rnor6.0" onchange="update_configuration()"/>
+  <label for="genome_Rnor6.0" class="radio" chec>Rnor_6.0 <i>(Rattus norvegicus)</i></label><br/>
+  <input type="radio" value="WBcel235" name="genome" id="genome_WBcel235" onchange="update_configuration()"/>
+  <label for="genome_WBcel235" class="radio" chec>WBcel_235 <i>(Caenorhabditis elegans)</i></label><br/>
+  </form>
+</div>
+</div>
+
+<div id="generated_configuration">
+  <h3>Generated Settings</h3>
+  <p>
+    Please save the following configuration as a file named “tailseeker.yaml”
+    in an empty directory. And, run “tseek run -j” there.
+  </p>
+  <textarea id="conf">
+Yay!
+</textarea>
+</div>
+<script language="javascript">
+update_configuration();
+</script>
+</body>
+</html>
