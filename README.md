@@ -35,6 +35,10 @@ Download the image and a wrapper script:
     wget http://bit.ly/tseek-docker
     chmod 755 tseek-docker
 
+Prepare a project configuration on
+[this page](http://hyeshik.github.io/tailseeker/generate-settings.html).
+Fill `/data` in “Data dir.” instead of the original paths.
+
 Set the environment variables up:
 
     # Point the directory holding the raw data from an Illumina sequencer
@@ -43,18 +47,9 @@ Set the environment variables up:
     # Create an empty directory for new temporary and output files
     mkdir myproject    # replace myproject with your favorite name
     cd myproject
-
-    # Download a configuration template from the repository or
-    # copy from one of your previous projects
-    wget -O tailseeker.yaml http://bit.ly/tseek-settings-miseq
-
-    # Modify the settings to adapt to the current task
-    vi tailseeker.yaml    # or with your preferred text editor
-
-    # -> Change the value of "dir" under the "sources" section to
-    #    "/data" where the raw data directory is mounted in our Docker
-    #    container.
-    # -> Edit the list of samples, barcodes and spike-ins as you need.
+    cat > tailseeker.yaml
+    # and paste the content generated from the settings web page.
+    # Press Ctrl-D.
 
 Run the pipeline:
 
@@ -131,11 +126,10 @@ the available genomes are shown in the first section of this tutorial.
   2. Create an empty work directory. This is used for storing the final result
      files and the intermediate files which you may want to look into when
      something went wrong.
-  3. Copy `templates/miseq-v2.yaml` to the work directory as a new name `tailseeker.yaml`.
-  4. Edit the copied setting file, `tailseeker.yaml`, to change the options and
-     paths to the directories. More options are specified in `conf/default-miseq.conf` and
-     `conf/defaults.conf`. They are overridden if you put lines in your `tailseeker.yaml`.
-  5. Run the pipeline with one of these commands:
+  3. Prepare a settings file on
+     [this page](http://hyeshik.github.io/tailseeker/generate-settings.html). Paste the
+     content into a new file `tailseeker.yaml` inside the work directory.
+  4. Run the pipeline with one of these commands:
  
      ```sh
      # In case you have an access to a job queuing system of a cluster. Change 150 to the
@@ -149,10 +143,10 @@ the available genomes are shown in the first section of this tutorial.
      All [Snakemake options](https://bitbucket.org/snakemake/snakemake/wiki/Documentation#markdown-header-all-options)
      can be used in `tseek run`, too.
 
-  7. Take a look at the `qcplots/` on the work directory. The plots there show how
+  5. Take a look at the `qcplots/` on the work directory. The plots there show how
      poly(A) length calling was accurate.
 
-  8. Perform the downstream analyses using the output files.
+  6. Perform the downstream analyses using the output files.
 
 
 ## Read name format (analysis level 1 only)
