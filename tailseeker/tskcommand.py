@@ -26,69 +26,43 @@ import sys
 import tailseeker
 
 
-class CommandHandlers:
+def check_configuration():
+    if not os.path.exists('tailseeker.yaml'):
+        print('ERROR: Configuration file "tailseeker.yaml" does '
+              'not exist in the current directory.', file=sys.stderr)
+        sys.exit(1)
 
-    COMMANDS = ['init', 'run', 'clean', 'clear']
+def proxy_to_snakemake(tailseeker_dir):
+    from snakemake import main
 
-    def __init__(self, tailseeker_dir):
-        self.tailseeker_dir = tailseeker_dir
-        self.tailseeker_main_file = os.path.join(tailseeker_dir, 'tailseeker', 'main.py')
+    tailseeker_main_file = os.path.join(tailseeker_dir, 'tailseeker', 'main.py')
 
-    def proxy_to_snakemake(self, command, target):
-        from snakemake import main
-
-        sys.argv[0] = '{} {}'.format(sys.argv[0], command)
+    if '-s' not in sys.argv and '--snakefile' not in sys.argv:
         sys.argv.insert(1, '-s')
-        sys.argv.insert(2, self.tailseeker_main_file)
-        if target:
-            sys.argv.append(target)
+        sys.argv.insert(2, tailseeker_main_file)
 
-        sys.exit(main())
-
-    def check_configuration(self):
-        if not os.path.exists('tailseeker.yaml'):
-            print('ERROR: Configuration file "tailseeker.yaml" does '
-                  'not exist in the current directory.', file=sys.stderr)
-            sys.exit(1)
-
-    def run(self):
-        self.check_configuration()
-        return self.proxy_to_snakemake('run', None)
-
-    def clean(self):
-        self.check_configuration()
-        return self.proxy_to_snakemake('clean', 'clean')
-
-    def clear(self):
-        self.check_configuration()
-        return self.proxy_to_snakemake('clear', 'clear')
-
+    sys.exit(main())
 
 def usage():
     print("""\
 Tailseeker {version} - High-throughput measurement of poly(A) tails
 
-Usage:  {command} <command> [options]
+Usage:  {command} [options] [target]
 
-Commands:
-  init      initiate and configure a project
-  run       run an analysis workflow
+Special targets:
   clean     clear intermediate files
   clear     clear all generated files
 """.format(version=tailseeker.__version__, command=sys.argv[0]))
 
-
 def main(tailseeker_dir):
-    if len(sys.argv) < 2 or sys.argv[1] not in CommandHandlers.COMMANDS:
+    if len(sys.argv) < 2:
         usage()
         return
 
     os.environ['TAILSEEKER_DIR'] = tailseeker_dir
 
-    command = sys.argv.pop(1)
-
-    handlers = CommandHandlers(tailseeker_dir)
-    getattr(handlers, command)()
+    check_configuration()
+    proxy_to_snakemake(tailseeker_dir)
 
 
 if __name__ == '__main__':

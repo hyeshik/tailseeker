@@ -134,14 +134,14 @@ the available genomes are shown in the first section of this tutorial.
      ```sh
      # In case you have an access to a job queuing system of a cluster. Change 150 to the
      # maximum number of jobs that you can put into the queue at a time.
-     tseek run -c qsub -j 150
+     tseek -c qsub -j 150
 
      # In case you have a single multi-core machine,
-     tseek run -j
+     tseek -j
      ```
 
      All [Snakemake options](https://bitbucket.org/snakemake/snakemake/wiki/Documentation#markdown-header-all-options)
-     can be used in `tseek run`, too.
+     can be used in `tseek`, too.
 
   5. Take a look at the `qcplots/` on the work directory. The plots there show how
      poly(A) length calling was accurate.
