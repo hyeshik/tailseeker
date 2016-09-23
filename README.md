@@ -53,7 +53,7 @@ Set the environment variables up:
 
 Run the pipeline:
 
-    ../tseek-docker run -j
+    ../tseek-docker -j
 
 Then, the results will be located in the current directory.
 
