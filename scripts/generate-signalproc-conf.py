@@ -214,7 +214,7 @@ maximum-fingerprint-mismatch = {mismatches}\
            mismatches=params.conf['maximum_mismatches']['fingerprint'][samplename]),
            file=outf)
 
-        if samplename in params.conf['spikein_trimming_length']:
+        if samplename in params.conf.get('spikein_trimming_length', []):
             print("limit-threep-processing =",
                   params.conf['spikein_trimming_length'][samplename], file=outf)
 
