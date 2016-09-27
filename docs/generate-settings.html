@@ -328,7 +328,7 @@ function update_configuration()
   var settings_text = 'include:\n    - defaults.conf\n\n';
 
   // Run ID
-  settings_text += 'run_id:         ts001\n\n'
+  settings_text += 'run_id:         "ts001"\n\n'
 
   // Data sources
   var datasource_form = document.getElementById('sourceform');
@@ -348,7 +348,7 @@ function update_configuration()
       laneid = String.fromCharCode(97 + sourcenum++);
       settings_text += '    - id:       ' + laneid + '\n' +
           '      type:     ' + chemistry + '\n' +
-          '      dir:      ' + datadir + '\n' +
+          '      dir:      "' + datadir + '"\n' +
           '      lane:     ' + lane + '\n';
     }
   }
