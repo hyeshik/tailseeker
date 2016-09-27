@@ -43,21 +43,13 @@ def proxy_to_snakemake(tailseeker_dir):
 
     sys.exit(main())
 
-def usage():
+def show_banner():
     print("""\
 Tailseeker {version} - High-throughput measurement of poly(A) tails
-
-Usage:  {command} [options] [target]
-
-Special targets:
-  clean     clear intermediate files
-  clear     clear all generated files
-""".format(version=tailseeker.__version__, command=sys.argv[0]))
+""".format(version=tailseeker.__version__))
 
 def main(tailseeker_dir):
-    if len(sys.argv) < 2:
-        usage()
-        return
+    show_banner()
 
     os.environ['TAILSEEKER_DIR'] = tailseeker_dir
 
