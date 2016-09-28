@@ -57,6 +57,18 @@ Run the pipeline:
 
 Then, the results will be located in the current directory.
 
+When you run an analysis with references to the genome (level 2 and 3),
+you need to extend the Docker image to supplement a genome reference
+database. Build the Docker image like this:
+
+    wget http://bit.ly/Dockerfile-withref
+    docker build -t tailseeker:GRCz10 --build-arg genome=GRCz10 -f Dockerfile-withref .
+
+Then, you'll need to define an environment variable before running
+`tseek-docker` to use your own Docker image.
+
+    export TAILSEEKER_IMAGE=tailseeker:GRCz10
+
 
 ## Prerequisite tools for the conventional installation
 

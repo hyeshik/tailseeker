@@ -4,7 +4,9 @@ ARG genome
 
 RUN cd /opt/tailseeker/refdb/level2 && \
     snakemake -j -- $genome && \
-    rm -rf tmp && \
+    rm -rf tmp
+
+RUN cd /opt/tailseeker/refdb/level3 && \
     cd ../level3 && \
     snakemake -j -- $genome && \
     rm -rf tmp
