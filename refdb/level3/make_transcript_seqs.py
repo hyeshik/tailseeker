@@ -64,6 +64,7 @@ with fileutils.TemporaryDirectory() as tmpdir:
                    tmpfasta])
 
     exonseqs = pd.read_table(tmpfasta, names=['exon_name', 'sequence'])
+    exonseqs['exon_name'] = exonseqs['exon_name'].apply(lambda x: x.split('::')[0])
 
 exonseqs['transcript_id'] = exonseqs['exon_name'].apply(lambda x: x.split('-')[0])
 exonseqs['exon_number'] = exonseqs['exon_name'].apply(lambda x: int(x.split('-')[1]))
