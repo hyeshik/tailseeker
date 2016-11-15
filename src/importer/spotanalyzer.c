@@ -34,6 +34,37 @@
 #include <assert.h>
 #include "tailseq-import.h"
 
+static const char IUPAC_ambiguity_codes[][5] = {
+    "A",    /* A */
+    "CGT",  /* B */
+    "C",    /* C */
+    "AGT",  /* D */
+    "",     /* E */
+    "",     /* F */
+    "G",    /* G */
+    "ACT",  /* H */
+    "",     /* I */
+    "",     /* J */
+    "GT",   /* K */
+    "",     /* L */
+    "AC",   /* M */
+    "GATC", /* N */
+    "",     /* O */
+    "",     /* P */
+    "",     /* Q */
+    "AG",   /* R */
+    "CG",   /* S */
+    "T",    /* T */
+    "T",    /* U */
+    "ACG",  /* V */
+    "AT",   /* W */
+    "GATC", /* X */
+    "CT",   /* Y */
+    "",     /* Z */
+};
+#define IUPAC_ambiguity_codes_first     'A'
+#define IUPAC_ambiguity_codes_last      'Z'
+
 
 static struct SampleInfo *
 assign_barcode(const char *indexseq, int barcode_length, struct SampleInfo *barcodes,
@@ -90,8 +121,22 @@ find_delimiter_end_position(const char *sequence, struct SampleInfo *barcode,
 
         delimpos_offset = delimpos + *poffset;
 
-        for (i = ndiff = 0; i < barcode->delimiter_length; i++)
-            ndiff += (barcode->delimiter[i] != delimpos_offset[i]);
+        for (i = ndiff = 0; i < barcode->delimiter_length; i++) {
+            const char *matchables;
+
+            if (barcode->delimiter[i] >= IUPAC_ambiguity_codes_first &&
+                    barcode->delimiter[i] <= IUPAC_ambiguity_codes_last)
+                matchables = IUPAC_ambiguity_codes[
+                    barcode->delimiter[i] - IUPAC_ambiguity_codes_first];
+            else
+                matchables = "";
+
+            for (; *matchables != '\0'; matchables++)
+                if (*matchables == delimpos_offset[i])
+                    break;
+
+            ndiff += (*matchables == '\0');
+        }
 
         if (ndiff <= barcode->maximum_delimiter_mismatches) {
             if (ndiff > 0)
