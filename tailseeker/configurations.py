@@ -112,9 +112,10 @@ class Configurations:
 
         return pathsettings
 
-    def export_paths(self, namespace):
+    def export_paths(self, namespace, relative_to='/'):
         for progname, path in self.paths.items():
-            namespace['{}_CMD'.format(progname.upper())] = path
+            resolved = os.path.abspath(os.path.join(relative_to, str(path)))
+            namespace['{}_CMD'.format(progname.upper())] = resolved
 
     @property
     def all_samples(self):

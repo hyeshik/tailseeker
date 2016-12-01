@@ -64,7 +64,7 @@ BINDIR = os.path.join(TAILSEEKER_DIR, 'bin')
 SCRATCHDIR = (CONF['scratch_dir'] if 'scratch_dir' in CONF
                                   else os.path.join(WRKDIR, 'scratch'))
 SCRIPTSDIR = os.path.join(TAILSEEKER_DIR, 'scripts')
-CONF.export_paths(globals())
+CONF.export_paths(globals(), relative_to=TAILSEEKER_DIR)
 create_scratch_link()
 
 if not CONF['clean_intermediate_files']:
