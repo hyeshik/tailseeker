@@ -47,6 +47,12 @@ def lazy_clearing(arg):
     all_intermediate_files.add(arg)
     return arg
 
+def make_path_addition(envname, newdir):
+    paths = [newdir]
+    if envname in os.environ:
+        paths.append(os.environ[envname])
+    return ':'.join(paths)
+
 
 #========== Initializations ============
 from tailseeker.powersnake import *
@@ -67,6 +73,14 @@ SCRIPTSDIR = os.path.join(TAILSEEKER_DIR, 'scripts')
 CONF.export_paths(globals(), relative_to=TAILSEEKER_DIR)
 create_scratch_link()
 
+# Add $TAILSEEKER_DIR/bin and $TAILSEEKER_DIR/lib to corresponding
+# paths. This helps finding files when they are installed in
+# non-standard paths.
+PATH = make_path_addition('PATH', BINDIR)
+PYTHONPATH = make_path_addition('PYTHONPATH', TAILSEEKER_DIR)
+LD_LIBRARY_PATH = make_path_addition('LD_LIBRARY_PATH',
+                                     os.path.join(TAILSEEKER_DIR, 'lib'))
+
 if not CONF['clean_intermediate_files']:
     temp = lazy_clearing
 
@@ -79,10 +93,10 @@ nan = float('nan')
 shell.executable(BASH_CMD) # pipefail is supported by bash only.
 shell.prefix(('set -e; set -o pipefail; '
               'export PYTHONPATH="{PYTHONPATH}" LC_ALL=C '
-                     'BGZIP_CMD="{BGZIP_CMD}" '
-                     'TABIX_CMD="{TABIX_CMD}" '
+                     'BGZIP_CMD="{BGZIP_CMD}" TABIX_CMD="{TABIX_CMD}" '
                      'TAILSEQ_SCRATCH_DIR="{SCRATCHDIR}" '
+                     'PATH="{PATH}" LD_LIBRARY_PATH="{LD_LIBRARY_PATH}" '
                      + CONF.get('envvars', '') + '; ').format(
                 PYTHONPATH=TAILSEEKER_DIR, SCRATCHDIR=SCRATCHDIR, BGZIP_CMD=BGZIP_CMD,
-                TABIX_CMD=TABIX_CMD))
+                TABIX_CMD=TABIX_CMD, PATH=PATH, LD_LIBRARY_PATH=LD_LIBRARY_PATH))
 
