@@ -28,7 +28,10 @@ from itertools import chain
 import pandas as pd
 import numpy as np
 
-import matplotlib; matplotlib.use('Agg')
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Agg')
+
 from matplotlib import pyplot as plt
 from matplotlib import cm
 from matplotlib.ticker import AutoMinorLocator
@@ -90,16 +93,17 @@ def size2phys_fun(min_polya, max_polya):
     return size2phys
 
 
-def plot(options, controlsamples, expsamples):
+def plot(tagcounts, controlsamples, expsamples, min_polya_len,
+         normalize_by_total_tags, merge_controls, kde_bandwidth,
+         width, height):
     # Load tag counts by poly(A) lengths
-    tagcounts = pd.read_csv(options.tagcounts, index_col=0)
-    tagcounts_pa = tagcounts.iloc[options.min_polya_len:]
-    if options.normalize_by_total_tags:
+    tagcounts_pa = tagcounts[tagcounts.index >= min_polya_len]
+    if normalize_by_total_tags:
         tagcounts_pa = tagcounts_pa.divide(tagcounts.sum(axis=0))
     else:
         tagcounts_pa = tagcounts_pa.divide(tagcounts_pa.sum(axis=0))
 
-    if options.merge_controls and controlsamples:
+    if merge_controls and controlsamples:
         ctlsum = tagcounts_pa[controlsamples].sum(axis=1)
         newbc = tagcounts_pa[expsamples].copy()
         newbc['ctl'] = ctlsum
@@ -110,23 +114,23 @@ def plot(options, controlsamples, expsamples):
 
     # Calculate kernel density estimates
     max_polya_len = int(np.ceil(tagcounts_pa.index.max() / 5) * 5)
-    size2phys = size2phys_fun(options.min_polya_len, max_polya_len)
-    vpositions = np.linspace(size2phys(options.min_polya_len),
+    size2phys = size2phys_fun(min_polya_len, max_polya_len)
+    vpositions = np.linspace(size2phys(min_polya_len),
                              size2phys(max_polya_len), IMAGE_HEIGHT)
 
     kdes = pd.DataFrame({
         name: gaussian_kde(
                 list(size2phys(np.array(cnts.index))),
                 weights=list(cnts),
-                bw_method=options.kde_bandwidth)(vpositions)
+                bw_method=kde_bandwidth)(vpositions)
         for name, cnts in tagcounts_pa.items()}, index=vpositions)
 
     # Construct the image and plot it.
     imgdata = construct_virtual_gel_image(kdes, controlsamples, expsamples)
 
-    figwidth = options.width if options.width is not None else (
+    figwidth = width if width is not None else (
                                        1.4 + 0.33 * len(samples))
-    fig, ax = plt.subplots(1, 1, figsize=(figwidth, options.height))
+    fig, ax = plt.subplots(1, 1, figsize=(figwidth, height))
 
     ax.pcolor(imgdata, cmap='Greys', rasterized=True, vmin=0, vmax=1)
 
@@ -140,8 +144,8 @@ def plot(options, controlsamples, expsamples):
     ax.xaxis.tick_top()
 
     ax.set_ylabel('Poly(A) tail length (nt)')
-    ax.set_yticks([(size2phys(m) - size2phys(options.min_polya_len)) /
-                   (size2phys(max_polya_len) - size2phys(options.min_polya_len))
+    ax.set_yticks([(size2phys(m) - size2phys(min_polya_len)) /
+                   (size2phys(max_polya_len) - size2phys(min_polya_len))
                     * IMAGE_HEIGHT for m in MARKER_POSITIONS])
     ax.set_yticklabels(MARKER_POSITIONS)
 
@@ -153,9 +157,20 @@ def plot(options, controlsamples, expsamples):
     ax.tick_params(axis='y', direction='out')
 
     ax.set_xlim(0, imgdata.shape[1])
-    ax.set_ylim(size2phys(options.min_polya_len) * IMAGE_HEIGHT, imgdata.shape[0])
+    ax.set_ylim(size2phys(min_polya_len) * IMAGE_HEIGHT, imgdata.shape[0])
 
     plt.tight_layout()
+
+    return fig
+
+
+def run(options, controlsamples, expsamples):
+    # Load tag counts by poly(A) lengths
+    tagcounts = pd.read_csv(options.tagcounts, index_col=0)
+
+    fig = plot(tagcounts, controlsamples, expsamples, options.min_polya_len,
+               options.normalize_by_total_tags, options.merge_controls,
+               options.kde_bandwidth, options.width, options.height)
 
     plt.savefig(options.output_plot, dpi=200)
 
@@ -204,5 +219,5 @@ if __name__ == '__main__':
 
     options, controlsamples, expsamples = parse_arguments()
 
-    plot(options, controlsamples, expsamples)
+    run(options, controlsamples, expsamples)
 
