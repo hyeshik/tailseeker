@@ -359,7 +359,8 @@ fi # -z TAILSEEKER_BINDIR
 
 rm -f $install_dir/tseek
 cat $TOPDIR/install/tailseeker.in | \
-sed -e "s,%%TAILSEEKER_DIR%%,$TOPDIR,g" > $install_dir/tseek
+sed -e "s,%%TAILSEEKER_DIR%%,$TOPDIR,g" -e "s,^##,,g" \
+  -e 's,^\(.*\)##$,# \1,g' > $install_dir/tseek
 script_mode=$(printf "%04o\n" $((0777 & ~$(umask))))
 chmod $script_mode $install_dir/tseek
 

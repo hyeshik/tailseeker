@@ -21,9 +21,11 @@
 # THE SOFTWARE.
 #
 
-TAILSEEKER_DIR = '%%TAILSEEKER_DIR%%'
+import sys, os
 
-import sys
+TAILSEEKER_DIR = os.path.join(os.path.dirname(sys.argv[0]), '..') ##
+##TAILSEEKER_DIR = '%%TAILSEEKER_DIR%%'
+
 sys.path.insert(0, TAILSEEKER_DIR)
 
 from tailseeker import tskcommand
