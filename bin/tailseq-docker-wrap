@@ -12,5 +12,5 @@ fi
 
 shift 2
 
-su -c "tseek $*" ts
+su -c "/opt/tailseeker/bin/tseek $*" ts
 exit $?
