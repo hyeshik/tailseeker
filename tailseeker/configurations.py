@@ -34,6 +34,7 @@ class Configurations:
         self.tailseeker_dir = tailseeker_dir
         self.confdata = self.load_config(settings_file)
         self.confdata = self.expand_sample_settings(self.confdata)
+        self.paths = self.load_paths()
 
     def load_config(self, settings_file):
         usersettings = yaml.load(settings_file)
@@ -103,13 +104,16 @@ class Configurations:
 
         return finalized
 
-    def export_paths(self, namespace):
+    def load_paths(self):
         pathconf = os.path.join(self.tailseeker_dir, self.PATH_CONF_FILE)
         pathsettings = yaml.load(open(pathconf)) if os.path.exists(pathconf) else {}
         if 'paths' in self.confdata:
             pathsettings.update(self.confdata['paths'])
 
-        for progname, path in pathsettings.items():
+        return pathsettings
+
+    def export_paths(self, namespace):
+        for progname, path in self.paths.items():
             namespace['{}_CMD'.format(progname.upper())] = path
 
     @property

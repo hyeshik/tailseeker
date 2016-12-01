@@ -180,6 +180,11 @@ rule GSNAP_alignment:
                 {input} | {SAMTOOLS_CMD} view -@ 3 -bS - > {output}')
 
 if CONF['performance']['enable_gsnap']:
+    if 'gsnap' not in CONF.paths:
+        logger.error('GSNAP is not configured in this installation. '
+                     'Please run setup.sh again.')
+        raise ValueError('Configuration error: gsnap not in paths.conf')
+
     rule merge_alignments:
         input:
             star='scratch/alignments/{sample}_STAR_{type}.bam',

@@ -169,6 +169,12 @@ def determine_inputs_process_signals(wildcards):
 
     return inputs
 
+for readid, program in CONF.get('third_party_basecaller', {}).items():
+    if program and program not in CONF.paths:
+        logger.error('{} is not configured in this installation. '
+                     'Please run setup.sh again.'.format(program))
+        raise ValueError('Configuration error: {} not in paths.conf'.format(program))
+
 
 rule process_signals:
     input: determine_inputs_process_signals
