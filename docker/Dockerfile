@@ -10,7 +10,7 @@ RUN apt-get -y update && \
     apt-get -y upgrade && \
     apt-get -y install whiptail git pkg-config gcc wget make && \
     apt-get -y install libblas-dev liblapack-dev zlib1g-dev libbz2-dev gfortran && \
-    apt-get -y install file python3 parallel python3-matplotlib python3-dev && \
+    apt-get -y install file python3 python3-matplotlib python3-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -88,6 +88,14 @@ RUN cd /tmp && \
     make -j 8 && \
     install -s -m 0755 -t /opt/tailseeker/bin bin/bedtools && \
     cd / && rm -rf /tmp/bedtools-2.26.0.tar.gz /tmp/bedtools2
+
+# Install parallel
+RUN cd /tmp && \
+    wget -q http://ftp.gnu.org/gnu/parallel/parallel-20161122.tar.bz2 && \
+    tar -xjf parallel-20161122.tar.bz2 && \
+    cd parallel-20161122 && \
+    ./configure --prefix=/opt/tailseeker && make && make install && \
+    cd / && rm -rf /tmp/parallel-20161122.tar.bz2 /tmp/parallel-20161122
 
 # Install tailseeker 3
 RUN cd /opt/tailseeker && \
