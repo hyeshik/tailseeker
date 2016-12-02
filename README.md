@@ -8,7 +8,29 @@ to Hyeshik Chang &lt;hyeshik@snu.ac.kr&gt; whenever you are stuck on a problem w
 using it. 
 
 
-## Analysis levels
+# Table of Contents
+
+   * [Tailseeker 3.1](#tailseeker-31)
+   * [Analysis levels](#analysis-levels)
+   * [Running with Docker](#running-with-docker)
+   * [Installing tailseeker](#installing-tailseeker)
+      * [Installing from a full binary bundle](#installing-from-a-full-binary-bundle)
+      * [Installing from a source package](#installing-from-a-source-package)
+         * [Prerequisite software](#prerequisite-software)
+         * [Installation](#installation)
+   * [Running the pipeline with non-Docker installations](#running-the-pipeline-with-non-docker-installations)
+      * [Generating genome reference databases](#generating-genome-reference-databases)
+      * [Running the pipeline](#running-the-pipeline)
+   * [Data outputs](#data-outputs)
+      * [Read name format (analysis level 1 only)](#read-name-format-analysis-level-1-only)
+   * [Software licenses](#software-licenses)
+      * [The tailseeker suite](#the-tailseeker-suite)
+      * [strstr implementation from the FreeBSD libc (<code>src/contrib/my_strstr.c</code>)](#strstr-implementation-from-the-freebsd-libc-srccontribmy_strstrc)
+      * [SIMD Smith-Waterman alignment library (src/contrib/ssw.c and <code>src/contrib/ssw.h</code>)](#simd-smith-waterman-alignment-library-srccontribsswc-and-srccontribsswh)
+      * [INIH configuration file parser (src/contrib/ini.c and <code>src/contrib/ini.h</code>)](#inih-configuration-file-parser-srccontribinic-and-srccontribinih)
+
+
+# Analysis levels
 
 Users can choose the extent of analysis by Tailseeker to let Tailseeker do
 almost everything, or just minimal tail length measurement. The options and
@@ -21,7 +43,7 @@ the list of supported genomes are as followed:
 | 3 | GRCh38 *(Homo sapiens)*<br>GRCm38 *(Mus musculus)*<br>GRCz10 *(Danio rerio)*<br>WBcel235 *(C. elegans)*<br>Rnor\_6.0 *(Rattus norvegicus)* | All features from level 2<br>Gene-level statistics for poly(A) length and non-templated additions<br>Gene-level quantifications |
 
 
-## Running with Docker
+# Running with Docker
 
 If you have a host running [Docker](https://www.docker.com), you can run
 the tailseeker pipeline without installing any. The current image is not
@@ -70,14 +92,14 @@ Then, you'll need to define an environment variable before running
     export TAILSEEKER_IMAGE=tailseeker:GRCz10
 
 
-## Installing tailseeker
+# Installing tailseeker
 
 You can install *tailseeker* from either a source distribution or a binary package.
 The binary package includes many of pre-compiled external programs that were built on
 a x64 Linux box with Ubuntu 16.04. For the other environments, it is recommended to
 use the source package to install it.
 
-### Installing from a full binary bundle
+## Installing from a full binary bundle
 
 Download a tarball from the [download section](https://github.com/hyeshik/tailseeker/releases).
 Extract the files into an appropriate place inside your filesystem.
@@ -99,9 +121,9 @@ using tailseeker later, you will need to add this to a shell startup script such
 Now, you can invoke the tailseeker pipeline with `tseek` command from anywhere. Proceed to
 [generate the genome reference database](#generating-genome-reference-databases).
 
-### Installing from a source package
+## Installing from a source package
 
-#### Prerequisite software
+### Prerequisite software
 
 Here're the list of software that must be installed before using tailseeker.
 
@@ -147,7 +169,7 @@ top source directory:
     pip3 install --user -r install/requirements.txt
 
 
-#### Installation
+### Installation
 
 A script in the top directory will check the paths of prerequisite tools and 
 guide you to set configurations correctly. Please run:
@@ -157,9 +179,9 @@ guide you to set configurations correctly. Please run:
 Proceed to [generate the genome reference database](#generating-genome-reference-databases).
 
 
-## Running the pipeline with non-Docker installations
+# Running the pipeline with non-Docker installations
 
-### Generating genome reference databases
+## Generating genome reference databases
 
 First of all, build reference databases unless you're going to run `tailseeker` in
 genome-independent mode, or the level 1 analysis.
@@ -170,7 +192,7 @@ genome-independent mode, or the level 1 analysis.
 Type the identifier of the genome to be used in place of `{genome}`. List of
 the available genomes are shown in the first section of this tutorial.
 
-### Running the pipeline
+## Running the pipeline
 
   1. Copy the full output hierarchy from MiSeq or HiSeq to somewhere in
      your machine.
@@ -200,9 +222,9 @@ the available genomes are shown in the first section of this tutorial.
   6. Perform the downstream analyses using the output files.
 
 
-## Data outputs
+# Data outputs
 
-### Read name format (analysis level 1 only)
+## Read name format (analysis level 1 only)
 
 In an analysis level 1 output, FASTQ files are fulfilled with nucleotide
 sequences, quality scores as well as poly(A) tail information in read name.
