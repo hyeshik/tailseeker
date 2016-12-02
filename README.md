@@ -10,17 +10,17 @@ using it.
 
 # Table of Contents
 
-   * [Tailseeker 3.1](#tailseeker-31)
    * [Analysis levels](#analysis-levels)
    * [Running with Docker](#running-with-docker)
-   * [Installing tailseeker](#installing-tailseeker)
-      * [Installing from a full binary bundle](#installing-from-a-full-binary-bundle)
-      * [Installing from a source package](#installing-from-a-source-package)
-         * [Prerequisite software](#prerequisite-software)
-         * [Installation](#installation)
-   * [Running the pipeline with non-Docker installations](#running-the-pipeline-with-non-docker-installations)
-      * [Generating genome reference databases](#generating-genome-reference-databases)
+   * [Non-Docker installations](#non-docker-installations)
+      * [Installing tailseeker](#installing-tailseeker)
+         * [Installing from a full binary bundle](#installing-from-a-full-binary-bundle)
+         * [Installing from a source package](#installing-from-a-source-package)
+            * [Prerequisite software](#prerequisite-software)
+            * [Installation](#installation)
       * [Running the pipeline](#running-the-pipeline)
+         * [Generating genome reference databases](#generating-genome-reference-databases)
+         * [Running the pipeline](#running-the-pipeline-1)
    * [Data outputs](#data-outputs)
       * [Read name format (analysis level 1 only)](#read-name-format-analysis-level-1-only)
    * [Software licenses](#software-licenses)
@@ -92,14 +92,16 @@ Then, you'll need to define an environment variable before running
     export TAILSEEKER_IMAGE=tailseeker:GRCz10
 
 
-# Installing tailseeker
+# Non-Docker installations
+
+## Installing tailseeker
 
 You can install *tailseeker* from either a source distribution or a binary package.
 The binary package includes many of pre-compiled external programs that were built on
 a x64 Linux box with Ubuntu 16.04. For the other environments, it is recommended to
 use the source package to install it.
 
-## Installing from a full binary bundle
+### Installing from a full binary bundle
 
 Download a tarball from the [download section](https://github.com/hyeshik/tailseeker/releases).
 Extract the files into an appropriate place inside your filesystem.
@@ -121,9 +123,9 @@ using tailseeker later, you will need to add this to a shell startup script such
 Now, you can invoke the tailseeker pipeline with `tseek` command from anywhere. Proceed to
 [generate the genome reference database](#generating-genome-reference-databases).
 
-## Installing from a source package
+### Installing from a source package
 
-### Prerequisite software
+#### Prerequisite software
 
 Here're the list of software that must be installed before using tailseeker.
 
@@ -169,7 +171,7 @@ top source directory:
     pip3 install --user -r install/requirements.txt
 
 
-### Installation
+#### Installation
 
 A script in the top directory will check the paths of prerequisite tools and 
 guide you to set configurations correctly. Please run:
@@ -179,9 +181,9 @@ guide you to set configurations correctly. Please run:
 Proceed to [generate the genome reference database](#generating-genome-reference-databases).
 
 
-# Running the pipeline with non-Docker installations
+## Running the pipeline
 
-## Generating genome reference databases
+### Generating genome reference databases
 
 First of all, build reference databases unless you're going to run `tailseeker` in
 genome-independent mode, or the level 1 analysis.
@@ -192,7 +194,7 @@ genome-independent mode, or the level 1 analysis.
 Type the identifier of the genome to be used in place of `{genome}`. List of
 the available genomes are shown in the first section of this tutorial.
 
-## Running the pipeline
+### Running the pipeline
 
   1. Copy the full output hierarchy from MiSeq or HiSeq to somewhere in
      your machine.
