@@ -259,7 +259,8 @@ process_polya_ruling(const char *filename,
 
     memset(polya_measurements, 0xff,
            sizeof(int16_t) * header.total_clusters); /* fill with -1 */
-    record_size = header.max_cycles * sizeof(signal_packet_t);
+    record_size = sizeof(struct SignalRecordHeader) +
+                  header.max_cycles * sizeof(signal_packet_t);
 
     for (;;) {
         int polya_len;
@@ -268,9 +269,7 @@ process_polya_ruling(const char *filename,
             signal_packet_t scores[];
         } rec;
 
-        bytesread = gzread(fp, (void *)&rec,
-                           sizeof(struct SignalRecordHeader) +
-                           sizeof(signal_packet_t) * header.max_cycles);
+        bytesread = gzread(fp, (void *)&rec, record_size);
         if (bytesread == 0)
             break;
 
