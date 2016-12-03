@@ -46,16 +46,19 @@ the list of supported genomes are as followed:
 # Running with Docker
 
 If you have a host running [Docker](https://www.docker.com), you can run
-the tailseeker pipeline without installing any. The current image is not
-ready for running it on multi-node clusters. For those environments, you're
-encouraged to install the software in conventional way as described later.
+the tailseeker pipeline without installing any. For Apple macOS or
+Microsoft Windows users, this is the only easy way to run tailseeker
+without extensive effort. The current image is not ready for running
+it on multi-node HPC clusters. For those environments, you're encouraged
+to install the software in
+[conventional way as described later](#non-docker-installations).
 
 Download the image and a wrapper script:
 
     docker pull hyeshik/tailseeker:latest
 
-    wget http://bit.ly/tseek-docker
-    chmod 755 tseek-docker
+    curl -L http://bit.ly/tseek-docker > tseek
+    chmod 755 tseek
 
 Prepare a project configuration on
 [this page](http://hyeshik.github.io/tailseeker/generate-settings.html).
@@ -75,16 +78,16 @@ Set the environment variables up:
 
 Run the pipeline:
 
-    ../tseek-docker -j
+    ../tseek -j
 
 Then, the results will be located in the current directory.
 
 When you run an analysis with references to the genome (level 2 and 3),
 you need to extend the Docker image to supplement a genome reference
-database. Build the Docker image like this:
+database. Build the Docker image from an empty directory like this:
 
-    wget http://bit.ly/Dockerfile-withref
-    docker build -t tailseeker:GRCz10 --build-arg genome=GRCz10 -f Dockerfile-withref .
+    curl -L http://bit.ly/Dockerfile-withref > Dockerfile
+    docker build -t tailseeker:GRCz10 --build-arg genome=GRCz10 .
 
 Then, you'll need to define an environment variable before running
 `tseek-docker` to use your own Docker image.
