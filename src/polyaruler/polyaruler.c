@@ -42,13 +42,6 @@
 #define TAGINFO_LINEBUF_SIZE    2048
 
 
-static inline int
-min_int(int a, int b)
-{
-    if (a < b) return a;
-    else return b;
-}
-
 static unpacked_score_t *
 load_score_cutoffs(const char *filename, const char *tileid,
                    ssize_t *ncycles)
@@ -272,10 +265,12 @@ process_polya_ruling(const char *filename,
         int polya_len;
         struct TSRecord {
             struct SignalRecordHeader header;
-            signal_packet_t scores[header.max_cycles];
+            signal_packet_t scores[];
         } rec;
 
-        bytesread = gzread(fp, (void *)&rec, sizeof(struct TSRecord));
+        bytesread = gzread(fp, (void *)&rec,
+                           sizeof(struct SignalRecordHeader) +
+                           sizeof(signal_packet_t) * header.max_cycles);
         if (bytesread == 0)
             break;
 

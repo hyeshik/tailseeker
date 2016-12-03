@@ -73,7 +73,7 @@ ${bindir}/tailseq-dedup-perfect: ${DEDUP_PERFECT_OBJECTS}
 	${CC} ${CFLAGS} -o $@ ${DEDUP_PERFECT_OBJECTS} ${DEDUP_PERFECT_LIBS}
 
 ${bindir}/tailseq-dedup-approx: ${DEDUP_APPROX_OBJECTS}
-	${CXX} ${CFLAGS} -fopenmp -o $@ ${DEDUP_APPROX_OBJECTS} ${DEDUP_APPROX_LIBS}
+	${CXX} ${CFLAGS} -o $@ ${DEDUP_APPROX_OBJECTS} ${DEDUP_APPROX_LIBS}
 
 ${bindir}/tailseq-writefastq: ${WRITEFASTQ_OBJECTS}
 	${CC} ${CFLAGS} -o $@ ${WRITEFASTQ_OBJECTS} ${WRITEFASTQ_LIBS}

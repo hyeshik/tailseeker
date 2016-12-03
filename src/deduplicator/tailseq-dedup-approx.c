@@ -523,9 +523,9 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
     if (bestprio_polya_pos_dups <= 0 || bestprio_tags <= 1) {
         /* If a single tag is the best, show it as a final representation. */
         pthread_mutex_lock(lock);
-        printf("%d\t%d\t%ld\t%s\n", pool->tagalns[bestprio_tag_ix].polya_len_1,
+        printf("%d\t%d\t%lld\t%s\n", pool->tagalns[bestprio_tag_ix].polya_len_1,
                pool->tagalns[bestprio_tag_ix].polya_len_2,
-               total_dups, pool->tagalns[bestprio_tag_ix].qname);
+               (long long)total_dups, pool->tagalns[bestprio_tag_ix].qname);
         pthread_mutex_unlock(lock);
 
         return 0;
@@ -559,10 +559,10 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
     }
 
     pthread_mutex_lock(lock);
-    printf("%d\t%d\t%ld\t%s\n",
+    printf("%d\t%d\t%lld\t%s\n",
            mean_polya_len_1 >= 0.f ? (int)roundf(mean_polya_len_1) : -1,
            mean_polya_len_2 >= 0.f ? (int)roundf(mean_polya_len_2) : -1,
-           total_dups, pool->tagalns[bestmatching_ix].qname);
+           (long long)total_dups, pool->tagalns[bestmatching_ix].qname);
     pthread_mutex_unlock(lock);
 
 //    fprintf(stderr, " -- (final) bestprio(%d) residual = %.2f nt\n", (int)bestmatching_ix,
