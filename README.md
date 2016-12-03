@@ -90,7 +90,7 @@ database. Build the Docker image from an empty directory like this:
     docker build -t tailseeker:GRCz10 --build-arg genome=GRCz10 .
 
 Then, you'll need to define an environment variable before running
-`tseek-docker` to use your own Docker image.
+`tseek` to use your own Docker image.
 
     export TAILSEEKER_IMAGE=tailseeker:GRCz10
 
