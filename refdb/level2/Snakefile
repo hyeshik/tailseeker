@@ -126,7 +126,7 @@ rule download_gene_annotation:
                    {BEDTOOLS_CMD} sort -header | gzip -c - > {output}')
         elif url.endswith('gff3.gz'):
             shell('{WGET_CMD} -O /dev/stdout "{url}" | gzip -cd - | \
-                   tar -xO | {PYTHON3_CMD} adopt_annotations_JGIxl91.py | \
+                   {PYTHON3_CMD} adopt_annotations_JGIxl91.py | \
                    gzip -c - > {output}')
         elif url.endswith('gff3'):
             shell('{WGET_CMD} -O /dev/stdout "{url}" | \
