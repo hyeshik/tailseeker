@@ -21,6 +21,7 @@ using it.
       * [Running the pipeline](#running-the-pipeline)
          * [Generating genome reference databases](#generating-genome-reference-databases)
          * [Running the pipeline](#running-the-pipeline-1)
+   * [Pre-built genome resource packages](#pre-built-genome-resource-packages)
    * [Data outputs](#data-outputs)
       * [Read name format (analysis level 1 only)](#read-name-format-analysis-level-1-only)
    * [Software licenses](#software-licenses)
@@ -225,6 +226,19 @@ the available genomes are shown in the first section of this tutorial.
      poly(A) length calling was accurate.
 
   6. Perform the downstream analyses using the output files.
+
+
+# Pre-built genome resource packages
+
+Instead of building a resource database by yourself, you can download one of the
+pre-built packages that are updated from time to time. Here're are the pointers
+for those files.
+
+| Date            | Species                  | Genome                                                               | Download |
+| --------------- | ------------------------ | -------------------------------------------------------------------- | -------- |
+| Dec 5, 2016     | *Danio rerio*            | [GRCz10](http://www.ensembl.org/Danio_rerio/Info/Index)              | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.157175.svg)](https://doi.org/10.5281/zenodo.157175) |
+| Dec 5, 2016     | *Drosophila melanogater* | [BDGP6](http://www.ensembl.org/Drosophila_melanogaster/Info/Index)   | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.192528.svg)](https://doi.org/10.5281/zenodo.192528) |
+| Dec 5, 2016     | *Caenorhabditis elegans* | [WBcel235](http://www.ensembl.org/Caenorhabditis_elegans/Info/Index) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.192527.svg)](https://doi.org/10.5281/zenodo.192527) |
 
 
 # Data outputs
