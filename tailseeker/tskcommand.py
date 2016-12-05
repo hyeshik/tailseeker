@@ -44,7 +44,8 @@ def proxy_to_snakemake(tailseeker_dir):
     sys.exit(main())
 
 def show_banner():
-    print("""\
+    if os.environ.get('TAILSEEKER_SKIP_BANNER', 'no') == 'no':
+        print("""\
 Tailseeker {version} - High-throughput measurement of poly(A) tails
 """.format(version=tailseeker.__version__))
 
@@ -52,6 +53,7 @@ def main(tailseeker_dir):
     show_banner()
 
     os.environ['TAILSEEKER_DIR'] = tailseeker_dir
+    os.environ['TAILSEEKER_SKIP_BANNER'] = 'yes'
 
     check_configuration()
     proxy_to_snakemake(tailseeker_dir)
