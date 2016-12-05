@@ -39,6 +39,8 @@ pathconf = load_configuration(os.path.join(TAILSEEKER_DIR, 'conf', 'paths.conf')
 sys.path.append(TAILSEEKER_DIR)
 
 shell.executable(BASH_CMD)
+shell.prefix('set -e; set -o pipefail; export PYTHONPATH="{TAILSEEKER_DIR}"; \
+'.format(TAILSEEKER_DIR=TAILSEEKER_DIR))
 
 GENOMES = {
     'GRCh38': 'Homo sapiens',
