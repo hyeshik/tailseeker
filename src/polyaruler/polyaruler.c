@@ -218,6 +218,10 @@ process_polya_ruling(const char *filename,
         uint32_t total_clusters;
         uint32_t max_cycles;
     } header;
+    struct TSRecord {
+        struct SignalRecordHeader header;
+        signal_packet_t scores[];
+    } *rec;
 
     sigdist_size = cutoffs_num_cycles * dist_sampling_bins * sizeof(cluster_count_t);
     pos_score_counts = malloc(sigdist_size);
@@ -261,15 +265,19 @@ process_polya_ruling(const char *filename,
            sizeof(int16_t) * header.total_clusters); /* fill with -1 */
     record_size = sizeof(struct SignalRecordHeader) +
                   header.max_cycles * sizeof(signal_packet_t);
+    rec = malloc(record_size);
+    if (rec == NULL) {
+        perror("process_polya_ruling");
+        gzclose(fp);
+        free(pos_score_counts);
+        free(polya_measurements);
+        return NULL;
+    }
 
     for (;;) {
         int polya_len;
-        struct TSRecord {
-            struct SignalRecordHeader header;
-            signal_packet_t scores[];
-        } rec;
 
-        bytesread = gzread(fp, (void *)&rec, record_size);
+        bytesread = gzread(fp, (void *)rec, record_size);
         if (bytesread == 0)
             break;
 
@@ -280,19 +288,20 @@ process_polya_ruling(const char *filename,
             return NULL;
         }
 
-        polya_len = measure_polya_length(rec.scores,
-                rec.header.valid_cycle_count, rec.header.first_cycle,
+        polya_len = measure_polya_length(rec->scores,
+                rec->header.valid_cycle_count, rec->header.first_cycle,
                 score_cutoffs, cutoffs_num_cycles, downhill_ext_weight);
 
         if (polya_len >= minimum_polya_len) {
             int sampling_len;
-            polya_measurements[rec.header.clusterno] = polya_len;
+            polya_measurements[rec->header.clusterno] = polya_len;
             sampling_len = polya_len - (int)(polya_len * dist_sampling_gap);
-            add_polya_score_sample(pos_score_counts, rec.scores,
-                sampling_len, rec.header.first_cycle, dist_sampling_bins);
+            add_polya_score_sample(pos_score_counts, rec->scores,
+                sampling_len, rec->header.first_cycle, dist_sampling_bins);
         }
     }
 
+    free(rec);
     gzclose(fp);
 
     r = write_signal_samples_dists(sigdist_output, pos_score_counts,
