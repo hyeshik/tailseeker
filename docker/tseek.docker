@@ -23,10 +23,20 @@ if ! touch $TEMPORARY_FILE; then
   exit 3
 fi
 
+echo "Tailseeker image:	${TAILSEEKER_IMAGE}"
+echo "Source data:	${TAILSEEKER_DATADIR}"
+
+if [ -z "$TAILSEEKER_REFDBDIR" ]; then
+  REFDBARGS="-v ${TAILSEEKER_REFDBDIR}:/opt/tailseeker/refdb"
+  echo "Reference database:	${TAILSEEKER_REFDBDIR}"
+else
+  REFDBARGS=""
+fi
+
 USERID=$(ls -n $TEMPORARY_FILE | awk '{ print $3; }')
 GROUPID=$(ls -n $TEMPORARY_FILE | awk '{ print $4; }')
 rm -f $TEMPORARY_FILE
 
 docker run -it --rm -v ${TAILSEEKER_DATADIR}:/data -v $(pwd):/work \
-  $TAILSEEKER_IMAGE $USERID $GROUPID $*
+  $REFDBARGS $TAILSEEKER_IMAGE $USERID $GROUPID $*
 exit $?
