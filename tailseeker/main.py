@@ -275,6 +275,7 @@ rule merge_and_deduplicate_taginfo:
                 {BGZIP_CMD} -@ {threads} -c > {output.taginfo}')
         elif wildcards.sample in SPIKEIN_SAMPLES:
             shell('{SCRIPTSDIR}/bgzf-merge.py --output {output.taginfo} {sorted_input}')
+            shell('echo -n "" | gzip -c - > {output.duptrace}')
 
 
 if CONF['analysis_level'] >= 2 and CONF['read_filtering']['contaminant_filtering']:
