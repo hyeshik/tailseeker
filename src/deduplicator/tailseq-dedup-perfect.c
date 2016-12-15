@@ -319,6 +319,8 @@ process_tag_duplicates(struct TagInfoQueue *queue)
         }
     }
 
+    tqueue_empty(queue);
+
     return 0;
 }
 
