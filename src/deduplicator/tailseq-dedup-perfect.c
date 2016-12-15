@@ -30,10 +30,12 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <stdint.h>
+#include <inttypes.h>
 #include <math.h>
 #include <assert.h>
+#include <htslib/bgzf.h>
 #include "../sigproc-flags.h"
+#include "../utils.h"
 
 #define DEFAULT_BUFFER_SIZE     1024
 #define MAX_TILENAME_LEN        63
@@ -67,7 +69,8 @@ struct TagInfoQueue { /* a circular queue */
     int num_duplicates;
     int highest_priority;
 
-    FILE *statsout;
+    BGZF *traceout;
+    uint64_t next_group;
 };
 
 
@@ -123,7 +126,8 @@ tqueue_new(ssize_t size)
     queue->rear = 0;
     queue->num_duplicates = 0;
     queue->highest_priority = -1;
-    queue->statsout = NULL;
+    queue->traceout = NULL;
+    queue->next_group = 0;
 
     return queue;
 }
@@ -132,8 +136,8 @@ static void
 tqueue_free(struct TagInfoQueue *queue)
 {
     free(queue->el);
-    if (queue->statsout != NULL)
-        fclose(queue->statsout);
+    if (queue->traceout != NULL)
+        bgzf_close(queue->traceout);
     free(queue);
 }
 
@@ -174,6 +178,16 @@ tqueue_append(struct TagInfoQueue *queue)
     tagprio = calculate_tag_prority(current->flags);
 
     if (tqueue_isempty(queue) || tagprio > queue->highest_priority) {
+        if (queue->traceout != NULL) {
+            /* print out the suboptimal tags */
+            ssize_t ptr;
+            tqueue_foreach(queue, ptr) {
+                struct TagInfo *taginfo=&queue->el[ptr];
+                bgzf_printf(queue->traceout, "%s\t%d\t%" PRIu64 "\t-3\n",
+                            taginfo->tilename, taginfo->clusterno,
+                            queue->next_group);
+            }
+        }
         tqueue_empty(queue);
         tqueue_inc(queue);
         queue->highest_priority = tagprio;
@@ -190,6 +204,10 @@ tqueue_append(struct TagInfoQueue *queue)
         tqueue_inc(queue);
         queue->highest_priority = tagprio;
     }
+    else if (queue->traceout != NULL) /* print out the suboptimal tag */
+        bgzf_printf(queue->traceout, "%s\t%d\t%" PRIu64 "\t-3\n",
+                    current->tilename, current->clusterno,
+                    queue->next_group);
 
     return 0;
 }
@@ -266,10 +284,10 @@ process_tag_duplicates(struct TagInfoQueue *queue)
 
     if (length == 1) {
         printf("%s\t%d\n", tqueue_tail(queue).line, queue->num_duplicates);
-        if (queue->statsout != NULL) {
+        if (queue->traceout != NULL) {
             struct TagInfo *taginfo=&tqueue_tail(queue);
-            fprintf(queue->statsout, "%s\t%d\t%d\t%d\n", taginfo->tilename, taginfo->clusterno,
-                    taginfo->polyA_len, taginfo->polyA_len);
+            bgzf_printf(queue->traceout, "%s\t%d\t%" PRIu64 "\t%d\n", taginfo->tilename,
+                        taginfo->clusterno, queue->next_group++, taginfo->polyA_len);
         }
     }
     else {
@@ -307,14 +325,15 @@ process_tag_duplicates(struct TagInfoQueue *queue)
                 rep->modifications, queue->num_duplicates);
 
             /* Output poly(A) length calls for accuracy assessments of clones */
-            if (queue->statsout != NULL) {
-                fprintf(queue->statsout, "%s\t%d\t%d", rep->tilename, rep->clusterno,
-                        final_polyA);
-
-                for (ptr = tqueue_next(queue, queue->rear);
-                        ptr != queue->front; ptr = tqueue_next(queue, ptr))
-                    fprintf(queue->statsout, "\t%d", queue->el[ptr].polyA_len);
-                fprintf(queue->statsout, "\n");
+            if (queue->traceout != NULL) {
+                tqueue_foreach(queue, ptr) {
+                    struct TagInfo *taginfo=&queue->el[ptr];
+                    bgzf_printf(queue->traceout, "%s\t%d\t%" PRIu64 "\t%d\n",
+                                taginfo->tilename, taginfo->clusterno,
+                                queue->next_group,
+                                ptr == nearest_ptr ? final_polyA : -2);
+                }
+                queue->next_group++;
             }
         }
     }
@@ -338,8 +357,8 @@ main(int argc, char *argv[])
     }
 
     if (argc >= 2) {
-        queue->statsout = fopen(argv[1], "w");
-        if (queue->statsout == NULL) {
+        queue->traceout = bgzf_open(argv[1], "w");
+        if (queue->traceout == NULL) {
             fprintf(stderr, "ERROR: Cannot open %s.", argv[1]);
             goto onError;
         }

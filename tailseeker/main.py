@@ -259,7 +259,9 @@ rule merge_and_deduplicate_taginfo:
     input:
         expand('scratch/taginfo-fl-r{round:02d}/{{sample}}_{tile}.txt.gz',
                tile=TILES, round=[CONF['polyA_ruler']['signal_resampling_rounds'] + 1])
-    output: 'taginfo/{sample}.txt.gz'
+    output:
+        taginfo='taginfo/{sample}.txt.gz',
+        duptrace=temp('scratch/stats/perfdup-traces-{sample}.txt.gz')
     threads: 12
     run:
         sorted_input = sorted(input)
@@ -267,12 +269,12 @@ rule merge_and_deduplicate_taginfo:
             shell('zcat {sorted_input} | \
                 env BGZIP_OPT="-@ {threads}" sort -t "\t" -k6,6 -k1,1 -k2,2n \
                     --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
-                {BINDIR}/tailseq-dedup-perfect | \
+                {BINDIR}/tailseq-dedup-perfect {output.duptrace} | \
                 env BGZIP_OPT="-@ {threads}" sort -t "\t" -k1,1 -k2,2n \
                     --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
-                {BGZIP_CMD} -@ {threads} -c > {output}')
+                {BGZIP_CMD} -@ {threads} -c > {output.taginfo}')
         elif wildcards.sample in SPIKEIN_SAMPLES:
-            shell('{SCRIPTSDIR}/bgzf-merge.py --output {output} {sorted_input}')
+            shell('{SCRIPTSDIR}/bgzf-merge.py --output {output.taginfo} {sorted_input}')
 
 
 if CONF['analysis_level'] >= 2 and CONF['read_filtering']['contaminant_filtering']:

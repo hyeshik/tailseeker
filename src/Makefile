@@ -4,7 +4,7 @@ CFLAGS=		-O3 -Wall -DNDEBUG -DINI_MAX_LINE=1024 ${HTSLIB_CFLAGS}
 
 IMPORT_LIBS=	-lz -lm -lpthread ${HTSLIB_LIBS}
 POLYARULER_LIBS=	-lz -lm
-DEDUP_PERFECT_LIBS=	-lm
+DEDUP_PERFECT_LIBS=	-lm ${HTSLIB_LIBS}
 DEDUP_APPROX_LIBS=	-lm -lpthread ${HTSLIB_LIBS}
 WRITEFASTQ_LIBS=	-lm -lz ${HTSLIB_LIBS}
 ARCH_FLAGS=	-msse2 -DUSE_SSE2
@@ -39,6 +39,7 @@ POLYARULER_OBJECTS= \
 	polyaruler/polyaruler.o
 
 DEDUP_PERFECT_OBJECTS= \
+	utils.o \
 	deduplicator/tailseq-dedup-perfect.o
 
 DEDUP_APPROX_OBJECTS= \
