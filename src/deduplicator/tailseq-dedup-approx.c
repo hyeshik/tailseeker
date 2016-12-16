@@ -432,7 +432,7 @@ edit_distance(const char *s1, const char *s2, int length, int maximum_distance)
     left = 1;
     right = maximum_distance + 1;
 
-    for (y = left; y <= right; y++)
+    for (y = 1; y <= length; y++)
         column[y] = y;
 
     for (x = 1; x <= length; x++) {
@@ -503,8 +503,8 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
             bestprio_tags = 1;
 
             if (tag->polya_len_ref > 0) {
-                bestprio_polya_sum_1 = tag->polya_len_1 * tag->ndups;
-                bestprio_polya_sum_2 = tag->polya_len_2 * tag->ndups;
+                bestprio_polya_sum_1 = tag->polya_len_1 * (int)tag->ndups;
+                bestprio_polya_sum_2 = tag->polya_len_2 * (int)tag->ndups;
                 bestprio_polya_pos_dups = tag->ndups;
             }
             else
@@ -513,8 +513,8 @@ write_tagcluster(struct deduppool *pool, struct tagcluster *clstr,
         else {
             bestprio_tags++;
             if (tag->polya_len_ref > 0) {
-                bestprio_polya_sum_1 += tag->polya_len_1 * tag->ndups;
-                bestprio_polya_sum_2 += tag->polya_len_2 * tag->ndups;
+                bestprio_polya_sum_1 += tag->polya_len_1 * (int)tag->ndups;
+                bestprio_polya_sum_2 += tag->polya_len_2 * (int)tag->ndups;
                 bestprio_polya_pos_dups += tag->ndups;
             }
         }
