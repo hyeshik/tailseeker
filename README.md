@@ -241,6 +241,7 @@ for those files.
 | Dec 5, 2016     | *Caenorhabditis elegans* | [WBcel235](http://www.ensembl.org/Caenorhabditis_elegans/Info/Index) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.192527.svg)](https://doi.org/10.5281/zenodo.192527) |
 | Dec 15, 2016    | *Mus musculus*           | [GRCm38](http://www.ensembl.org/Mus_musculus/Info/Index) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.203939.svg)](https://zenodo.org/record/203939) |
 | Dec 15, 2016    | *Homo sapiens*           | [GRCh38](http://www.ensembl.org/Homo_sapiens/Info/Index) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.204805.svg)](https://doi.org/10.5281/zenodo.204805)<br/> [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.203943.svg)](https://doi.org/10.5281/zenodo.203943) |
+| Dec 16, 2016    | *Xenopus laevis*         | [JGIxl91](http://www.xenbase.org/common/displayGBrowse.do?source=xl9_1) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.205747.svg)](https://doi.org/10.5281/zenodo.205747) |
 
 
 # Data outputs
