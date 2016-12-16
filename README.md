@@ -239,7 +239,7 @@ for those files.
 | Dec 5, 2016     | *Danio rerio*            | [GRCz10](http://www.ensembl.org/Danio_rerio/Info/Index)              | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.157175.svg)](https://doi.org/10.5281/zenodo.157175) |
 | Dec 5, 2016     | *Drosophila melanogater* | [BDGP6](http://www.ensembl.org/Drosophila_melanogaster/Info/Index)   | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.192528.svg)](https://doi.org/10.5281/zenodo.192528) |
 | Dec 5, 2016     | *Caenorhabditis elegans* | [WBcel235](http://www.ensembl.org/Caenorhabditis_elegans/Info/Index) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.192527.svg)](https://doi.org/10.5281/zenodo.192527) |
-| Dec 15, 2016    | *Mus musculus*           | [GRCm38](http://www.ensembl.org/Mus_musculus/Info/Index) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.203939.svg)](https://doi.org/10.5281/zenodo.203939) |
+| Dec 15, 2016    | *Mus musculus*           | [GRCm38](http://www.ensembl.org/Mus_musculus/Info/Index) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.203939.svg)](https://zenodo.org/record/203939) |
 | Dec 15, 2016    | *Homo sapiens*           | [GRCh38](http://www.ensembl.org/Homo_sapiens/Info/Index) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.204805.svg)](https://doi.org/10.5281/zenodo.204805)<br/> [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.203943.svg)](https://doi.org/10.5281/zenodo.203943) |
 
 
