@@ -5,7 +5,7 @@ lengths and 3′-end modifications with Illumina SBS sequencers.
 
 It is not yet fully stable for generic uses. In case you need a help for the use,
 please post a question to [BioStar](http://www.biostars.org/show/tag/tailseeker/)
-with #tailseeker as a tag.
+with `tailseeker` as a tag.
 
 
 # Table of Contents
