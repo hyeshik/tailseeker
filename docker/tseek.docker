@@ -26,7 +26,7 @@ fi
 echo "Tailseeker image:	${TAILSEEKER_IMAGE}"
 echo "Source data:	${TAILSEEKER_DATADIR}"
 
-if [ -z "$TAILSEEKER_REFDBDIR" ]; then
+if [ -n "$TAILSEEKER_REFDBDIR" ]; then
   REFDBARGS="-v ${TAILSEEKER_REFDBDIR}:/opt/tailseeker/refdb"
   echo "Reference database:	${TAILSEEKER_REFDBDIR}"
 else
