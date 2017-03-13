@@ -59,8 +59,6 @@ CONTAMINANTS_RFAM_ACCESSIONS = [
     'RF00002', # 5.8S ribosomal RNA
     'RF01960', # Eukaryotic small subunit ribosomal RNA
     'RF02543', # Eukaryotic large subunit ribosomal RNA
-    'RF00012', # Small nucleolar RNA U3
-    'RF00017', # Metazoan signal recognition particle RNA
 ]
 
 GENOMES = {
