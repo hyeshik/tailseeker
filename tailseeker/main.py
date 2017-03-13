@@ -24,9 +24,12 @@
 #
 
 import os
+import sys
 import shutil
 
 TAILSEEKER_DIR = os.path.abspath(os.path.join(os.path.dirname(workflow.snakefile), '..'))
+if TAILSEEKER_DIR not in sys.path:
+    sys.path.append(TAILSEEKER_DIR)
 TARGETS = []
 
 include: os.path.join(TAILSEEKER_DIR, 'tailseeker', 'snakesupport.py')
