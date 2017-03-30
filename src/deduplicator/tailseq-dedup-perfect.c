@@ -204,10 +204,13 @@ tqueue_append(struct TagInfoQueue *queue)
         tqueue_inc(queue);
         queue->highest_priority = tagprio;
     }
-    else if (queue->traceout != NULL) /* print out the suboptimal tag */
+    else if (queue->traceout != NULL) { /* print out the suboptimal tag */
+        /* the elements may have re-allocated for the expansion. */
+        current = &tqueue_head(queue);
         bgzf_printf(queue->traceout, "%s\t%d\t%" PRIu64 "\t-3\n",
                     current->tilename, current->clusterno,
                     queue->next_group);
+    }
 
     return 0;
 }
