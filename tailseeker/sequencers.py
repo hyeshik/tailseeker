@@ -37,6 +37,9 @@ TILE_LIST = {
     'MiSeq-V2': """
         1101 1102 1103 1104 1105 1106 1107 1108 1109 1110 1111 1112 1113 1114
         2101 2102 2103 2104 2105 2106 2107 2108 2109 2110 2111 2112 2113 2114""".split(),
+    'MiSeq-V3': """
+        1101 1102 1103 1104 1105 1106 1107 1108 1109 1110 1111 1112 1113 1114 1115 1116
+        2101 2102 2103 2104 2105 2106 2107 2108 2109 2110 2111 2112 2113 2114 2115 2116""".split(),
 }
 TILE_LIST['HiSeq-RapidV2'] = TILE_LIST['HiSeq-RapidV1']
 
@@ -44,6 +47,7 @@ INTENSITIES_SUBDIR = {
     'HiSeq-RapidV1': 'Data/Intensities',
     'HiSeq-RapidV2': 'Data/Intensities',
     'MiSeq-V2': 'Data/Intensities',
+    'MiSeq-V3': 'Data/Intensities',
 }
 
 
