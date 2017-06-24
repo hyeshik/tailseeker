@@ -54,15 +54,17 @@ def construct_virtual_gel_image(tagdensities, controlsamples, expsamples, height
     #tagdensities = tagdensities[expsamples + controlsamples].copy()
 
     is_control = tagdensities.columns.map(lambda x: x in controlsamples)
+    control_sel = is_control.tolist()
+    noncontrol_sel = (is_control == False).tolist()
 
-    if is_control.sum() > 0:
+    if is_control.to_series().sum() > 0:
         # Rescale the control samples to the maximum in each lane.
-        control_signals = tagdensities.loc[:, is_control]
-        tagdensities.loc[:, is_control] = control_signals / control_signals.max(axis=0)
+        control_signals = tagdensities.loc[:, control_sel]
+        tagdensities.loc[:, control_sel] = control_signals / control_signals.max(axis=0)
 
     # Rescale the control samples to the total poly(A)+ tag count in each lane.
-    experimental_signals = tagdensities.loc[:, ~is_control]
-    tagdensities.loc[:, ~is_control] = experimental_signals / experimental_signals.max().max()
+    experimental_signals = tagdensities.loc[:, noncontrol_sel]
+    tagdensities.loc[:, noncontrol_sel] = experimental_signals / experimental_signals.max().max()
 
     # Pad the gel image with signals and spacings between lanes.
     virtual_width = tagdensities.shape[1] * LANE_WIDTH + LANE_SPACE
