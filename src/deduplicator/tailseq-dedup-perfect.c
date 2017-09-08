@@ -37,7 +37,7 @@
 #include "../sigproc-flags.h"
 #include "../utils.h"
 
-#define DEFAULT_BUFFER_SIZE     1024
+#define DEFAULT_BUFFER_SIZE     2048
 #define MAX_TILENAME_LEN        63
 #define MAX_MODIFICATION_LEN    50
 #define MAX_UMI_LEN             50
