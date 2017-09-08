@@ -7,6 +7,7 @@ It is not yet fully stable for generic uses. In case you need a help for the use
 please post a question to [BioStar](http://www.biostars.org/show/tag/tailseeker/)
 with `tailseeker` as a tag.
 
+[![DOI](https://zenodo.org/badge/54756636.svg)](https://zenodo.org/badge/latestdoi/54756636)
 
 # Table of Contents
 
