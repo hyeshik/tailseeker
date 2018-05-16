@@ -373,7 +373,7 @@ main(int argc, char *argv[])
         current = &tqueue_head(queue);
 
         if (parse_line(current) < 0) {
-            fprintf(stderr, "Could line parse line %d: %s", lineno, current->line);
+            fprintf(stderr, "Could not parse line %d: %s", lineno, current->line);
             break;
         }
 
