@@ -24,8 +24,6 @@
  * - Hyeshik Chang <hyeshik@snu.ac.kr>
  */
 
-#define _BSD_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -353,8 +351,16 @@ output_corrected_polya_measurements(const char *taginfo_file,
 
         clusterno = atoi(token);
         if (polya_measurements[clusterno] < 0) {
+            size_t termpos;
+
             /* Poly(A) length is not revised. Bypass the line. */
             token[strlen(token)] = '\t';
+
+            /* Ensure the line is terminated accordingly. */
+            termpos = strlen(token);
+            if (termpos > 0)
+                token[termpos - 1] = '\n';
+
             fputs(tile_id, stdout);
             fputc('\t', stdout);
             fputs(linebuf, stdout);
