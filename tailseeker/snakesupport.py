@@ -63,6 +63,9 @@ SETTINGS_FILE = os.path.abspath('tailseeker.yaml')
 from tailseeker import configurations
 CONF = configurations.Configurations(TAILSEEKER_DIR, open(SETTINGS_FILE))
 
+# Set default null parameters
+TABIX_CMD = ''
+
 # Verify directories and links.
 WRKDIR = os.getcwd()
 RESOURCESDIR = os.path.join(TAILSEEKER_DIR, 'resources')
