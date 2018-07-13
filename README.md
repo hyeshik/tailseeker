@@ -1,5 +1,7 @@
 # Tailseeker 3.1
 
+>_**(CAUTION)** The current version tailseeker 3 fails to process many of HiSeq- and MiSeq-derived data due to a problem in the normalization paramter estimation. In that case, it is advised to try [an older version](https://github.com/hyeshik/tailseeker/tree/tailseeker2) instead._
+
 Tailseeker is the official pipeline for TAIL-seq, which measures poly(A) tail
 lengths and 3′-end modifications with Illumina SBS sequencers.
 
