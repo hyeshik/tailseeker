@@ -1,6 +1,6 @@
 # Tailseeker 3.1
 
->_**(CAUTION)** The current version tailseeker 3 fails to process many of HiSeq- and MiSeq-derived data due to a problem in the normalization paramter estimation. In that case, it is advised to try [an older version](https://github.com/hyeshik/tailseeker/tree/tailseeker2) instead._
+>_**(CAUTION)** The current version tailseeker 3 fails to process many of HiSeq- and MiSeq-derived data due to a problem in the normalization paramter estimation. It is highly recommended to validate whether the length measurements were done correctly using the QC outputs in `qcplots/*.pdf`. In that case, it is advised to try [an older version](https://github.com/hyeshik/tailseeker/tree/tailseeker2) instead, which is relatively insensitive than tailseeker 3. The issue originates from the patterned imbalance of fluoresence signals among the channels. An additional locally adaptive normalization step before the processing would be required to fix this. There's currently no progression on the implementation from the authors as they don't have a project using this recently. Please consider donating a possible fix once you write one._
 
 Tailseeker is the official pipeline for TAIL-seq, which measures poly(A) tail
 lengths and 3′-end modifications with Illumina SBS sequencers.
