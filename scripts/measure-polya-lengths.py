@@ -40,7 +40,7 @@ def load_sig_dists(filename):
     elemsize, cycles, bins = struct.unpack('<III', inpf.read(12))
     assert elemsize == 4
 
-    counts = np.fromstring(inpf.read(), np.uint32).reshape((cycles, bins))
+    counts = np.frombuffer(inpf.read(), np.uint32).reshape((cycles, bins))
     return counts.astype(np.uint64)
 
 def write_sig_dists(counts, filename):
