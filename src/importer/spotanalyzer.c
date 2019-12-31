@@ -543,10 +543,7 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
     }
 
     insert_len = cfg->threep_start + cfg->threep_length - delimiter_end;
-    if (sample->limit_threep_processing > 0 &&
-            sample->limit_threep_processing < insert_len)
-        insert_len = sample->limit_threep_processing;
-
+    
     {
         struct IntensitySet spot_intensities[insert_len];
         float scores[insert_len], contrast_score;
@@ -600,7 +597,7 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
 
         /* Write computed poly(A) scores of long poly(A) candidates
          * for later evaluation. */
-        if (polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
+        if (true || polya_len >= cfg->finderparams.sigproc_trigger_polya_length) {
             if (write_polya_score(sample, scores + polya_start, scan_len,
                                   downhill, global_clusterno,
                                   delimiter_end + polya_start) < 0) {
