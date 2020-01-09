@@ -55,11 +55,10 @@ tableschema = refined_taginfo if snakemake.params.refined else taginfo
 columnname = 'unaligned_polyA' if snakemake.params.refined else 'polyA'
 columnno = tableschema['names'].index(columnname)
 
-pacounts = pd.DataFrame.from_items(
-    [(samplename,
-      get_polya_length_hist(lencallfile, snakemake.params.badflagmask,
-                            snakemake.params.maxpalength, columnno))
-     for samplename, lencallfile in inputfiles])
+pacounts = pd.DataFrame()
+for samplename, lencallfile in inputfiles:
+    pacounts[samplename] = get_polya_length_hist(lencallfile, snakemake.params.badflagmask,
+                                                 snakemake.params.maxpalength, columnno)
 
 # trim all-zero rows at the end of the list
 effective_maximum_pa_len = np.where(pacounts.sum(axis=1) > 0)[0].max()
