@@ -209,59 +209,43 @@ rule merge_signal_processing_stats:
     script: SCRIPTSDIR + '/stats-merge-demultiplexing-counts.py'
 
 
-rule calculate_optimal_parameters:
+rule generate_polyA_finder_init_parameters:
+    input: 'scratch/sigdists-r00/pos_{tile}.sigdists'
+    output: temp('scratch/mean_stdevs/r00/{tile}.meanstdev')
+    params: CONF=CONF.confdata
+    run: external_script('{PYTHON3_CMD} {SCRIPTSDIR}/generate-init-mean-stddev.py')
+        
+rule polyA_find_iterator:
     input:
-        expand('scratch/sigdists-r{{round}}/pos_{tile}.sigdists', tile=TILES),
-        expand('scratch/sigdists-r00/neg_{tile}.sigdists', tile=TILES)
+        mean_stdev = lambda wc: ('scratch/mean_stdevs/r{rnd:02d}/{tile}.meanstdev'
+                                 .format(rnd=int(wc.round)-1, tile="{tile}")),
+        sigpacks = expand('scratch/signals/{sample}_{{tile}}.sigpack', sample=EXP_SAMPLES)
     output:
-        cutoff_values=temp('scratch/sigdists-r{round}/signal-cutoffs.txt'),
-        cutoff_bases=temp('scratch/stats/polya-score-cutoffs-bases-r{round}.txt'),
-    params: conf=CONF.confdata, tileinfo=TILES, total_cycles=NUM_CYCLES
-    threads: 20
-    run:
-        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/calculate-optimal-parameters.py')
-
-
-# A single job of this task is generally very light (<~1s). The tasks are
-# processed as grouped within a same tile to save the overheads by
-# the pipeline itself.
-rule measure_polya_lengths_from_fluorescence:
+        mean_stdev = 'scratch/mean_stdevs/r{round,[^0].|.[^0]}/{tile}.meanstdev'
+    threads: THREADS_MAXIMUM_CORE
+    params: CONF=CONF.confdata, isWrite=False
+    run: external_script('{PYTHON3_CMD} {SCRIPTSDIR}/polya-find-iterator.py')
+    
+        
+rule polyA_taginfo_writer:
     input:
-        signals=expand('scratch/signals/{sample}_{{tile}}.sigpack', sample=ALL_SAMPLES),
-        taginfo=expand('scratch/taginfo/{sample}_{{tile}}.txt.gz', sample=ALL_SAMPLES),
-        score_cutoffs=lambda wc: (
-            'scratch/sigdists-r{round:02d}/signal-cutoffs.txt'.format(round=int(wc.round)-1))
+        mean_stdev = 'scratch/mean_stdevs/r{rnd:02d}/{tile}.meanstdev'
+                     .format(rnd=CONF['polyA_ruler']['signal_resampling_rounds'], tile="{tile}"),
+        sigpacks = expand('scratch/signals/{sample}_{{tile}}.sigpack', sample=ALL_SAMPLES),
+        taginfo = expand('scratch/taginfo/{sample}_{{tile}}.txt.gz', sample=ALL_SAMPLES)
     output:
-        taginfo=map(temp, expand('scratch/taginfo-fl-r{{round,[^0].|.[^0]}}/'
-                                 '{sample}_{{tile,[^_]+}}.txt.gz', sample=ALL_SAMPLES)),
-        sigdists=temp('scratch/sigdists-r{round,[^0].|.[^0]}/pos_{tile}.sigdists')
-    params: CONF=CONF.confdata, BINDIR=BINDIR, BGZIP_CMD=BGZIP_CMD
-    run:
-        external_script('{PYTHON3_CMD} {SCRIPTSDIR}/measure-polya-lengths.py')
-
-
-TARGETS.extend(['stats/polya-score-cutoffs-bases.txt',
-                'stats/polya-score-cutoffs.txt'])
-rule finalize_measurement_params:
-    input:
-        cutoff_values='scratch/sigdists-r{round:02d}/signal-cutoffs.txt'.format(
-                        round=CONF['polyA_ruler']['signal_resampling_rounds']),
-        cutoff_bases='scratch/stats/polya-score-cutoffs-bases-r{round:02d}.txt'.format(
-                        round=CONF['polyA_ruler']['signal_resampling_rounds'])
-    output:
-        cutoff_values='stats/polya-score-cutoffs.txt',
-        cutoff_bases='stats/polya-score-cutoffs-bases.txt'
-    shell: 'cp {input.cutoff_values} {output.cutoff_values} && \
-            cp {input.cutoff_bases} {output.cutoff_bases}'
-
+        taginfo = map(temp, expand('scratch/taginfo_final/{sample}_{{tile}}.txt.gz', sample=ALL_SAMPLES))
+    threads: THREADS_MAXIMUM_CORE
+    params: CONF=CONF.confdata, isWrite=True, tileinfo=lambda wc: wc.tile
+    run: external_script('{PYTHON3_CMD} {SCRIPTSDIR}/polya-find-iterator.py')
+        
 
 TARGETS.extend(expand('taginfo/{sample}.txt.gz', sample=ALL_SAMPLES))
 rule merge_and_deduplicate_taginfo:
     # Round number for taginfo files are actually based on parameters
     # of one round behind. Thus, use the file for one step later.
     input:
-        expand('scratch/taginfo-fl-r{round:02d}/{{sample}}_{tile}.txt.gz',
-               tile=TILES, round=[CONF['polyA_ruler']['signal_resampling_rounds'] + 1])
+        expand('scratch/taginfo_final/{{sample}}_{tile}.txt.gz', tile=TILES)
     output:
         taginfo='taginfo/{sample}.txt.gz',
         duptrace=temp('scratch/stats/perfdup-traces-{sample}.txt.gz')
@@ -277,7 +261,7 @@ rule merge_and_deduplicate_taginfo:
                     --compress-program={BINDIR}/bgzip-wrap --parallel={threads} | \
                 {BGZIP_CMD} -@ {threads} -c > {output.taginfo}')
         elif wildcards.sample in SPIKEIN_SAMPLES:
-            shell('{SCRIPTSDIR}/bgzf-merge.py --output {output.taginfo} {sorted_input}')
+            external_script('{PYTHON3_CMD} {SCRIPTSDIR}/bgzf-merge.py')
             shell('echo -n "" | gzip -c - > {output.duptrace}')
 
 

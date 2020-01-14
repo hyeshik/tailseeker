@@ -23,7 +23,8 @@
 #
 # - Hyeshik Chang <hyeshik@snu.ac.kr>
 #
-
+from tailseeker.powersnake import *
+import pandas as pd
 
 def parse_arguments():
     import argparse
@@ -37,10 +38,11 @@ def parse_arguments():
 
     return options
 
+def merge_gzip_dataframes(inputfiles, outputfile):
+    taginfos = [pd.read_csv(inbound, sep='\t', names=['a', 'b', 'c', 'd', 'e', 'f'])
+                for inbound in inputfiles]
+    pd.concat(taginfos, axis='index', ignore_index=True).to_csv(
+        outputfile, sep='\t', index=False,header=False, compression='gzip')
 
 if __name__ == '__main__':
-    from tailseeker.fileutils import merge_bgzf_files
-
-    options = parse_arguments()
-    merge_bgzf_files(options.output, options.inputs)
-
+    merge_gzip_dataframes(input, output.taginfo)
