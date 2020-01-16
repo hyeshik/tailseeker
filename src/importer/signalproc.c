@@ -334,7 +334,6 @@ compute_polya_score(struct IntensitySet *intensities, int ncycles,
         *procflags |= PAFLAG_DARKCYCLE_EXISTS;
         if (ndarkcycles >= params->max_dark_cycles) {
             *procflags |= PAFLAG_DARKCYCLE_OVER_THRESHOLD;
-            return -1;
         }
     }
 

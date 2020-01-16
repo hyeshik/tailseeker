@@ -605,6 +605,14 @@ process_polya_signal(struct TailseekerConfig *cfg, uint32_t clusterno,
                 return polya_len; //Modified by hanju: apply polya_len instead of scan_len
             }
         }
+        else if (polya_len == 0) {
+            if (write_polya_score(sample, scores + polya_start, scan_len,
+                                  downhill, global_clusterno,
+                                  delimiter_end + polya_start) < 0) {
+                fprintf(stderr, "Failed to write a poly(A) score.\n");
+                return polya_len; //Modified by hanju: write polya_len even undetectable
+            }
+        }
     }
 
     return polya_len;
