@@ -31,6 +31,11 @@ import numpy as np
 
 
 def get_polya_length_hist(pacallsfile, badflagmask, maxpalen, columnno):
+    tmp = np.zeros(243)
+    palens = np.array(pd.read_csv(pacallsfile, sep='\t', names=['tile', 'clusterNo', 'flag', 'palen', 'modi', 'finger']).palen.tolist())
+    palens[palens < 0] = 0
+    tmp[:np.max(palens) + 1] = np.bincount(palens)
+    return tmp
     freqoutput = sp.check_output(
         'zcat {input_file} | perl -e \'while (<>) {{ \
             chomp; my @f=split; if ((@f[2] & {flagmask}) == 0) {{ \

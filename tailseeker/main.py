@@ -210,18 +210,20 @@ rule merge_signal_processing_stats:
 
 
 rule generate_polyA_finder_init_parameters:
-    input: 'scratch/sigdists-r00/pos_{tile}.sigdists'
-    output: temp('scratch/mean_stdevs/r00/{tile}.meanstdev')
+    input:
+        sigdist_pos = 'scratch/sigdists-r00/pos_{tile}.sigdists',
+        sigdist_neg = 'scratch/sigdists-r00/neg_{tile}.sigdists'
+    output: temp('scratch/avgs_r00/{tile}.avg')
     params: CONF=CONF.confdata
-    run: external_script('{PYTHON3_CMD} {SCRIPTSDIR}/generate-init-mean-stddev.py')
+    run: external_script('{PYTHON3_CMD} {SCRIPTSDIR}/generate-init-average.py')
         
 rule polyA_find_iterator:
     input:
-        mean_stdev = lambda wc: ('scratch/mean_stdevs/r{rnd:02d}/{tile}.meanstdev'
-                                 .format(rnd=int(wc.round)-1, tile="{tile}")),
+        avg = lambda wc: ('scratch/avgs_r{rnd:02d}/{tile}.avg'
+                          .format(rnd=int(wc.round)-1, tile="{tile}")),
         sigpacks = expand('scratch/signals/{sample}_{{tile}}.sigpack', sample=EXP_SAMPLES)
     output:
-        mean_stdev = 'scratch/mean_stdevs/r{round,[^0].|.[^0]}/{tile}.meanstdev'
+        avg = 'scratch/avgs_r{round,[^0].|.[^0]}/{tile}.avg'
     threads: THREADS_MAXIMUM_CORE
     params: CONF=CONF.confdata, isWrite=False
     run: external_script('{PYTHON3_CMD} {SCRIPTSDIR}/polya-find-iterator.py')
@@ -229,7 +231,7 @@ rule polyA_find_iterator:
         
 rule polyA_taginfo_writer:
     input:
-        mean_stdev = 'scratch/mean_stdevs/r{rnd:02d}/{tile}.meanstdev'
+        avg = 'scratch/avgs_r{rnd:02d}/{tile}.avg'
                      .format(rnd=CONF['polyA_ruler']['signal_resampling_rounds'], tile="{tile}"),
         sigpacks = expand('scratch/signals/{sample}_{{tile}}.sigpack', sample=ALL_SAMPLES),
         taginfo = expand('scratch/taginfo/{sample}_{{tile}}.txt.gz', sample=ALL_SAMPLES)
