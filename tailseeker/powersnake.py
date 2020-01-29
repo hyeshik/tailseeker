@@ -71,12 +71,7 @@ def load_snakemake_params():
 
     for varname, value in options.items():
         if not isinstance(value, int):
-            nl = Namedlist()
-            for k, v in value:
-                nl.append(v)
-                if k is not None:
-                    nl.add_name(k)
-            value = nl
+            value = Namedlist(fromdict=dict(value))
         setattr(builtins, varname, value)
 
 
@@ -92,7 +87,13 @@ def external_script(_command):
         if isinstance(callerlocal[var], int):
             packed[var] = callerlocal[var]
         else:
-            packed[var] = list(callerlocal[var].allitems())
+            numkeys = len(callerlocal[var].keys())
+            if numkeys == 0: # when there is no input name
+                packed[var] = [(str(i), v) for i, v in enumerate(callerlocal[var])]
+            else:
+                packed[var] = list(callerlocal[var].items())
+                assert numkeys == len(packed[var]),\
+                "A rule's input name must either all exist or not exist."
 
     with tempfile.NamedTemporaryFile(mode='wt') as tmpfile:
         json.dump(packed, tmpfile)
