@@ -2,17 +2,17 @@ CC?=		gcc
 #CFLAGS=	-O0 -Wall -Werror -pg -ggdb -DINI_MAX_LINE=1024 ${HTSLIB_CFLAGS}
 CFLAGS=		-O3 -Wall -DNDEBUG -DINI_MAX_LINE=1024 ${HTSLIB_CFLAGS}
 
-IMPORT_LIBS=	-lz -lm -lpthread ${HTSLIB_LIBS}
-POLYARULER_LIBS=	-lz -lm
+IMPORT_LIBS=	${ZLIB_LIBS} -lm -lpthread ${HTSLIB_LIBS}
+POLYARULER_LIBS=	${ZLIB_LIBS} -lm
 DEDUP_PERFECT_LIBS=	-lm ${HTSLIB_LIBS}
 DEDUP_APPROX_LIBS=	-lm -lpthread ${HTSLIB_LIBS}
-WRITEFASTQ_LIBS=	-lm -lz ${HTSLIB_LIBS}
+WRITEFASTQ_LIBS=	-lm ${ZLIB_LIBS} ${HTSLIB_LIBS}
 ARCH_FLAGS=	-msse2 -DUSE_SSE2
 bindir=		../bin
 
 HTSLIB_CFLAGS:=	$(shell pkg-config --cflags htslib)
 HTSLIB_LIBS:=	$(shell pkg-config --libs htslib)
-
+ZLIB_LIBS:=	$(shell pkg-config --libs zlib)
 
 PROG=	${bindir}/tailseq-import ${bindir}/tailseq-polya-ruler \
 	${bindir}/tailseq-dedup-perfect ${bindir}/tailseq-writefastq \
