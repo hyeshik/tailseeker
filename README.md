@@ -43,6 +43,25 @@ the list of supported genomes are as followed:
 | 3 | GRCh38 *(Homo sapiens)*<br>GRCm38 *(Mus musculus)*<br>GRCz10 *(Danio rerio)*<br>WBcel235 *(C. elegans)*<br>Rnor\_6.0 *(Rattus norvegicus)* | All features from level 2<br>Gene-level statistics for poly(A) length and non-templated additions<br>Gene-level quantifications |
 
 
+# Running with Conda
+
+Conda is the most convenient way to install `tailseeker`. The current
+`tailseeker` version depends on old versions of several programs.
+You can install them without a significant effort in an isolated
+environment. Try this command:
+
+    conda create -n tailseeker -c conda-forge -c bioconda -c qbio tailseeker
+
+As soon as the installation finishes you can use it like this:
+
+    conda activate tailseeker
+
+    tseek
+
+You need a reference annotation database for level 2 or 3 analyses.
+Downloaded databases can be took up by tailseeker if you specify the
+path in `TAILSEEKER_REFDIR`.
+
 # Running with Docker
 
 If you have a host running [Docker](https://www.docker.com), you can run
