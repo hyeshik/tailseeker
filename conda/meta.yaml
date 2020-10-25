@@ -1,0 +1,62 @@
+package:
+  name: tailseeker
+  version: 3.1.8
+
+source:
+  git_rev: v3.1.8
+  git_url: https://github.com/hyeshik/tailseeker
+
+build:
+  number: 0
+#  has_prefix_files:
+#    - bin/tseek
+#    - share/tailseeker/bin/bgzip-wrap
+#    - share/tailseeker/conf/paths.conf
+#  binary_has_prefix_files:
+#    - 123
+ 
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - pkg-config
+  host:
+    - zlib
+    - htslib==1.3.1
+  run:
+    - curl
+    - bzip2
+    - wget
+    - xz
+    - zlib
+    - lapack
+    - openblas
+    - qbio::ayb2==2.11.h1
+    - bedtools==2.26.0
+    - colormath==2.1.1
+    - feather-format==0.4.0
+    - gmap==2017.05.08
+    - htslib==1.3.1
+    - libblas==3.8.0
+    - liblapack==3.8.0
+    - matplotlib==2.0.2
+    - newt==0.52.18
+    - numpy==1.15.2
+    - numpy-base==1.15.2
+    - pandas==0.20.3
+    - parallel==20171222
+    - python==3.5.5
+    - pyyaml==3.12
+    - samtools==1.3.1
+    - scipy==1.0.0
+    - seqtk==1.2
+    - snakemake==3.13.3
+    - star==2.5.2b
+    - xlsxwriter==0.9.8
+
+test:
+  commands:
+    - tseek --version
+
+about:
+  summary: 
+  home: https://github.com/hyeshik/tailseeker
