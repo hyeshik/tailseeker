@@ -42,7 +42,7 @@ rule contaminant_alignment:
     threads: THREADS_MAXIMUM_CORE
     params: scratch='scratch/contaminants-{sample}'
     run:
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        genomedir = os.path.join(REFDBDIR, 'level2',
                         CONF['reference_set'][wildcards.sample], 'contaminants.star')
 
         if os.path.isdir(params.scratch):
@@ -103,7 +103,7 @@ rule STAR_alignment:
     threads: THREADS_MAXIMUM_CORE
     params: scratch='scratch/STAR-{sample}-{type}'
     run:
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        genomedir = os.path.join(REFDBDIR, 'level2',
                         CONF['reference_set'][wildcards.sample], 'index.star')
         input = suffix_filter(input)
 
@@ -171,7 +171,7 @@ rule GSNAP_alignment:
     output: temp('scratch/alignments/{sample}_GSNAP_{type,[^_.]+}.bam.{part}')
     threads: THREADS_MAXIMUM_CORE
     run:
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        genomedir = os.path.join(REFDBDIR, 'level2',
                         CONF['reference_set'][wildcards.sample], 'index.gmap')
         partno = '{}/{}'.format(wildcards.part, CONF['performance']['split_gsnap_jobs'])
 
@@ -236,7 +236,7 @@ rule reevaluate_tails:
     output: temp('refined-taginfo/{sample}.txt.pre.gz')
     threads: THREADS_MAXIMUM_CORE
     run:
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        genomedir = os.path.join(REFDBDIR, 'level2',
                                  CONF['reference_set'][wildcards.sample])
         analytic_options = """\
             --max-fragment-size {modopt[maximum_fragment_size]} \
@@ -273,7 +273,7 @@ rule extract_short_polya_tag_alignments:
     output: temp('scratch/polya-sites/indiv-{sample}.txt')
     threads: 4
     run:
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        genomedir = os.path.join(REFDBDIR, 'level2',
                                  CONF['reference_set'][wildcards.sample])
 
         shell('{SAMTOOLS_CMD} view -h -f 128 -F 4 {input.alignments} | \
@@ -295,7 +295,7 @@ rule merge_polya_sites_list:
     output: temp('scratch/polya-sites/group-{group}.txt')
     run:
         sample1 = EXPERIMENT_GROUPS[wildcards.group][0]
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        genomedir = os.path.join(REFDBDIR, 'level2',
                                  CONF['reference_set'][sample1])
         polya_site_window = CONF['modification_refinement']['polya_site_flank']
 
@@ -319,7 +319,7 @@ rule apply_short_polya_filter:
     output: 'refined-taginfo/{sample}.all.txt.gz'
     params: tmplist=SCRATCHDIR+'/apply_short_polya_filter-{sample}.txt'
     run:
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        genomedir = os.path.join(REFDBDIR, 'level2',
                                  CONF['reference_set'][wildcards.sample])
 
         shell("{SAMTOOLS_CMD} view -b -f 128 -F 4 {input.alignment} | \
@@ -445,7 +445,7 @@ rule index_alignments:
 rule make_read5_position_dists:
     input:
         bam='scratch/tr-alignments/{sample}_single.bam',
-        transcript_sizes=lambda wc: os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        transcript_sizes=lambda wc: os.path.join(REFDBDIR, 'level2',
                                         CONF['reference_set'][wc.sample], 'transcript-sizes')
     output: temp('scratch/read5-pos-dists/{sample}.csv')
     script: SCRIPTSDIR + '/make-read5-positions-dist.py'
@@ -491,7 +491,7 @@ rule associate_tags_to_genes:
     output: temp('scratch/associations/{sample}.txt')
     threads: 4
     run:
-        genomedir = os.path.join(TAILSEEKER_DIR, 'refdb', 'level2',
+        genomedir = os.path.join(REFDBDIR, 'level2',
                                  CONF['reference_set'][wildcards.sample])
         required_mapq = CONF['gene_level_stats']['required_mapping_quality']
 

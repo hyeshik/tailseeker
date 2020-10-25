@@ -76,6 +76,10 @@ SCRIPTSDIR = os.path.join(TAILSEEKER_DIR, 'scripts')
 CONF.export_paths(globals(), relative_to=TAILSEEKER_DIR)
 create_scratch_link()
 
+# Use reference database dir from environment variable if specified
+REFDBDIR = os.path.join(TAILSEEKER_DIR, 'refdb')
+REFDBDIR = os.environ.get('TAILSEEKER_REFDBDIR', REFDBDIR)
+
 # Add $TAILSEEKER_DIR/bin and $TAILSEEKER_DIR/lib to corresponding
 # paths. This helps finding files when they are installed in
 # non-standard paths.

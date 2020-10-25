@@ -42,7 +42,7 @@ rule merge_gene_level_stats:
         feather='stats/genelevelstats-{genome}-{ambigtype}.feather',
         excel='stats/genelevelstats-{genome}-{ambigtype}.xlsx'
     params:
-        genomedir=TAILSEEKER_DIR + '/refdb/level3/{genome}',
+        genomedir=REFDBDIR + '/level3/{genome}',
         samples_by_genome=SAMPLES_BY_GENOME
     script: SCRIPTSDIR + '/merge-gene-level-stats.py'
 
