@@ -7,7 +7,7 @@ source:
   git_url: https://github.com/hyeshik/tailseeker
 
 build:
-  number: 0
+  number: 1
 #  has_prefix_files:
 #    - bin/tseek
 #    - share/tailseeker/bin/bgzip-wrap
