@@ -175,9 +175,11 @@ rule GSNAP_alignment:
                         CONF['reference_set'][wildcards.sample], 'index.gmap')
         partno = '{}/{}'.format(wildcards.part, CONF['performance']['split_gsnap_jobs'])
 
-        shell('{GSNAP_CMD} -D {genomedir} -d genome -A sam -B 4 --gunzip -q {partno} \
+        inputargs = ['<(gzip -cd {})'.format(inp) for inp in input]
+
+        shell('{GSNAP_CMD} -D {genomedir} -d genome -A sam -B 4 -q {partno} \
                 -s {genomedir}/splicesites.iit -m 0.05 -t {threads} \
-                {input} | {SAMTOOLS_CMD} view -@ 3 -bS - > {output}')
+                {inputargs} | {SAMTOOLS_CMD} view -@ 3 -bS - > {output}')
 
 if CONF['performance']['enable_gsnap']:
     if 'gsnap' not in CONF.paths:
