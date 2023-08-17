@@ -75,7 +75,7 @@ def load_snakemake_params():
             for k, v in value:
                 nl.append(v)
                 if k is not None:
-                    nl.add_name(k)
+                    nl._add_name(k)
             value = nl
         setattr(builtins, varname, value)
 
@@ -92,7 +92,7 @@ def external_script(_command):
         if isinstance(callerlocal[var], int):
             packed[var] = callerlocal[var]
         else:
-            packed[var] = list(callerlocal[var].allitems())
+            packed[var] = list(callerlocal[var]._allitems())
 
     with tempfile.NamedTemporaryFile(mode='wt') as tmpfile:
         json.dump(packed, tmpfile)

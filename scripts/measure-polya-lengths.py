@@ -40,13 +40,13 @@ def load_sig_dists(filename):
     elemsize, cycles, bins = struct.unpack('<III', inpf.read(12))
     assert elemsize == 4
 
-    counts = np.fromstring(inpf.read(), np.uint32).reshape((cycles, bins))
+    counts = np.frombuffer(inpf.read(), np.uint32).reshape((cycles, bins))
     return counts.astype(np.uint64)
 
 def write_sig_dists(counts, filename):
     with gzip.open(filename, 'wb') as outf:
         outf.write(struct.pack('<III', 4, counts.shape[0], counts.shape[1]))
-        outf.write(counts.astype(np.uint32).tostring())
+        outf.write(counts.astype(np.uint32).tobytes())
 
 counts_aggr = None
 

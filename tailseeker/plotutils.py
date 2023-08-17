@@ -62,15 +62,13 @@ def estimate_2d_density(x, y, bw=None):
     kernel = gaussian_kde(positions, bw_method=bw)
     return kernel(positions)
 
-def apply_dropped_spine(ax, spines=('left', 'bottom'), xgrid=False, smart_bounds=False,
-                        drop=5):
+def apply_dropped_spine(ax, spines=('left', 'bottom'), xgrid=False, drop=5):
     if drop:
         for sp in spines:
             ax.spines[sp].set_position(('outward', drop))
 
     for loc, spine in ax.spines.items():
         if loc in spines:
-            spine.set_smart_bounds(smart_bounds)
             spine.set_linewidth(0.8)
         else:
             spine.set_color('none') # don't draw spine

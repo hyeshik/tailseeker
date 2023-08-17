@@ -37,7 +37,7 @@ class Configurations:
         self.paths = self.load_paths()
 
     def load_config(self, settings_file):
-        usersettings = yaml.load(settings_file)
+        usersettings = yaml.load(settings_file, Loader=yaml.FullLoader)
         if 'include' in usersettings:
             confdict = {}
 
@@ -106,7 +106,7 @@ class Configurations:
 
     def load_paths(self):
         pathconf = os.path.join(self.tailseeker_dir, self.PATH_CONF_FILE)
-        pathsettings = yaml.load(open(pathconf)) if os.path.exists(pathconf) else {}
+        pathsettings = yaml.load(open(pathconf), Loader=yaml.FullLoader) if os.path.exists(pathconf) else {}
         if 'paths' in self.confdata:
             pathsettings.update(self.confdata['paths'])
 
