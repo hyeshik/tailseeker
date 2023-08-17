@@ -40,7 +40,7 @@ def load_sig_dists(filename):
     elemsize, cycles, bins = struct.unpack('<III', inpf.read(12))
     assert elemsize == 4
 
-    counts = np.frombytes(inpf.read(), np.uint32).reshape((cycles, bins))
+    counts = np.frombuffer(inpf.read(), np.uint32).reshape((cycles, bins))
     spots_per_cycle = counts.sum(axis=1)
     return counts.astype(np.uint64), spots_per_cycle.astype(np.uint64)
 
