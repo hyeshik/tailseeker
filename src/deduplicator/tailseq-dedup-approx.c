@@ -861,7 +861,7 @@ process_deduplications(struct taskpool *tasks)
     deduppool_destroy(tpool);
 
     hts_idx_destroy(bamidx);
-    bam_hdr_destroy(header);
+    sam_hdr_destroy(header);
 
     sam_close(samf);
 
@@ -908,7 +908,7 @@ load_sam_targets_count(struct taskpool *pool)
             sizeof(*header->target_len) * header->n_targets);
 
     hts_idx_destroy(bamidx);
-    bam_hdr_destroy(header);
+    sam_hdr_destroy(header);
 
     sam_close(samf);
 
