@@ -10,9 +10,9 @@ WRITEFASTQ_LIBS=	-lm ${ZLIB_LIBS} ${HTSLIB_LIBS}
 ARCH_FLAGS=	-msse2 -DUSE_SSE2
 bindir=		../bin
 
-HTSLIB_CFLAGS:=	$(shell pkg-config --cflags htslib)
-HTSLIB_LIBS:=	$(shell pkg-config --libs htslib)
-ZLIB_LIBS:=	$(shell pkg-config --libs zlib)
+HTSLIB_CFLAGS:=	$(shell pkg-config --cflags --static htslib)
+HTSLIB_LIBS:=	$(shell pkg-config --libs --static htslib)
+ZLIB_LIBS:=	$(shell pkg-config --libs --static zlib)
 
 PROG=	${bindir}/tailseq-import ${bindir}/tailseq-polya-ruler \
 	${bindir}/tailseq-dedup-perfect ${bindir}/tailseq-writefastq \
